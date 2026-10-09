@@ -4,10 +4,11 @@ import Papa from 'papaparse'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
 import { TextPdfTab } from '../../components/admin/TextPdfTab'
+import AiPdfTab from '../../components/admin/AiPdfTab'
 import { useApp } from '../../contexts/AppContext'
 import {
   ArrowLeft, Upload, FileText, CheckCircle2, AlertCircle, Loader2,
-  Save, ChevronDown, ChevronRight, Eye, FileCheck,
+  Save, ChevronDown, ChevronRight, Eye, FileCheck, Sparkles,
 } from 'lucide-react'
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
@@ -132,10 +133,10 @@ export function ImportQuestionsPage() {
       </div>
 
       {/* Tab switcher */}
-      <div className="flex gap-2 border-b border-surface-border pb-1">
+      <div className="flex gap-2 border-b border-surface-border pb-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('text')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
             activeTab === 'text'
               ? 'bg-primary text-white shadow-subtle'
               : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
@@ -145,8 +146,19 @@ export function ImportQuestionsPage() {
           Text PDF (Local Parser)
         </button>
         <button
+          onClick={() => setActiveTab('ai')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            activeTab === 'ai'
+              ? 'bg-blue-600 text-white shadow-subtle'
+              : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          AI Vision PDF (Tamil / Handwritten)
+        </button>
+        <button
           onClick={() => setActiveTab('csv')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
             activeTab === 'csv'
               ? 'bg-primary text-white shadow-subtle'
               : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
@@ -166,7 +178,14 @@ export function ImportQuestionsPage() {
         />
       )}
 
-      {/* ── CSV/JSON tab ── */}
+      {activeTab === 'ai' && (
+        <AiPdfTab
+          paperId={paperId}
+          paperTitle={paper?.title}
+          onImportSuccess={() => setTimeout(() => navigate(`/admin/papers/${paperId}/questions`), 2000)}
+        />
+      )}
+
       {activeTab === 'csv' && (
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-surface-border p-6 shadow-card space-y-4">
