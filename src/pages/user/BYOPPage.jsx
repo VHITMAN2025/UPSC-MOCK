@@ -517,7 +517,21 @@ export function BYOPPage() {
         statusText: 'Parsing questions from text...'
       })
 
-      const parseResult = await parseMcqQuestions(extractionResult, processingJobId, paper.file_name)
+      console.log('[BYOP] Calling MCQ parser...')
+      
+      let parseResult
+      try {
+        parseResult = await parseMcqQuestions(extractionResult, processingJobId, paper.file_name)
+      } catch (parserError) {
+        console.error('[BYOP] MCQ PARSER CRASHED:', {
+          processingJobId,
+          error: parserError,
+          message: parserError.message,
+          stack: parserError.stack
+        })
+        throw parserError
+      }
+      
       const questions = parseResult.questions || []
 
       console.log('[BYOP] MCQ parsing complete:', {
