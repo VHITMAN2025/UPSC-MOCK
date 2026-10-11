@@ -26,6 +26,44 @@ const STATUS_CONFIG = {
   failed:          { label: 'Failed',           color: 'bg-red-100 text-red-700',        icon: XCircle },
 }
 
+// ─── Unicode Sanitizer Utility ───────────────────────────────────────────────
+function sanitizeUnicode(value) {
+  if (typeof value !== 'string') {
+    if (Array.isArray(value)) return value.map(sanitizeUnicode)
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([k, v]) => [k, sanitizeUnicode(v)])
+      )
+    }
+    return value
+  }
+
+  // Remove null bytes and unpaired surrogates (PostgreSQL rejects these)
+  let result = ''
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+
+    // Skip null bytes (U+0000)
+    if (code === 0x0000) continue
+
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      // High surrogate - check if followed by low surrogate
+      const next = value.charCodeAt(i + 1)
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        result += value[i] + value[i + 1]
+        i++
+      } else {
+        result += '\uFFFD'
+      }
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      result += '\uFFFD'
+    } else {
+      result += value[i]
+    }
+  }
+  return result
+}
+
 // ─── Batch progress bar ────────────────────────────────────────────────────────
 function BatchProgress({ info }) {
   if (!info) return null
@@ -694,48 +732,6 @@ export function BYOPPage() {
         previewCount: questionsPreview.length,
         reason: 'Intentional limit - full questions saved when user confirms extraction'
       })
-      
-      // Sanitize Unicode recursively to remove unpaired surrogates and null bytes
-      const sanitizeUnicode = (value) => {
-        if (typeof value !== 'string') {
-          if (Array.isArray(value)) return value.map(sanitizeUnicode)
-          if (value && typeof value === 'object') {
-            return Object.fromEntries(
-              Object.entries(value).map(([k, v]) => [k, sanitizeUnicode(v)])
-            )
-          }
-          return value
-        }
-        
-        // Remove null bytes and unpaired surrogates
-        let result = ''
-        for (let i = 0; i < value.length; i++) {
-          const code = value.charCodeAt(i)
-          
-          // Skip null bytes (U+0000) - PostgreSQL TEXT columns reject these
-          if (code === 0x0000) {
-            continue
-          }
-          
-          if (code >= 0xD800 && code <= 0xDBFF) {
-            // High surrogate - check if followed by low surrogate
-            const next = value.charCodeAt(i + 1)
-            if (next >= 0xDC00 && next <= 0xDFFF) {
-              result += value[i] + value[i + 1]
-              i++
-            } else {
-              // Unpaired high surrogate - replace with replacement char
-              result += '\uFFFD'
-            }
-          } else if (code >= 0xDC00 && code <= 0xDFFF) {
-            // Unpaired low surrogate - replace
-            result += '\uFFFD'
-          } else {
-            result += value[i]
-          }
-        }
-        return result
-      }
       
       const sanitizedQuestions = sanitizeUnicode(questionsPreview)
       
