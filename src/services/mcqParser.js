@@ -37,11 +37,10 @@ const TICK_REGEX = /[✓✔☑√✅☒]/
 
 // ─── Question Detection Patterns (Language-agnostic) ──────────────────────
 const QUESTION_PATTERNS = [
-  /^(\d+)\.\s+/,                    // 1.
-  /^(\d+)\)\s+/,                    // 1)
-  /^(\d+):\s+/,                     // 1:
-  /^Q\.?\s*(\d+)\.?\s+/i,          // Q1. or Q.1
-  /^Question\s+(\d+):?\s+/i,        // Question 1:
+  /^\s*(\d+)[\.\)]\s*/,             // 1. or 1)
+  /^\s*(\d+)[:\-]\s*/,              // 1: or 1-
+  /^\s*Q\.?\s*(\d+)[\.:\)]\s*/i,    // Q1. or Q.1
+  /^\s*Question\s+(\d+)[\.:\)]\s*/i,// Question 1:
 ]
 
 // ─── Option Label Patterns (A-D only, NO 1-4) ────────────────────────────
@@ -177,29 +176,25 @@ export async function parseMcqQuestions(extractionResult, processingJobId = 'unk
         continue
       }
 
-      // Look for option candidates (DON'T assume they're THE options yet)
-      const optionMatch = detectOptionLabel(lineText)
-      if (optionMatch && currentQuestion) {
-        const { label, remainder } = optionMatch
-        const hasTick = detectTickMark(lineText)
-        const cleanText = removeTickMarks(remainder)
-
-        // Trace for Q13
-        if (currentQuestion.question_number === 13) {
-          console.log(`[TRACE Q13] Option detected: ${label} = "${cleanText.substring(0, 60)}" hasTick=${hasTick}`)
+      // Check if this line contains option candidates (support single or multiple columns)
+      if (currentQuestion) {
+        const lineOptions = extractOptionsFromLine(lineText)
+        if (lineOptions.length > 0) {
+          lineOptions.forEach((opt) => {
+            const hasTick = detectTickMark(opt.text)
+            const cleanText = removeTickMarks(opt.text)
+            currentQuestion.option_candidates.push({
+              label: opt.label,
+              text: cleanText,
+              lineIdx,
+              y: lineItems[0]?.y || 0,
+              x: lineItems[0]?.x || 0,
+              hasTick,
+              items: lineItems,
+            })
+          })
+          continue
         }
-
-        // Record as candidate
-        currentQuestion.option_candidates.push({
-          label: label.toUpperCase(),
-          text: cleanText,
-          lineIdx,
-          y: lineItems[0]?.y || 0,
-          x: lineItems[0]?.x || 0,
-          hasTick,
-          items: lineItems,
-        })
-        continue
       }
 
       // Multiline continuation
@@ -342,6 +337,41 @@ function detectQuestionNumber(text) {
     }
   }
   return null
+}
+
+
+/**
+ * Extract multiple options from a single line (supports columns like (A) ... (B) ...)
+ */
+function extractOptionsFromLine(text) {
+  if (!text) return []
+  const pattern = /(?:^|\s+)(?:\(([A-Da-d])\)|\[([A-Da-d])\]|([A-Da-d])[\)\.])\s*/g
+  const matches = []
+  let m
+  while ((m = pattern.exec(text)) !== null) {
+    const label = (m[1] || m[2] || m[3]).toUpperCase()
+    matches.push({
+      label,
+      startIndex: m.index,
+      matchLength: m[0].length,
+      endIndex: m.index + m[0].length,
+    })
+  }
+
+  if (matches.length === 0) return []
+
+  const results = []
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i]
+    const nextStart = i + 1 < matches.length ? matches[i + 1].startIndex : text.length
+    const rawOptionText = text.slice(current.endIndex, nextStart).trim()
+    results.push({
+      label: current.label,
+      text: rawOptionText,
+      prefixIndex: current.startIndex,
+    })
+  }
+  return results
 }
 
 function detectOptionLabel(text) {
@@ -487,15 +517,25 @@ function selectOptionGroup(candidates, qNum) {
     }
   }
 
-  if (sequences.length === 0) {
-    // No complete A-D sequence found
-    return null
-  }
-
   if (sequences.length === 1) {
-    // Only one A-D sequence - use it
     return sequences[0].group
   }
+
+  if (sequences.length > 1) {
+    sequences.sort((a, b) => b.score - a.score)
+    return sequences[0].group
+  }
+
+  // Fallback: Group candidates by label A, B, C, D (handles 2-column or slightly disordered layouts)
+  const labelMap = {}
+  candidates.forEach((c) => {
+    if (!labelMap[c.label] || (c.text.length > (labelMap[c.label].text.length || 0))) {
+      labelMap[c.label] = c
+    }
+  })
+
+  const fallback = ['A', 'B', 'C', 'D'].filter((l) => labelMap[l]).map((l) => labelMap[l])
+  return fallback.length > 0 ? fallback : null
 
   // Multiple A-D sequences found (e.g., Assertion/Reason + actual options)
   // Select the one with best score

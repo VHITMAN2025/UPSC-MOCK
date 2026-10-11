@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle,
   RefreshCw, Eye, Trash2, Plus, Clock, ChevronDown, ChevronRight,
-  Layers, Zap, BookOpen, AlertTriangle, RotateCcw, X, Save, Play,
+  Layers, Zap, BookOpen, AlertTriangle, RotateCcw, X, Save, Play, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase'
 import { byopService } from '../../services/tnpscService'
 import { extractPdfText } from '../../services/pdfTextExtractor'
 import { parseMcqQuestions } from '../../services/mcqParser'
+import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
 import { formatDate } from '../../lib/utils'
@@ -188,8 +189,8 @@ function QuestionsPanel({ questions, onSave, saving }) {
                     </label>
                     <textarea
                       rows={2}
-                      value={q.tamil_question ?? ''}
-                      onChange={e => editQuestion(idx, 'tamil_question', e.target.value)}
+                      value={q.question_text || q.tamil_question || ''}
+                      onChange={e => { editQuestion(idx, 'question_text', e.target.value); editQuestion(idx, 'tamil_question', e.target.value) }}
                       className="w-full border border-surface-border rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand resize-none"
                       placeholder="Tamil text…"
                     />
@@ -221,8 +222,8 @@ function QuestionsPanel({ questions, onSave, saving }) {
                         </label>
                         <input
                           type="text"
-                          value={q[`option_${opt.toLowerCase()}`] ?? ''}
-                          onChange={e => editQuestion(idx, `option_${opt.toLowerCase()}`, e.target.value)}
+                          value={q[`option_${opt.toLowerCase()}`] || q.options?.[opt] || ''}
+                          onChange={e => { editQuestion(idx, `option_${opt.toLowerCase()}`, e.target.value); if (q.options) q.options[opt] = e.target.value }}
                           className={`w-full border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand ${
                             q.correct_option === opt
                               ? 'border-emerald-400 bg-emerald-50'
@@ -393,7 +394,7 @@ export function BYOPPage() {
   }
 
   // ── Process (run full pipeline) ────────────────────────────────────────────
-  async function handleProcess(paper) {
+  async function handleProcess(paper, mode = 'ai') {
     // Generate unique processing job ID
     const processingJobId = `${paper.id}-${Date.now()}`
     
@@ -430,6 +431,64 @@ export function BYOPPage() {
         throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
       }
       const pdfBlob = await response.blob()
+      
+      // Check if AI Vision extraction is requested (Best for Tamil / Scanned / Handwritten)
+      if (mode === 'ai') {
+        setProgress({
+          stage: 'extracting',
+          currentPage: 1,
+          totalPages: 1,
+          pagesProcessed: 1,
+          questionsFound: 0,
+          statusText: 'Analyzing Tamil PDF with Gemini AI Vision...'
+        })
+
+        const base64Data = await blobToBase64(pdfBlob)
+        const aiQuestions = await extractQuestionsWithAi(
+          base64Data,
+          'gemini-3.8-flash',
+          (statusText) => setProgress({ stage: 'extracting', currentPage: 1, totalPages: 1, pagesProcessed: 1, questionsFound: 0, statusText })
+        )
+
+        const questions = aiQuestions.map((q, idx) => ({
+          ...q,
+          question_number: q.question_number || idx + 1,
+          parser_status: 'ready',
+          isValid: true,
+          extraction_status: 'complete',
+          source_page: 1,
+        }))
+
+        setResult({
+          processingJobId,
+          fileName: paper.file_name,
+          questions,
+          totalQuestions: questions.length,
+          totalPages: 1,
+          processedPages: 1,
+        })
+
+        const storagePayload = sanitizeUnicode({
+          processing_status: 'ready',
+          total_pages: 1,
+          processed_pages: 1,
+          extracted_count: questions.length,
+          questions_json: sanitizeUnicode(questions.slice(0, 20)),
+          batch_progress_json: [],
+          notes: `${questions.length} questions extracted using AI Vision.`,
+        })
+
+        await byopService.update(paper.id, user.id, storagePayload)
+
+        setPapers(prev => prev.map(p => p.id === paper.id
+          ? { ...p, processing_status: 'ready', extracted_count: questions.length }
+          : p
+        ))
+
+        setShowReview(true)
+        toast.success(`AI extracted ${questions.length} questions accurately!`)
+        return
+      }
       
       console.log('[BYOP] PDF Blob fetched:', {
         processingJobId,
@@ -532,7 +591,20 @@ export function BYOPPage() {
         throw parserError
       }
       
-      const questions = parseResult.questions || []
+      const rawQuestions = parseResult.questions || []
+      const questions = rawQuestions.map((q, idx) => ({
+        ...q,
+        question_number: q.question_number || idx + 1,
+        question_text: q.question_text || q.tamil_question || `Question ${idx + 1}`,
+        tamil_question: q.tamil_question || q.question_text || '',
+        option_a: q.option_a || q.options?.A || '',
+        option_b: q.option_b || q.options?.B || '',
+        option_c: q.option_c || q.options?.C || '',
+        option_d: q.option_d || q.options?.D || '',
+        correct_option: q.correct_option || q.correct_answer || null,
+        parser_status: q.parser_status || 'ready',
+        isValid: q.isValid !== false,
+      }))
 
       console.log('[BYOP] MCQ parsing complete:', {
         processingJobId,
@@ -885,12 +957,12 @@ export function BYOPPage() {
           question_number: parseInt(String(q.question_number), 10) || i + 1,
           question_text:   [q.tamil_question, q.english_question].filter(Boolean).join('\n').trim()
                            || q.question_text || `Question ${i + 1}`,
-          option_a:        q.option_a || '',
-          option_b:        q.option_b || '',
-          option_c:        q.option_c || '',
-          option_d:        q.option_d || '',
-          correct_option:  q.correct_option ?? null,
-          explanation:     null,
+            option_a:        q.option_a || q.options?.A || '',
+            option_b:        q.option_b || q.options?.B || '',
+            option_c:        q.option_c || q.options?.C || '',
+            option_d:        q.option_d || q.options?.D || '',
+            correct_option:  q.correct_option || q.correct_answer || null,
+            explanation:     q.explanation || null,
         }))
 
       await questionService.saveQuestionsToSupabase(newPaper.id, toSave, false)
@@ -1033,13 +1105,27 @@ export function BYOPPage() {
                   {/* Action buttons */}
                   <div className="flex items-center gap-2 shrink-0">
                     {isProcessable && (
-                      <button
-                        onClick={() => handleProcess(paper)}
-                        disabled={!!activeId}
-                        className="px-3 py-1.5 bg-tnpsc-brand text-white text-xs font-bold rounded-lg hover:bg-tnpsc-brand-hover transition-colors disabled:opacity-40"
-                      >
-                        {paper.processing_status === 'failed' ? 'Retry' : 'Process'}
-                      </button>
+                      
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleProcess(paper, 'ai')}
+                            disabled={!!activeId}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-subtle disabled:opacity-40"
+                            title="Extract questions with Gemini AI (Best for Tamil / Scanned / Handwritten PDFs)"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            {paper.processing_status === 'failed' ? 'Retry (AI)' : 'Process with AI'}
+                          </button>
+                          <button
+                            onClick={() => handleProcess(paper, 'local')}
+                            disabled={!!activeId}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-body-secondary text-xs font-semibold rounded-lg transition-colors disabled:opacity-40"
+                            title="Run offline PDF.js parser (For selectable-text English PDFs)"
+                          >
+                            Local
+                          </button>
+                        </div>
+                      
                     )}
 
                     {/* Attempt Test — for READY papers */}

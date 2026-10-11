@@ -296,11 +296,8 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
           errors.push('Missing question text')
         }
         ['A', 'B', 'C', 'D'].forEach((opt) => {
-          if (!updated.options[opt]) errors.push(`Missing Option ${opt}`)
+          if (!updated.options?.[opt]?.trim()) errors.push(`Missing Option ${opt}`)
         })
-        if (!updated.correct_answer) {
-          errors.push('Correct answer not set')
-        }
 
         updated.status = errors.length === 0 ? 'valid' : 'needs_review'
         updated.warnings = errors
@@ -338,14 +335,18 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
       return
     }
 
-    const validQuestions = questions.filter((q) => q.status === 'valid')
-    const needsReview = questions.length - validQuestions.length
+    const questionsToSave = questions.filter((q) => q.question_text?.trim())
+    if (questionsToSave.length === 0) {
+      toast.error('No questions with question text found.')
+      return
+    }
 
-    if (needsReview > 0) {
+    const incomplete = questions.filter((q) => q.status === 'needs_review').length
+    if (incomplete > 0) {
       const proceed = confirm(
-        `${validQuestions.length} valid question(s) ready to import.\n` +
-        `${needsReview} question(s) need review and will be skipped.\n\n` +
-        `Continue with valid questions only?`
+        `${questionsToSave.length} total question(s) ready to save.\n` +
+        `(${incomplete} question(s) flagged with review warnings).\n\n` +
+        `Import all ${questionsToSave.length} questions?`
       )
       if (!proceed) return
     }
@@ -353,14 +354,14 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
     setSaving(true)
 
     try {
-      const toSave = validQuestions.map((q) => ({
-        question_number: q.question_number,
+      const toSave = questionsToSave.map((q, idx) => ({
+        question_number: q.question_number || idx + 1,
         question_text: q.question_text,
-        option_a: q.options.A || '',
-        option_b: q.options.B || '',
-        option_c: q.options.C || '',
-        option_d: q.options.D || '',
-        correct_option: q.correct_answer,
+        option_a: q.options?.A || q.option_a || '',
+        option_b: q.options?.B || q.option_b || '',
+        option_c: q.options?.C || q.option_c || '',
+        option_d: q.options?.D || q.option_d || '',
+        correct_option: q.correct_answer || q.correct_option || null,
         explanation: null,
       }))
 

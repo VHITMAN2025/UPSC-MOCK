@@ -6,6 +6,7 @@ import {
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { questionService } from '../../services/questionService'
 import { useApp } from '../../contexts/AppContext'
+import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
 
 export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const { toast } = useApp()
@@ -56,83 +57,6 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     }
   }
 
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const extractWithRetriesAndFallback = async (genAI, initialModelId, base64Data) => {
-    let currentModelId = initialModelId;
-    let fallbackIndex = modelsList.findIndex(m => m.id === currentModelId);
-    if (fallbackIndex === -1) fallbackIndex = 0;
-    
-    // We will attempt at most 3 distinct models
-    const MAX_MODELS_TO_TRY = Math.min(3, modelsList.length);
-    let modelsTried = 0;
-
-    const prompt = `You are a helpful assistant that extracts questions and multiple-choice options from handwritten or scanned Tamil PDFs. 
-    Extract all the questions and their options (A, B, C, D) from this document.
-    Format the output ONLY as a JSON array of objects. Do not include markdown code blocks or any other text.
-    Each object must have the following keys:
-    - "question_number": integer
-    - "question_text": string (the Tamil text of the question)
-    - "option_a": string
-    - "option_b": string
-    - "option_c": string
-    - "option_d": string
-    - "correct_option": string ("A", "B", "C", or "D") - if not marked, guess or leave null
-    - "explanation": string (any explanation or leave empty)
-    `
-
-    while (modelsTried < MAX_MODELS_TO_TRY) {
-      const model = genAI.getGenerativeModel({ model: currentModelId });
-      let retries = 0;
-      const MAX_RETRIES = 3;
-      
-      while (retries <= MAX_RETRIES) {
-        try {
-          console.log(`Attempting extraction with model: ${currentModelId} (Try ${retries + 1}/${MAX_RETRIES + 1})`);
-          const response = await model.generateContent([
-            prompt,
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: "application/pdf"
-              }
-            }
-          ]);
-          return response;
-        } catch (error) {
-          const is503 = error.message?.includes('503') || error.status === 503;
-          const is429 = error.message?.includes('429') || error.status === 429;
-          
-          if ((is503 || is429) && retries < MAX_RETRIES) {
-            retries++;
-            const waitTime = Math.pow(2, retries) * 1000;
-            console.warn(`[Gemini Error] ${error.message}. Retrying in ${waitTime/1000}s...`);
-            
-            // Show toast only on first retry to avoid spam
-            if (retries === 1) {
-              toast.error(`Model busy (High Demand). Auto-retrying in ${waitTime/1000}s...`);
-            }
-            await delay(waitTime);
-          } else {
-            console.error(`Model ${currentModelId} failed completely.`, error);
-            break; // Move to fallback model
-          }
-        }
-      }
-      
-      // Fallback to next model
-      modelsTried++;
-      if (modelsTried < MAX_MODELS_TO_TRY) {
-        fallbackIndex = (fallbackIndex + 1) % modelsList.length;
-        currentModelId = modelsList[fallbackIndex].id;
-        toast.error(`Previous model failed. Switching to fallback model: ${modelsList[fallbackIndex].name}`);
-        setSelectedModel(currentModelId);
-      } else {
-        throw new Error("All model extraction attempts failed due to high demand or errors. Please try again later.");
-      }
-    }
-  };
-
   const handleExtract = async () => {
     if (!file) return
 
@@ -141,50 +65,22 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     setQuestions([])
 
     try {
-      // 1. Read file as base64
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        try {
-          const base64Data = e.target.result.split(',')[1]
+      const base64Data = await blobToBase64(file)
+      const parsedQuestions = await extractQuestionsWithAi(
+        base64Data,
+        selectedModel,
+        (msg) => toast(msg)
+      )
 
-          // 2. Initialize Gemini API
-          const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-          if (!apiKey) {
-            throw new Error("VITE_GEMINI_API_KEY is not set in .env")
-          }
-
-          const genAI = new GoogleGenerativeAI(apiKey)
-
-          // 3. Call API with Retries and Fallback
-          const response = await extractWithRetriesAndFallback(genAI, selectedModel, base64Data)
-
-          const text = response.response.text()
-          
-          // 4. Parse JSON
-          const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim()
-          let parsedQuestions = []
-          try {
-            parsedQuestions = JSON.parse(cleanedText)
-          } catch (err) {
-            console.error("Failed to parse JSON from AI:", cleanedText)
-            throw new Error("AI returned malformed JSON. Please try again.")
-          }
-
-          setQuestions(parsedQuestions)
-          setResult({
-            totalQuestions: parsedQuestions.length,
-          })
-          setLoading(false)
-        } catch (err) {
-          console.error(err)
-          toast.error(err.message || "Failed to process PDF.")
-          setLoading(false)
-        }
-      }
-      reader.readAsDataURL(file)
+      setQuestions(parsedQuestions)
+      setResult({
+        totalQuestions: parsedQuestions.length,
+      })
+      toast.success(`Successfully extracted ${parsedQuestions.length} questions!`)
     } catch (err) {
       console.error(err)
-      toast.error(err.message || "Failed to read file.")
+      toast.error(err.message || 'Failed to process PDF.')
+    } finally {
       setLoading(false)
     }
   }
