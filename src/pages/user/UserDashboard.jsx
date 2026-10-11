@@ -175,7 +175,7 @@ export function UserDashboard() {
                 { label: 'Custom Practice', icon: BookOpen,   action: () => navigate('/practice'),  color: 'bg-emerald-50 text-emerald-700' },
                 { label: 'Full Mock Test',  icon: Zap,        action: () => navigate('/mock-tests'), color: 'bg-orange-50 text-orange-700' },
                 { label: 'PYQ Papers',      icon: FileText,   action: () => navigate('/papers'),    color: 'bg-blue-50 text-blue-700' },
-                { label: 'Syllabus',        icon: BookMarked, action: () => setShowSyllabus(true),  color: 'bg-purple-50 text-purple-700' },
+                { label: 'Syllabus',        icon: BookMarked, action: () => navigate('/syllabus'), color: 'bg-purple-50 text-purple-700' },
                 { label: 'Upload Paper',    icon: Upload,     action: () => navigate('/my-papers'), color: 'bg-slate-100 text-slate-700' },
               ].map(({ label, icon: Icon, action, color }) => (
                 <button

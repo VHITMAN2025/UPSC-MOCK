@@ -18,36 +18,39 @@ import React, { useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Upload, Loader2, FileCheck, AlertCircle, CheckCircle2, Eye, Save,
-  ChevronDown, ChevronRight, Trash2, Plus, GripVertical, X
+  ChevronDown, ChevronRight, Trash2, Plus, GripVertical, X, Sparkles
 } from 'lucide-react'
 import { useApp } from '../../contexts/AppContext'
 import { questionService } from '../../services/questionService'
 import { extractPdfText } from '../../services/pdfTextExtractor'
 import { parseMcqQuestions } from '../../services/mcqParser'
+import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
 
 // ─── Progress Display ──────────────────────────────────────────────────────────
-function ExtractionProgress({ stage, currentPage, totalPages }) {
+function ExtractionProgress({ stage, currentPage, totalPages, statusText }) {
   const pct = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs">
         <span className="font-semibold text-purple-800">
-          {stage === 'extracting' ? 'Extracting text...' : 'Parsing questions...'}
+          {statusText || (stage === 'extracting' ? 'Extracting text...' : 'Parsing questions...')}
         </span>
-        <span className="text-purple-600 font-mono">{pct}%</span>
+        <span className="text-purple-600 font-mono">{pct > 0 ? `${pct}%` : ''}</span>
       </div>
       <div className="w-full h-2.5 bg-purple-100 rounded-full overflow-hidden">
         <div
           className="h-full bg-purple-600 rounded-full transition-all duration-300"
-          style={{ width: `${Math.max(pct, 4)}%` }}
+          style={{ width: `${Math.max(pct, 15)}%` }}
         />
       </div>
-      <div className="text-center">
-        <p className="text-sm font-bold text-purple-800">
-          Page {currentPage} / {totalPages}
-        </p>
-      </div>
+      {totalPages > 1 && (
+        <div className="text-center">
+          <p className="text-sm font-bold text-purple-800">
+            Page {currentPage} / {totalPages}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -230,45 +233,87 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
     setProgress(null)
   }
 
-  async function handleExtract() {
+  async function handleExtract(mode = 'ai') {
     if (!file) {
       toast.error('Select a PDF first.')
       return
     }
 
     setProcessing(true)
-    setProgress({ stage: 'extracting', currentPage: 0, totalPages: 0 })
+    setProgress({ stage: 'extracting', currentPage: 0, totalPages: 0, statusText: 'Initializing PDF extraction...' })
     setResult(null)
     setQuestions([])
     setImportMsg(null)
 
     try {
-      // Step 1: Extract text
-      const extractResult = await extractPdfText(file, (page, total) => {
-        setProgress({ stage: 'extracting', currentPage: page, totalPages: total })
-      })
+      if (mode === 'ai') {
+        setProgress({
+          stage: 'ai',
+          currentPage: 1,
+          totalPages: 1,
+          statusText: 'Analyzing PDF with Gemini AI (using VITE_GEMINI_API_KEY)...'
+        })
 
-      if (!extractResult.hasSelectableText) {
-        toast.error(
-          'PDF contains no selectable text. This appears to be a scanned PDF. ' +
-          'Scanned/image-only PDFs are not supported. Please upload a selectable-text PDF.'
+        const base64Data = await blobToBase64(file)
+        const aiQuestions = await extractQuestionsWithAi(
+          base64Data,
+          'gemini-3.8-flash',
+          (msg) => setProgress({ stage: 'ai', currentPage: 1, totalPages: 1, statusText: msg })
         )
-        setProcessing(false)
+
+        const formatted = aiQuestions.map((q, idx) => ({
+          question_number: q.question_number || idx + 1,
+          question_text: q.question_text || '',
+          options: {
+            A: q.option_a || q.options?.A || '',
+            B: q.option_b || q.options?.B || '',
+            C: q.option_c || q.options?.C || '',
+            D: q.option_d || q.options?.D || '',
+          },
+          option_a: q.option_a || q.options?.A || '',
+          option_b: q.option_b || q.options?.B || '',
+          option_c: q.option_c || q.options?.C || '',
+          option_d: q.option_d || q.options?.D || '',
+          correct_answer: q.correct_option || null,
+          status: 'valid',
+          warnings: [],
+          page_number: q.source_page || 1,
+        }))
+
+        setResult({
+          totalQuestions: formatted.length,
+          validQuestions: formatted.length,
+          needsReview: 0,
+          totalPages: 1,
+          warnings: [],
+        })
+        setQuestions(formatted)
+
+        toast.success(`Gemini AI successfully extracted ${formatted.length} question(s)!`)
         return
       }
 
-      // Step 2: Parse MCQs
-      setProgress({ stage: 'parsing', currentPage: 0, totalPages: extractResult.totalPages })
+      // Local extraction mode
+      const extractResult = await extractPdfText(file, (page, total) => {
+        setProgress({ stage: 'extracting', currentPage: page, totalPages: total, statusText: `Reading page ${page} of ${total}...` })
+      })
+
+      if (!extractResult.hasSelectableText) {
+        toast.error('PDF contains no selectable text. Switching to Gemini AI extraction...')
+        return handleExtract('ai')
+      }
+
+      setProgress({ stage: 'parsing', currentPage: 0, totalPages: extractResult.totalPages, statusText: 'Parsing MCQ structure...' })
 
       const parseResult = await parseMcqQuestions(extractResult, (page, total) => {
-        setProgress({ stage: 'parsing', currentPage: page, totalPages: total })
+        setProgress({ stage: 'parsing', currentPage: page, totalPages: total, statusText: `Parsing page ${page} of ${total}...` })
       })
 
       setResult(parseResult)
       setQuestions(parseResult.questions)
 
       if (parseResult.totalQuestions === 0) {
-        toast.warning('No questions detected. Please check the PDF format.')
+        toast.warning('No questions detected with local parser. You can try extracting with Gemini AI.')
       } else {
         toast.success(
           `${parseResult.totalQuestions} question(s) extracted! ` +
@@ -400,12 +445,11 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
     <div className="space-y-5">
       {/* Info banner */}
       <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
-        <FileCheck className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+        <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-bold text-purple-800">Text-Based PDF Import</p>
+          <p className="text-sm font-bold text-purple-800">AI-Powered PDF Question Import</p>
           <p className="text-xs text-body-secondary mt-0.5">
-            Extracts MCQ questions from selectable-text PDFs using PDF.js. Detects question numbers,
-            options A/B/C/D, and tick marks (✓ ✔ ☑ √). NO AI/OCR - works offline with deterministic parsing.
+            Extracts questions and options A/B/C/D accurately using Google Gemini AI (via your configured <code>VITE_GEMINI_API_KEY</code>). Also includes an offline fallback option.
           </p>
         </div>
       </div>
@@ -441,13 +485,22 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
         />
 
         {file && !processing && (
-          <button
-            onClick={handleExtract}
-            className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-subtle transition-colors"
-          >
-            <FileCheck className="w-4 h-4" />
-            {result ? 'Re-extract Questions' : 'Extract Questions'}
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => handleExtract('ai')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-subtle transition-colors"
+            >
+              <Sparkles className="w-4 h-4" />
+              {result ? 'Re-extract with Gemini AI' : 'Extract Questions with Gemini AI'}
+            </button>
+            <button
+              onClick={() => handleExtract('local')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-body-secondary rounded-lg text-xs font-semibold transition-colors"
+            >
+              <FileCheck className="w-4 h-4" />
+              Local Offline Parser
+            </button>
+          </div>
         )}
       </div>
 

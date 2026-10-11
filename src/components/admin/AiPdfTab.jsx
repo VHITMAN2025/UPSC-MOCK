@@ -13,6 +13,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [statusMsg, setStatusMsg] = useState('')
   const [result, setResult] = useState(null)
   const [questions, setQuestions] = useState([])
   const [importMsg, setImportMsg] = useState('')
@@ -47,13 +48,14 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     }
     fetchModels()
   }, [])
-  
+
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0])
       setResult(null)
       setQuestions([])
       setImportMsg('')
+      setStatusMsg('')
     }
   }
 
@@ -61,6 +63,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     if (!file) return
 
     setLoading(true)
+    setStatusMsg('Reading PDF file...')
     setResult(null)
     setQuestions([])
 
@@ -69,7 +72,11 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
       const parsedQuestions = await extractQuestionsWithAi(
         base64Data,
         selectedModel,
-        (msg) => toast(msg)
+        (msg) => {
+          setStatusMsg(msg)
+          if (typeof toast === 'function') toast(msg)
+          else if (toast?.info) toast.info(msg)
+        }
       )
 
       setQuestions(parsedQuestions)
@@ -205,7 +212,9 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <Loader2 className="w-5 h-5 text-blue-600 animate-spin shrink-0" />
-            <p className="text-sm font-bold text-blue-800">AI is analyzing the PDF. This may take a minute...</p>
+            <p className="text-sm font-bold text-blue-800">
+              {statusMsg || 'AI is analyzing the PDF. This may take a moment...'}
+            </p>
           </div>
         </div>
       )}

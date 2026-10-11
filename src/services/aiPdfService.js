@@ -15,7 +15,12 @@ export async function fetchAvailableGeminiModels(apiKey) {
   } catch (e) {
     console.error('Failed to fetch Gemini models', e)
   }
-  return []
+  return [
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+  ]
 }
 
 /**
@@ -35,7 +40,7 @@ export function blobToBase64(blob) {
 }
 
 /**
- * Extracts structured questions from PDF using Gemini Vision with retry and model fallback.
+ * Extracts structured questions from PDF using Gemini Vision with retry and fast model fallback.
  */
 export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-3.8-flash', onStatusUpdate) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -46,14 +51,17 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
   const genAI = new GoogleGenerativeAI(apiKey)
   const availableModels = await fetchAvailableGeminiModels(apiKey)
 
-  const modelsToTry = []
-  if (preferredModel) modelsToTry.push(preferredModel)
-  availableModels.forEach((m) => {
-    if (!modelsToTry.includes(m.id)) modelsToTry.push(m.id)
-  })
-  if (modelsToTry.length === 0) {
-    modelsToTry.push('gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-flash-latest')
-  }
+  const candidateList = [
+    preferredModel,
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-pro-preview',
+    'gemini-flash-latest',
+    ...availableModels.map((m) => m.id),
+  ]
+
+  // Deduplicate models to try
+  const modelsToTry = Array.from(new Set(candidateList.filter(Boolean)))
 
   const prompt = `You are an expert OCR and exam question parser. Analyze the uploaded PDF document (which may contain Tamil handwritten or scanned text).
 Extract ALL multiple-choice questions (MCQs) and their options (A, B, C, D) accurately.
@@ -70,17 +78,25 @@ Each object must have the following keys:
 - "explanation": string (any notes or empty string)
 `
 
-  const MAX_MODELS = Math.min(3, modelsToTry.length)
   let lastError = null
+  const MAX_MODELS = Math.min(4, modelsToTry.length)
+
+  const notify = (msg) => {
+    if (typeof onStatusUpdate === 'function') {
+      try { onStatusUpdate(msg) } catch (e) { console.warn('Status callback error:', e) }
+    }
+  }
 
   for (let mIdx = 0; mIdx < MAX_MODELS; mIdx++) {
     const currentModelId = modelsToTry[mIdx]
+    const nextModelId = mIdx + 1 < MAX_MODELS ? modelsToTry[mIdx + 1] : null
     const model = genAI.getGenerativeModel({ model: currentModelId })
-    const MAX_RETRIES = 3
+
+    const MAX_RETRIES = 1
 
     for (let retry = 0; retry <= MAX_RETRIES; retry++) {
       try {
-        onStatusUpdate?.(`Analyzing PDF with AI (${currentModelId})...`)
+        notify(`Analyzing PDF with AI (${currentModelId})...`)
         const response = await model.generateContent([
           prompt,
           {
@@ -118,17 +134,24 @@ Each object must have the following keys:
         lastError = err
         const is503 = err.message?.includes('503') || err.status === 503
         const is429 = err.message?.includes('429') || err.status === 429
+
+        // If 503 (high demand) and next model is available, switch immediately!
+        if (is503 && nextModelId) {
+          console.warn(`[Gemini] ${currentModelId} 503 High Demand. Auto-switching to ${nextModelId}...`)
+          notify(`${currentModelId} busy (503 High Demand). Switching to ${nextModelId}...`)
+          await delay(1000)
+          break
+        }
+
         if ((is503 || is429) && retry < MAX_RETRIES) {
-          const waitMs = Math.pow(2, retry + 1) * 1000
-          onStatusUpdate?.(`Model busy (${currentModelId}). Retrying in ${waitMs / 1000}s...`)
-          await delay(waitMs)
+          notify(`Model ${currentModelId} busy. Retrying in 2s...`)
+          await delay(2000)
         } else {
           break
         }
       }
     }
-    onStatusUpdate?.(`Model ${currentModelId} unavailable. Switching to fallback...`)
   }
 
-  throw new Error(lastError?.message || 'Failed to extract questions with AI.')
+  throw new Error(lastError?.message || 'Failed to extract questions with AI. All candidate models busy.')
 }

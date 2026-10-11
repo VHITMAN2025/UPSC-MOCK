@@ -11,7 +11,7 @@ import { supabase } from '../../lib/supabase'
 import { byopService } from '../../services/tnpscService'
 import { extractPdfText } from '../../services/pdfTextExtractor'
 import { parseMcqQuestions } from '../../services/mcqParser'
-import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
+import { extractQuestionsWithAi, blobToBase64, fetchAvailableGeminiModels } from '../../services/aiPdfService'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
 import { formatDate } from '../../lib/utils'
@@ -352,6 +352,29 @@ export function BYOPPage() {
   const [result, setResult]         = useState(null)   // local parser result
   const [showReview, setShowReview] = useState(false)
   const [saving, setSaving]         = useState(false)
+  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash')
+  const [modelsList, setModelsList] = useState([
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Recommended)' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+  ])
+
+  useEffect(() => {
+    async function loadModels() {
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      if (!apiKey) return
+      try {
+        const list = await fetchAvailableGeminiModels(apiKey)
+        if (list && list.length > 0) {
+          setModelsList(list)
+        }
+      } catch (e) {
+        console.warn('Error loading models in BYOP:', e)
+      }
+    }
+    loadModels()
+  }, [])
 
   useEffect(() => { if (user?.id) fetchPapers() }, [user?.id])
 
@@ -446,7 +469,7 @@ export function BYOPPage() {
         const base64Data = await blobToBase64(pdfBlob)
         const aiQuestions = await extractQuestionsWithAi(
           base64Data,
-          'gemini-3.8-flash',
+          selectedModel,
           (statusText) => setProgress({ stage: 'extracting', currentPage: 1, totalPages: 1, pagesProcessed: 1, questionsFound: 0, statusText })
         )
 
@@ -1015,15 +1038,31 @@ export function BYOPPage() {
         <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
       </div>
 
-      {/* Pipeline info banner */}
-      <div className="bg-tnpsc-brand-light border border-tnpsc-brand/20 rounded-2xl p-4 flex items-start gap-3">
-        <Layers className="w-5 h-5 text-tnpsc-brand shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-bold text-tnpsc-brand">Local PDF.js Extraction Pipeline</p>
-          <p className="text-xs text-body-secondary mt-0.5">
-            Uses PDF.js to extract selectable text from PDFs and deterministic parser to identify MCQ questions with tick-mark detection.
-            Supports selectable-text PDFs only. Scanned/image-only PDFs are not supported.
-          </p>
+            {/* Model selector & info bar */}
+      <div className="bg-white border border-surface-border rounded-2xl p-4 shadow-subtle flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Sparkles className="w-5 h-5 text-tnpsc-brand shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-body-text">AI Vision & Local PDF Pipeline</p>
+            <p className="text-xs text-body-secondary mt-0.5">
+              Extract questions from Tamil, handwritten, or scanned PDFs. Switch models if any version experiences high traffic.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-bold text-body-secondary whitespace-nowrap">AI Model Version:</label>
+          <select
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            className="text-xs font-semibold border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand bg-slate-50 text-body-text cursor-pointer"
+          >
+            {modelsList.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name || m.id}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -129,12 +129,14 @@ export function AppProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id))
   }, [])
 
-  const toast = {
-    success: (msg, dur) => addToast(msg, 'success', dur),
-    error:   (msg, dur) => addToast(msg, 'error',   dur || 6000),
-    info:    (msg, dur) => addToast(msg, 'info',    dur),
-    warning: (msg, dur) => addToast(msg, 'warning', dur),
-  }
+  const toast = React.useMemo(() => {
+    const fn = (msg, dur) => addToast(msg, 'info', dur)
+    fn.success = (msg, dur) => addToast(msg, 'success', dur)
+    fn.error   = (msg, dur) => addToast(msg, 'error',   dur || 6000)
+    fn.info    = (msg, dur) => addToast(msg, 'info',    dur)
+    fn.warning = (msg, dur) => addToast(msg, 'warning', dur)
+    return fn
+  }, [addToast])
 
   // Cleanup on unmount
   useEffect(() => {
