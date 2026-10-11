@@ -67,7 +67,10 @@ export function UserDashboard() {
     }
   }
 
-  const completedAttempts = recentAttempts.filter(a => a.status === 'completed')
+  // Exclude quick recall from mock test attempts — keeping Latest Result card dedicated to full exam papers
+  const completedAttempts = recentAttempts.filter(
+    a => a.status === 'completed' && a.attempt_type !== 'QUICK_RECALL' && a.papers?.paper_type !== 'quick_recall'
+  )
   const avgAccuracy = completedAttempts.length
     ? (completedAttempts.reduce((s, a) => s + Number(a.accuracy ?? 0), 0) / completedAttempts.length).toFixed(1)
     : '—'
@@ -278,27 +281,35 @@ export function UserDashboard() {
 
           {/* Consistency / Streak card */}
           <div className="bg-gradient-to-br from-tnpsc-brand to-tnpsc-brand-dark rounded-2xl p-5 text-white shadow-brand">
-            <div className="flex items-center gap-2 mb-3">
-              <Flame className="w-5 h-5 text-orange-300" />
-              <span className="font-bold text-sm">Your Streak</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-300" />
+                <span className="font-bold text-sm">Daily Recall Streak</span>
+              </div>
+              <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">
+                5/5 Rule
+              </span>
             </div>
-            <p className="text-4xl font-black">{streak?.current_streak ?? 0}</p>
-            <p className="text-sm text-white/70 mt-1">consecutive correct answers</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-4xl font-black">{streak?.current_streak ?? 0}</p>
+              <span className="text-base text-white/80 font-bold">days</span>
+            </div>
+            <p className="text-xs text-white/75 mt-1">Requires 5/5 daily score to maintain streak</p>
             <div className="mt-4 grid grid-cols-2 gap-3 text-center">
               <div className="bg-white/10 rounded-xl py-2">
-                <p className="text-lg font-bold">{streak?.highest_streak ?? 0}</p>
+                <p className="text-lg font-bold">{streak?.highest_streak ?? 0} d</p>
                 <p className="text-[10px] text-white/70">Best streak</p>
               </div>
               <div className="bg-white/10 rounded-xl py-2">
-                <p className="text-lg font-bold">{streak?.questions_answered ?? 0}</p>
-                <p className="text-[10px] text-white/70">Answered</p>
+                <p className="text-lg font-bold">{streak?.recall_points ?? 0}</p>
+                <p className="text-[10px] text-white/70">Recall pts</p>
               </div>
             </div>
             <button
               onClick={() => setShowRecall(true)}
-              className="mt-4 w-full py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-semibold transition-colors"
+              className="mt-4 w-full py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
             >
-              Start Quick Recall →
+              <span>Daily Quick Recall (5 Qs) →</span>
             </button>
           </div>
 
