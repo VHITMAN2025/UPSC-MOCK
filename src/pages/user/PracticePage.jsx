@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Brain, Play, Clock, Zap, BookOpen, Loader2, CheckCircle2, XCircle,
   ChevronLeft, ChevronRight, AlertCircle, BarChart3, Timer,
@@ -20,12 +20,15 @@ function PracticeBuilder({ onStart }) {
   const { selectedExam } = useApp()
   const { toast } = useApp()
   const { user }  = useAuth()
+  const [searchParams] = useSearchParams()
+  const urlSubject = searchParams.get('subject')
+  const urlTopic   = searchParams.get('topic')
 
   const [subjects, setSubjects]   = useState(['All Subjects'])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
 
   const [config, setConfig] = useState({
-    subject: 'All Subjects', question_count: 25,
+    subject: urlSubject || 'All Subjects', question_count: 25,
     timer_mode: 'strict', difficulty: 'adaptive', exam_context: selectedExam,
   })
   const [loading, setLoading] = useState(false)
@@ -33,12 +36,12 @@ function PracticeBuilder({ onStart }) {
 
   // Fetch subjects from syllabus_units for the selected exam
   useEffect(() => {
-    setConfig(c => ({ ...c, subject: 'All Subjects', exam_context: selectedExam }))
+    setConfig(c => ({ ...c, subject: urlSubject || 'All Subjects', exam_context: selectedExam }))
     setError(null)
-    loadSubjects()
-  }, [selectedExam])
+    loadSubjects(urlSubject)
+  }, [selectedExam, urlSubject])
 
-  async function loadSubjects() {
+  async function loadSubjects(preferredSubject) {
     setSubjectsLoading(true)
     try {
       // Get exam ID first
@@ -58,6 +61,9 @@ function PracticeBuilder({ onStart }) {
         if (units && units.length > 0) {
           // Build unique subject list from unit names
           const names = ['All Subjects', ...new Set(units.map(u => u.subject || u.unit_name).filter(Boolean))]
+          if (preferredSubject && !names.includes(preferredSubject)) {
+            names.push(preferredSubject)
+          }
           setSubjects(names)
           return
         }
@@ -71,12 +77,15 @@ function PracticeBuilder({ onStart }) {
       
       if (papers && papers.length > 0) {
         const names = ['All Subjects', ...new Set(papers.map(p => p.subject).filter(Boolean))]
+        if (preferredSubject && !names.includes(preferredSubject)) {
+          names.push(preferredSubject)
+        }
         setSubjects(names)
       } else {
-        setSubjects(['All Subjects'])
+        setSubjects(preferredSubject ? ['All Subjects', preferredSubject] : ['All Subjects'])
       }
     } catch {
-      setSubjects(['All Subjects'])
+      setSubjects(preferredSubject ? ['All Subjects', preferredSubject] : ['All Subjects'])
     } finally {
       setSubjectsLoading(false)
     }
@@ -105,6 +114,16 @@ function PracticeBuilder({ onStart }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-6 space-y-6">
+        {urlTopic && (
+          <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-200 rounded-xl px-4 py-2.5 text-xs">
+            <span className="text-indigo-800 font-semibold">
+              Targeted Micro-Topic Focus: <strong className="font-bold">{urlTopic}</strong>
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+              From Syllabus
+            </span>
+          </div>
+        )}
         {/* Subject */}
         <div>
           <label className="block text-sm font-bold text-body-text mb-2">Target Subject</label>

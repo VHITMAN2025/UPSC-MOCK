@@ -1,34 +1,40 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   BarChart3, Target, CheckCircle2, XCircle, Minus,
   TrendingUp, Loader2, AlertCircle, BookOpen, Award,
-  Flame, Trophy, Brain, Sparkles,
+  Flame, Trophy, Brain, Sparkles, Layers, ArrowRight,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
 import { analyticsService } from '../../services/tnpscService'
+import { syllabusAnalyticsService } from '../../services/syllabusAnalyticsService'
 
 export function AnalyticsPage() {
   const { user } = useAuth()
   const { selectedExam } = useApp()
-  const [data, setData]             = useState(null)
-  const [recallData, setRecallData] = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
+  const navigate = useNavigate()
+  const [data, setData]                 = useState(null)
+  const [recallData, setRecallData]     = useState(null)
+  const [syllabusData, setSyllabusData] = useState(null)
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState(null)
 
   useEffect(() => { if (user?.id) load() }, [user?.id, selectedExam])
 
   async function load() {
     setLoading(true); setError(null)
     try {
-      const [overviewRes, recallRes] = await Promise.allSettled([
+      const [overviewRes, recallRes, syllabusRes] = await Promise.allSettled([
         analyticsService.getOverview(user.id, selectedExam),
         analyticsService.getQuickRecallAnalytics(user.id),
+        syllabusAnalyticsService.getSyllabusWithAnalytics(user.id, selectedExam),
       ])
 
       if (overviewRes.status === 'fulfilled') setData(overviewRes.value)
       if (recallRes.status === 'fulfilled')   setRecallData(recallRes.value)
+      if (syllabusRes.status === 'fulfilled') setSyllabusData(syllabusRes.value)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -54,7 +60,7 @@ export function AnalyticsPage() {
     )
   }
 
-  const hasAnyData = data?.hasData || recallData?.hasData
+  const hasAnyData = data?.hasData || recallData?.hasData || (syllabusData?.units?.length > 0)
 
   if (!hasAnyData) {
     return (
@@ -81,7 +87,91 @@ export function AnalyticsPage() {
             </p>
           </div>
         </div>
+        <button
+          onClick={() => navigate('/syllabus')}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-tnpsc-brand text-white hover:bg-tnpsc-brand-dark transition-colors shadow-sm"
+        >
+          <Layers className="w-3.5 h-3.5" />
+          Open Interactive Syllabus Tree
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
       </div>
+
+      {/* ── SECTION: Syllabus Unit Coverage & Accuracy Roll-Up ─────── */}
+      {syllabusData?.units?.length > 0 && (
+        <div className="bg-white rounded-2xl border border-surface-border p-6 shadow-subtle space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-surface-border">
+            <div className="flex items-center gap-2.5">
+              <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-100 text-indigo-800 tracking-wider">
+                SYLLABUS TAXONOMY
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-body-text">
+                  Unit-Level Coverage & Accuracy Roll-Up
+                </h2>
+                <p className="text-xs text-body-secondary">
+                  Overall Coverage: <strong>{syllabusData.overall?.coverage_percentage ?? 0}%</strong> ({syllabusData.overall?.attempted_questions ?? 0}/{syllabusData.overall?.total_questions ?? 0} unique Qs) · Overall Accuracy: <strong>{syllabusData.overall?.accuracy_percentage ?? 0}%</strong>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/syllabus')}
+              className="text-xs font-bold text-tnpsc-brand hover:underline flex items-center gap-1"
+            >
+              Drill down into Macro & Micro Topics <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {syllabusData.units.map((u) => {
+              const cov = Number(u.coverage_percentage || 0)
+              const acc = Number(u.accuracy_percentage || 0)
+              const hasAtt = Number(u.total_attempts || 0) > 0
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => navigate('/syllabus')}
+                  className="border border-surface-border rounded-xl p-3.5 hover:border-tnpsc-brand/40 hover:bg-slate-50/60 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 mr-1.5">
+                        Unit {u.unit_number}
+                      </span>
+                      <span className="text-xs font-bold text-body-text truncate">
+                        {u.unit_name}
+                      </span>
+                    </div>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                        !hasAtt
+                          ? 'bg-slate-100 text-slate-500 border-slate-200'
+                          : acc >= 70
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : acc >= 50
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-red-50 text-red-700 border-red-200'
+                      }`}
+                    >
+                      {hasAtt ? `${acc}% Acc` : '0% Acc'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-body-secondary mb-1">
+                    <span>Coverage ({u.attempted_questions}/{u.total_questions} Qs)</span>
+                    <span className="font-bold text-body-text">{cov}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, cov)}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── SECTION: Dedicated QUICK_RECALL Category ───────────────── */}
       <div className="bg-white rounded-2xl border border-surface-border p-6 shadow-subtle space-y-5">
