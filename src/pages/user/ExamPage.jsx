@@ -29,6 +29,10 @@ export function ExamPage() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [error, setError] = useState(null)
 
+  // Per-question active pacing tracker (seconds spent on each question)
+  const questionTimingsRef = useRef({})
+  const questionEnterTsRef = useRef(Date.now())
+
   // Load active attempt and questions
   useEffect(() => {
     async function initExam() {
@@ -48,6 +52,15 @@ export function ExamPage() {
 
         setPaper(paperData)
         setAttempt(attemptData)
+
+        // Restore any previously recorded per-question timings for this attempt
+        try {
+          const savedTimings = localStorage.getItem(`exam_q_timings_${attemptData.id}`)
+          if (savedTimings) {
+            questionTimingsRef.current = JSON.parse(savedTimings) || {}
+          }
+        } catch {}
+        questionEnterTsRef.current = Date.now()
 
         // Fetch questions in EXAM MODE (excludes correct_option and explanation for security)
         const qList = await questionService.getQuestionsByPaperId(paperId, true)
@@ -72,9 +85,31 @@ export function ExamPage() {
     initExam()
   }, [paperId, user, navigate])
 
+  // Record time spent when switching questions
+  const flushCurrentQuestionTime = useCallback((qId) => {
+    if (!qId || !attempt?.id) return
+    const now = Date.now()
+    const elapsedSec = Math.max(1, Math.round((now - questionEnterTsRef.current) / 1000))
+    questionEnterTsRef.current = now
+    questionTimingsRef.current[qId] = (questionTimingsRef.current[qId] || 0) + elapsedSec
+    try {
+      localStorage.setItem(`exam_q_timings_${attempt.id}`, JSON.stringify(questionTimingsRef.current))
+    } catch {}
+  }, [attempt?.id])
+
+  useEffect(() => {
+    questionEnterTsRef.current = Date.now()
+    return () => {
+      const q = questions[currentIndex]
+      if (q?.id) flushCurrentQuestionTime(q.id)
+    }
+  }, [currentIndex, questions, flushCurrentQuestionTime])
+
   // Submit Handler
   const handleSubmitExam = useCallback(async () => {
     if (!attempt || submitting) return
+    const activeQ = questions[currentIndex]
+    if (activeQ?.id) flushCurrentQuestionTime(activeQ.id)
     setSubmitting(true)
 
     try {
@@ -85,7 +120,7 @@ export function ExamPage() {
       setError(err.message || 'Failed to submit exam attempt.')
       setSubmitting(false)
     }
-  }, [attempt, answers, submitting, navigate])
+  }, [attempt, answers, submitting, navigate, questions, currentIndex, flushCurrentQuestionTime])
 
   // Timer hook
   const { timeLeftSeconds, isExpired } = useTimer(
@@ -98,6 +133,7 @@ export function ExamPage() {
   const handleSelectOption = (optionKey) => {
     if (!questions[currentIndex] || !attempt) return
     const currentQ = questions[currentIndex]
+    flushCurrentQuestionTime(currentQ.id)
 
     const updated = { ...answers, [currentQ.id]: optionKey }
     setAnswers(updated)

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Flame, Brain, Zap, FileText, BookMarked, Newspaper,
   BellRing, StickyNote, Upload, ArrowRight, Loader2,
-  Trophy, Target, Clock, CheckCircle2, BookOpen,
+  Trophy, Target, Clock, CheckCircle2, BookOpen, BarChart3, Timer,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -174,12 +174,12 @@ export function UserDashboard() {
             <h2 className="text-sm font-bold text-body-text mb-4">Quick Actions</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
-                { label: 'Quick Recall',    icon: Brain,      action: () => setShowRecall(true),    color: 'bg-tnpsc-brand-light text-tnpsc-brand' },
-                { label: 'Custom Practice', icon: BookOpen,   action: () => navigate('/practice'),  color: 'bg-emerald-50 text-emerald-700' },
-                { label: 'Full Mock Test',  icon: Zap,        action: () => navigate('/mock-tests'), color: 'bg-orange-50 text-orange-700' },
-                { label: 'PYQ Papers',      icon: FileText,   action: () => navigate('/papers'),    color: 'bg-blue-50 text-blue-700' },
-                { label: 'Syllabus',        icon: BookMarked, action: () => navigate('/syllabus'), color: 'bg-purple-50 text-purple-700' },
-                { label: 'Upload Paper',    icon: Upload,     action: () => navigate('/my-papers'), color: 'bg-slate-100 text-slate-700' },
+                { label: 'Quick Recall',     icon: Brain,      action: () => setShowRecall(true),     color: 'bg-tnpsc-brand-light text-tnpsc-brand' },
+                { label: 'Master Analytics', icon: BarChart3,  action: () => navigate('/analytics'),  color: 'bg-indigo-50 text-indigo-700' },
+                { label: 'Syllabus Tree',    icon: BookMarked, action: () => navigate('/syllabus'),   color: 'bg-purple-50 text-purple-700' },
+                { label: 'Custom Practice',  icon: BookOpen,   action: () => navigate('/practice'),   color: 'bg-emerald-50 text-emerald-700' },
+                { label: 'Full Mock Test',   icon: Zap,        action: () => navigate('/mock-tests'), color: 'bg-orange-50 text-orange-700' },
+                { label: 'Upload Paper',     icon: Upload,     action: () => navigate('/my-papers'),  color: 'bg-slate-100 text-slate-700' },
               ].map(({ label, icon: Icon, action, color }) => (
                 <button
                   key={label}
@@ -190,6 +190,75 @@ export function UserDashboard() {
                   <span className="text-left leading-tight">{label}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Master Analytics Hub Card */}
+          <div className="bg-white rounded-2xl border border-surface-border p-5 shadow-subtle space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-tnpsc-brand-light text-tnpsc-brand flex items-center justify-center">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-body-text">Master Analytics Suite</h2>
+                  <p className="text-xs text-body-secondary">
+                    Pacing (54s/Q Benchmark) · Unit Accuracy Tiers · Chronological Mock Trend
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/analytics"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-tnpsc-brand text-white hover:bg-tnpsc-brand-dark transition-colors"
+              >
+                Open Master Analytics <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div
+                onClick={() => navigate('/analytics')}
+                className="border border-surface-border rounded-xl p-3.5 hover:border-tnpsc-brand/40 hover:bg-slate-50/70 transition-all cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-xs font-bold text-indigo-700 mb-1">
+                  <span>1. Pacing & Time</span>
+                  <Timer className="w-3.5 h-3.5" />
+                </div>
+                <p className="text-sm font-black text-body-text">54s / Q Target</p>
+                <p className="text-[11px] text-body-secondary mt-0.5">
+                  Flags slow responses (≥70s) & category time loss
+                </p>
+              </div>
+
+              <div
+                onClick={() => navigate('/analytics')}
+                className="border border-surface-border rounded-xl p-3.5 hover:border-tnpsc-brand/40 hover:bg-slate-50/70 transition-all cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-700 mb-1">
+                  <span>2. Unit Accuracy</span>
+                  <Target className="w-3.5 h-3.5" />
+                </div>
+                <p className="text-sm font-black text-body-text">Weak / Mod / Strong</p>
+                <p className="text-[11px] text-body-secondary mt-0.5">
+                  &lt;50%, 50–70%, &gt;70% tiers with Syllabus drill-down
+                </p>
+              </div>
+
+              <div
+                onClick={() => navigate('/analytics')}
+                className="border border-surface-border rounded-xl p-3.5 hover:border-tnpsc-brand/40 hover:bg-slate-50/70 transition-all cursor-pointer"
+              >
+                <div className="flex items-center justify-between text-xs font-bold text-purple-700 mb-1">
+                  <span>3. Mock Trend</span>
+                  <BarChart3 className="w-3.5 h-3.5" />
+                </div>
+                <p className="text-sm font-black text-body-text">
+                  {completedAttempts.length} Mock Test{completedAttempts.length === 1 ? '' : 's'}
+                </p>
+                <p className="text-[11px] text-body-secondary mt-0.5">
+                  Chronological bar chart & score delta trajectory
+                </p>
+              </div>
             </div>
           </div>
 

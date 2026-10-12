@@ -12,11 +12,11 @@ import { cn } from '../../lib/utils'
 
 const NAV = [
   { label: 'Dashboard',           path: '/dashboard',       icon: LayoutDashboard },
+  { label: 'Master Analytics',    path: '/analytics',       icon: BarChart3 },
+  { label: 'Syllabus',            path: '/syllabus',        icon: BookMarked },
   { label: 'Practice',            path: '/practice',        icon: Brain },
   { label: 'Mock Tests',          path: '/mock-tests',      icon: Zap },
   { label: 'Previous Year Papers',path: '/papers',          icon: FileText },
-  { label: 'Syllabus',            path: '/syllabus',        icon: BookMarked },
-  { label: 'Analytics',           path: '/analytics',       icon: BarChart3 },
   { label: 'Current Affairs',     path: '/current-affairs', icon: Newspaper },
   { label: 'Govt Updates',        path: '/govt-updates',    icon: BellRing },
   { label: 'My Papers (BYOP)',    path: '/my-papers',       icon: Upload },

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   BookMarked, ChevronRight, ChevronDown, Loader2, X, Target,
   CheckCircle2, RefreshCw, Circle, Search, Award, Layers,
-  BarChart3, Play, ChevronsUpDown, Sparkles,
+  BarChart3, Play, ChevronsUpDown, Sparkles, ArrowLeft,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -18,38 +18,45 @@ const STATUS_CONFIG = {
 }
 
 /**
- * Helper to return badge color classes and label for Accuracy (%)
+ * Helper to return badge color classes and tier label for Accuracy (%):
+ * - Strong: Accuracy > 70%
+ * - Moderate: Accuracy 50% - 70%
+ * - Weak: Accuracy < 50%
  */
 function getAccuracyBadgeStyle(accuracyPct, totalAttempts) {
   if (!totalAttempts || totalAttempts <= 0) {
     return {
       cls: 'bg-slate-100 text-slate-600 border-slate-200',
       dot: 'bg-slate-400',
+      tier: 'Untested',
       text: '0% Acc (No attempts)',
       shortText: '0% Acc',
     }
   }
-  if (accuracyPct >= 70) {
+  if (accuracyPct > 70) {
     return {
       cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       dot: 'bg-emerald-500',
-      text: `${accuracyPct}% Accuracy`,
-      shortText: `${accuracyPct}% Acc`,
+      tier: 'Strong',
+      text: `${accuracyPct}% Accuracy (Strong)`,
+      shortText: `${accuracyPct}% · Strong`,
     }
   }
-  if (accuracyPct >= 45) {
+  if (accuracyPct >= 50) {
     return {
       cls: 'bg-amber-50 text-amber-700 border-amber-200',
       dot: 'bg-amber-500',
-      text: `${accuracyPct}% Accuracy`,
-      shortText: `${accuracyPct}% Acc`,
+      tier: 'Moderate',
+      text: `${accuracyPct}% Accuracy (Moderate)`,
+      shortText: `${accuracyPct}% · Moderate`,
     }
   }
   return {
     cls: 'bg-red-50 text-red-700 border-red-200',
     dot: 'bg-red-500',
-    text: `${accuracyPct}% Accuracy`,
-    shortText: `${accuracyPct}% Acc`,
+    tier: 'Weak',
+    text: `${accuracyPct}% Accuracy (Weak)`,
+    shortText: `${accuracyPct}% · Weak`,
   }
 }
 
@@ -72,6 +79,9 @@ export function InteractiveSyllabusTree() {
   const { user } = useAuth()
   const { selectedExam, toast } = useApp()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const targetUnitId     = searchParams.get('unit')
+  const targetUnitNumber = searchParams.get('unitNumber')
 
   const [loading, setLoading]             = useState(true)
   const [analytics, setAnalytics]         = useState(null)
@@ -79,11 +89,31 @@ export function InteractiveSyllabusTree() {
   const [expandedMacros, setExpandedMacros] = useState({})
   const [savingStatus, setSavingStatus]   = useState({})
   const [searchQuery, setSearchQuery]     = useState('')
-  const [activeFilter, setActiveFilter]   = useState('all') // 'all' | 'attempted' | 'strong' | 'weak' | 'untouched'
+  const [activeFilter, setActiveFilter]   = useState('all') // 'all' | 'attempted' | 'strong' | 'moderate' | 'weak' | 'untouched'
 
   useEffect(() => {
     loadSyllabusAnalytics()
   }, [selectedExam, user?.id])
+
+  // Handle drill-down when targetUnitId or targetUnitNumber is passed via URL
+  useEffect(() => {
+    if (!analytics?.units?.length) return
+    if (targetUnitId || targetUnitNumber) {
+      const matched = analytics.units.find(
+        u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
+      )
+      if (matched) {
+        setExpandedUnits({ [matched.unit_id]: true })
+        const macrosToOpen = {}
+        matched.macro_topics?.forEach(m => { macrosToOpen[m.macro_topic_id] = true })
+        setExpandedMacros(macrosToOpen)
+        setTimeout(() => {
+          const el = document.getElementById(`syllabus-unit-${matched.unit_number}`)
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 120)
+      }
+    }
+  }, [analytics, targetUnitId, targetUnitNumber])
 
   async function loadSyllabusAnalytics() {
     setLoading(true)
@@ -91,12 +121,21 @@ export function InteractiveSyllabusTree() {
       const payload = await syllabusAnalyticsService.getSyllabusWithAnalytics(user?.id, selectedExam)
       setAnalytics(payload)
 
-      // Auto-expand first unit and its first macro-topic for immediate visibility
       if (payload?.units?.length > 0) {
-        const firstUnit = payload.units[0]
-        setExpandedUnits({ [firstUnit.unit_id]: true })
-        if (firstUnit.macro_topics?.length > 0) {
-          setExpandedMacros({ [firstUnit.macro_topics[0].macro_topic_id]: true })
+        const matched = (targetUnitId || targetUnitNumber)
+          ? payload.units.find(
+              u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
+            )
+          : null
+
+        const initialUnit = matched || payload.units[0]
+        setExpandedUnits({ [initialUnit.unit_id]: true })
+        if (matched) {
+          const macrosToOpen = {}
+          initialUnit.macro_topics?.forEach(m => { macrosToOpen[m.macro_topic_id] = true })
+          setExpandedMacros(macrosToOpen)
+        } else if (initialUnit.macro_topics?.length > 0) {
+          setExpandedMacros({ [initialUnit.macro_topics[0].macro_topic_id]: true })
         }
       }
     } catch (err) {
@@ -390,6 +429,39 @@ export function InteractiveSyllabusTree() {
         </div>
       </div>
 
+      {/* ── Focused Unit Drill-Down Banner (from Master Analytics) ───── */}
+      {(targetUnitId || targetUnitNumber) && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-subtle">
+          <div className="flex items-center gap-2.5 text-xs text-indigo-900">
+            <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-bold uppercase tracking-wider text-[10px]">
+              Unit Drill-Down
+            </span>
+            <span className="font-semibold">
+              Viewing targeted syllabus breakdown for{' '}
+              <strong className="font-bold">
+                {analytics?.units?.find(
+                  u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
+                )?.unit_name || `Unit ${targetUnitNumber || ''}`}
+              </strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/analytics')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Master Analytics
+            </button>
+            <button
+              onClick={() => setSearchParams({})}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" /> Clear Focus
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── 3-Level Hierarchy Tree: Unit > Macro-Topic > Micro-Topic ── */}
       {filteredUnits.length === 0 ? (
         <div className="bg-white rounded-2xl border border-surface-border p-12 text-center">
@@ -403,13 +475,21 @@ export function InteractiveSyllabusTree() {
         <div className="space-y-4">
           {filteredUnits.map(unit => {
             const isUnitOpen = !!expandedUnits[unit.unit_id]
+            const isTargetUnit =
+              (targetUnitId && String(unit.unit_id) === String(targetUnitId)) ||
+              (targetUnitNumber && String(unit.unit_number) === String(targetUnitNumber))
             const unitAccBadge = getAccuracyBadgeStyle(unit.accuracy_percentage, unit.total_attempts)
             const unitCovColor = getCoverageBarColor(unit.coverage_percentage)
 
             return (
               <div
                 key={unit.unit_id}
-                className="bg-white rounded-2xl border border-surface-border shadow-subtle overflow-hidden transition-all"
+                id={`syllabus-unit-${unit.unit_number}`}
+                className={`bg-white rounded-2xl border shadow-subtle overflow-hidden transition-all ${
+                  isTargetUnit
+                    ? 'border-tnpsc-brand ring-2 ring-tnpsc-brand/20'
+                    : 'border-surface-border'
+                }`}
               >
                 {/* ─── LEVEL 1: UNIT HEADER ─────────────────────────────── */}
                 <div
