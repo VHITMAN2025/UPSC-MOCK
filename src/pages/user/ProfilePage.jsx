@@ -6,7 +6,7 @@ import { profileService } from '../../services/tnpscService'
 
 export function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth()
-  const { selectedExam, setSelectedExam, language, setLanguage, toast } = useApp()
+  const { selectedExam, setSelectedExam, language, setLanguage, group2LanguagePref, setGroup2LanguagePref, toast } = useApp()
 
   const [form, setForm] = useState({
     full_name:  '',
@@ -31,8 +31,9 @@ export function ProfilePage() {
     try {
       await profileService.update(user.id, {
         ...form,
-        selected_exam:      selectedExam,
-        preferred_language: language,
+        selected_exam:        selectedExam,
+        preferred_language:   language,
+        group2_language_pref: group2LanguagePref,
       })
       await refreshProfile()
       toast.success('Profile updated successfully')
@@ -114,7 +115,7 @@ export function ProfilePage() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-body-secondary mb-2">Preferred Language</label>
+            <label className="block text-xs font-bold text-body-secondary mb-2">Preferred UI Language</label>
             <div className="flex gap-3">
               {[
                 { value: 'en', label: 'English' },
@@ -131,6 +132,30 @@ export function ProfilePage() {
                   }`}
                 >
                   {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-body-secondary mb-1">TNPSC Group 2 Language Specialization</label>
+            <p className="text-[11px] text-body-secondary mb-2">Controls Part 1 subject (100 questions) in Group 2 full mock tests.</p>
+            <div className="flex gap-3">
+              {[
+                { value: 'General Tamil', label: 'General Tamil (பொதுத் தமிழ்)' },
+                { value: 'General English', label: 'General English' },
+              ].map(opt => (
+                <button
+                  type="button"
+                  key={opt.value}
+                  onClick={() => setGroup2LanguagePref(opt.value)}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
+                    group2LanguagePref === opt.value
+                      ? 'bg-tnpsc-brand text-white border-tnpsc-brand shadow-sm'
+                      : 'bg-white border-surface-border text-body-secondary hover:border-tnpsc-brand/40'
+                  }`}
+                >
+                  {opt.label}
                 </button>
               ))}
             </div>

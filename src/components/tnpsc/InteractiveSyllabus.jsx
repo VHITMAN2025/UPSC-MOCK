@@ -1,79 +1,52 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  BookMarked, ChevronRight, ChevronDown, Loader2, X, Target,
-  CheckCircle2, RefreshCw, Circle, Search, Award, Layers,
-  BarChart3, Play, ChevronsUpDown, Sparkles, ArrowLeft,
+  BookMarked, Loader2, X, Target, CheckCircle2,
+  AlertTriangle, RefreshCw, Circle, Search, ArrowRight,
+  Sparkles, Layers,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
-import { syllabusService } from '../../services/tnpscService'
 import { syllabusAnalyticsService } from '../../services/syllabusAnalyticsService'
 
-const STATUS_CONFIG = {
-  completed:      { label: 'Completed',      color: 'text-emerald-700 bg-emerald-50 border-emerald-200', icon: CheckCircle2 },
-  in_progress:    { label: 'In Progress',    color: 'text-blue-700 bg-blue-50 border-blue-200',          icon: RefreshCw },
-  needs_revision: { label: 'Needs Revision', color: 'text-amber-700 bg-amber-50 border-amber-200',       icon: RefreshCw },
-  not_started:    { label: 'Not Started',    color: 'text-slate-600 bg-slate-100 border-slate-200',      icon: Circle },
-}
-
 /**
- * Helper to return badge color classes and tier label for Accuracy (%):
- * - Strong: Accuracy > 70%
- * - Moderate: Accuracy 50% - 70%
- * - Weak: Accuracy < 50%
+ * Returns status metadata for a topic based on accuracy and attempts:
+ * - Mastered: >= 70% accuracy
+ * - Needs Review: < 50% accuracy
+ * - In Progress / Pending: 50% - 69% accuracy or low attempts
  */
-function getAccuracyBadgeStyle(accuracyPct, totalAttempts) {
-  if (!totalAttempts || totalAttempts <= 0) {
+function getTopicStatus(score, attempts = 0) {
+  if (attempts > 0 && score >= 70) {
     return {
-      cls: 'bg-slate-100 text-slate-600 border-slate-200',
-      dot: 'bg-slate-400',
-      tier: 'Untested',
-      text: '0% Acc (No attempts)',
-      shortText: '0% Acc',
+      label: 'Mastered',
+      scoreText: `${score}%`,
+      cls: 'mastered',
+      badgeCls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      icon: '✓',
     }
   }
-  if (accuracyPct > 70) {
+  if (attempts > 0 && score < 50) {
     return {
-      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      dot: 'bg-emerald-500',
-      tier: 'Strong',
-      text: `${accuracyPct}% Accuracy (Strong)`,
-      shortText: `${accuracyPct}% · Strong`,
-    }
-  }
-  if (accuracyPct >= 50) {
-    return {
-      cls: 'bg-amber-50 text-amber-700 border-amber-200',
-      dot: 'bg-amber-500',
-      tier: 'Moderate',
-      text: `${accuracyPct}% Accuracy (Moderate)`,
-      shortText: `${accuracyPct}% · Moderate`,
+      label: 'Needs Review',
+      scoreText: `${score}%`,
+      cls: 'review',
+      badgeCls: 'bg-red-50 text-red-700 border-red-200',
+      icon: '!',
     }
   }
   return {
-    cls: 'bg-red-50 text-red-700 border-red-200',
-    dot: 'bg-red-500',
-    tier: 'Weak',
-    text: `${accuracyPct}% Accuracy (Weak)`,
-    shortText: `${accuracyPct}% · Weak`,
+    label: attempts > 0 ? 'In Progress' : 'Pending',
+    scoreText: attempts > 0 ? `${score}%` : 'Not Attempted',
+    cls: 'pending',
+    badgeCls: 'bg-slate-100 text-slate-600 border-slate-200',
+    icon: '○',
   }
 }
 
 /**
- * Helper to return progress bar fill color for Coverage (%)
- */
-function getCoverageBarColor(coveragePct) {
-  if (coveragePct >= 75) return 'bg-emerald-500'
-  if (coveragePct >= 35) return 'bg-tnpsc-brand'
-  if (coveragePct > 0)   return 'bg-blue-500'
-  return 'bg-slate-300'
-}
-
-/**
- * Core Interactive Syllabus & Topic Analytics Tree Component
- * Renders the 3-level hierarchy: Unit -> Macro-Topic -> Micro-Topic
- * with real-time Coverage (%) progress bars and Accuracy (%) performance badges.
+ * Split-Pane Interactive Syllabus Component
+ * Left: Unit list with scores & progress
+ * Right: Detailed unit view, mastery strip, structured topic breakdown & "Generate Practice Set →" button.
  */
 export function InteractiveSyllabusTree() {
   const { user } = useAuth()
@@ -85,688 +58,366 @@ export function InteractiveSyllabusTree() {
 
   const [loading, setLoading]             = useState(true)
   const [analytics, setAnalytics]         = useState(null)
-  const [expandedUnits, setExpandedUnits] = useState({})
-  const [expandedMacros, setExpandedMacros] = useState({})
-  const [savingStatus, setSavingStatus]   = useState({})
+  const [selectedUnitIdx, setSelectedUnitIdx] = useState(0)
   const [searchQuery, setSearchQuery]     = useState('')
-  const [activeFilter, setActiveFilter]   = useState('all') // 'all' | 'attempted' | 'strong' | 'moderate' | 'weak' | 'untouched'
 
   useEffect(() => {
-    loadSyllabusAnalytics()
+    loadSyllabus()
   }, [selectedExam, user?.id])
 
-  // Handle drill-down when targetUnitId or targetUnitNumber is passed via URL
-  useEffect(() => {
-    if (!analytics?.units?.length) return
-    if (targetUnitId || targetUnitNumber) {
-      const matched = analytics.units.find(
-        u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
-      )
-      if (matched) {
-        setExpandedUnits({ [matched.unit_id]: true })
-        const macrosToOpen = {}
-        matched.macro_topics?.forEach(m => { macrosToOpen[m.macro_topic_id] = true })
-        setExpandedMacros(macrosToOpen)
-        setTimeout(() => {
-          const el = document.getElementById(`syllabus-unit-${matched.unit_number}`)
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 120)
-      }
-    }
-  }, [analytics, targetUnitId, targetUnitNumber])
-
-  async function loadSyllabusAnalytics() {
+  async function loadSyllabus() {
     setLoading(true)
     try {
-      const payload = await syllabusAnalyticsService.getSyllabusWithAnalytics(user?.id, selectedExam)
-      setAnalytics(payload)
+      const data = await syllabusAnalyticsService.getSyllabusWithAnalytics(user?.id, selectedExam)
+      setAnalytics(data)
 
-      if (payload?.units?.length > 0) {
-        const matched = (targetUnitId || targetUnitNumber)
-          ? payload.units.find(
-              u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
-            )
-          : null
-
-        const initialUnit = matched || payload.units[0]
-        setExpandedUnits({ [initialUnit.unit_id]: true })
-        if (matched) {
-          const macrosToOpen = {}
-          initialUnit.macro_topics?.forEach(m => { macrosToOpen[m.macro_topic_id] = true })
-          setExpandedMacros(macrosToOpen)
-        } else if (initialUnit.macro_topics?.length > 0) {
-          setExpandedMacros({ [initialUnit.macro_topics[0].macro_topic_id]: true })
+      // Handle direct unit drill-down if provided via URL
+      if (data?.units?.length > 0) {
+        if (targetUnitId || targetUnitNumber) {
+          const matchIdx = data.units.findIndex(
+            u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
+          )
+          if (matchIdx !== -1) {
+            setSelectedUnitIdx(matchIdx)
+          }
         }
       }
     } catch (err) {
       console.error('[InteractiveSyllabus] Load error:', err)
-      toast?.error?.('Failed to load interactive syllabus analytics')
+      toast?.error?.('Failed to load syllabus analytics')
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleMacroStatusChange(macroTopicId, newStatus) {
-    if (!user?.id) return
-    setSavingStatus(prev => ({ ...prev, [macroTopicId]: true }))
-    try {
-      const score = newStatus === 'completed' ? 100
-                  : newStatus === 'in_progress' ? 50
-                  : newStatus === 'needs_revision' ? 25 : 0
-      await syllabusService.upsertProgress(user.id, macroTopicId, newStatus, score)
-      setAnalytics(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          units: prev.units.map(u => ({
-            ...u,
-            macro_topics: u.macro_topics.map(mt =>
-              mt.macro_topic_id === macroTopicId ? { ...mt, status: newStatus } : mt
-            ),
-          })),
-        }
-      })
-    } catch (e) {
-      // Update locally even if topic ID is synthetic/canonical
-      setAnalytics(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          units: prev.units.map(u => ({
-            ...u,
-            macro_topics: u.macro_topics.map(mt =>
-              mt.macro_topic_id === macroTopicId ? { ...mt, status: newStatus } : mt
-            ),
-          })),
-        }
-      })
-    } finally {
-      setSavingStatus(prev => ({ ...prev, [macroTopicId]: false }))
-    }
-  }
-
-  function handleExpandAll() {
-    if (!analytics?.units) return
-    const allU = {}
-    const allM = {}
-    analytics.units.forEach(u => {
-      allU[u.unit_id] = true
-      u.macro_topics?.forEach(m => { allM[m.macro_topic_id] = true })
-    })
-    setExpandedUnits(allU)
-    setExpandedMacros(allM)
-  }
-
-  function handleCollapseAll() {
-    setExpandedUnits({})
-    setExpandedMacros({})
-  }
-
-  // Filter hierarchy based on search query and active filter pill
+  // Filter units on the left pane based on search input
+  const units = analytics?.units || []
   const filteredUnits = useMemo(() => {
-    if (!analytics?.units) return []
-    const q = searchQuery.trim().toLowerCase()
+    if (!searchQuery.trim()) return units
+    const q = searchQuery.toLowerCase().trim()
+    return units.filter(u =>
+      u.unit_name.toLowerCase().includes(q) ||
+      (u.macro_topics || []).some(m => m.macro_topic_name.toLowerCase().includes(q))
+    )
+  }, [units, searchQuery])
 
-    const matchesFilter = (node) => {
-      if (activeFilter === 'attempted') return node.coverage_percentage > 0
-      if (activeFilter === 'strong')    return node.total_attempts > 0 && node.accuracy_percentage >= 70
-      if (activeFilter === 'weak')      return node.total_attempts > 0 && node.accuracy_percentage < 50
-      if (activeFilter === 'untouched') return node.coverage_percentage === 0
-      return true
-    }
+  // Currently selected unit
+  const activeUnit = units[selectedUnitIdx] || units[0] || null
 
-    return analytics.units
-      .map(unit => {
-        const unitMatchesSearch = !q || unit.unit_name.toLowerCase().includes(q)
-
-        const macroList = (unit.macro_topics || [])
-          .map(macro => {
-            const macroMatchesSearch = !q || unitMatchesSearch || macro.macro_topic_name.toLowerCase().includes(q)
-
-            const microList = (macro.micro_topics || []).filter(micro => {
-              const microMatchesSearch = !q || macroMatchesSearch || micro.micro_topic_name.toLowerCase().includes(q)
-              return microMatchesSearch && matchesFilter(micro)
-            })
-
-            if (microList.length > 0 || (macroMatchesSearch && matchesFilter(macro) && activeFilter === 'all')) {
-              return {
-                ...macro,
-                micro_topics: microList.length > 0 ? microList : macro.micro_topics,
-              }
-            }
-            return null
-          })
-          .filter(Boolean)
-
-        if (macroList.length > 0) {
-          return { ...unit, macro_topics: macroList }
-        }
-        return null
-      })
-      .filter(Boolean)
-  }, [analytics, searchQuery, activeFilter])
+  // Summary counts
+  const totalUnits = units.length
+  const overallMastery = analytics?.accuracy_percentage ?? analytics?.coverage_percentage ?? 0
+  const strongUnitsCount = units.filter(u => Number(u.accuracy_percentage || 0) >= 70 && Number(u.total_attempts || 0) > 0).length
+  const weakUnitsCount   = units.filter(u => Number(u.accuracy_percentage || 0) < 50 || Number(u.total_attempts || 0) === 0).length
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="w-7 h-7 animate-spin text-tnpsc-brand" />
-        <p className="text-xs text-body-secondary">Computing real-time syllabus coverage & accuracy...</p>
+      <div className="flex flex-col items-center justify-center py-24 gap-3 bg-white rounded-2xl border border-surface-border">
+        <Loader2 className="w-8 h-8 animate-spin text-tnpsc-brand" />
+        <p className="text-xs text-body-secondary font-medium">Loading Interactive Syllabus & Topic Analytics…</p>
       </div>
     )
   }
 
-  const totalUnits = analytics?.units?.length || 0
-  const totalMacros = analytics?.units?.reduce((s, u) => s + (u.macro_topics?.length || 0), 0) || 0
-  const totalMicros = analytics?.units?.reduce(
-    (s, u) => s + (u.macro_topics?.reduce((ms, m) => ms + (m.micro_topics?.length || 0), 0) || 0),
-    0
-  )
-  const overallAccStyle = getAccuracyBadgeStyle(analytics?.accuracy_percentage ?? 0, analytics?.total_attempts ?? 0)
+  if (!activeUnit) {
+    return (
+      <div className="bg-white rounded-2xl border border-surface-border p-12 text-center">
+        <BookMarked className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+        <p className="text-sm font-bold text-body-text">No syllabus units found for {selectedExam}</p>
+      </div>
+    )
+  }
+
+  const activeScore = Number(activeUnit.accuracy_percentage || 0)
+  const isWeakZone  = activeScore < 50 || Number(activeUnit.total_attempts || 0) === 0
+  const isMastered  = activeScore >= 70 && Number(activeUnit.total_attempts || 0) > 0
 
   return (
-    <div className="space-y-6">
-      {/* ── Top Roll-Up Analytics Cards ─────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: Overall Topic Coverage (%) */}
-        <div className="bg-white rounded-2xl border border-surface-border p-5 shadow-subtle">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-tnpsc-brand-light text-tnpsc-brand flex items-center justify-center">
-                <Target className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-body-secondary uppercase tracking-wider">Syllabus Coverage</p>
-                <p className="text-[11px] text-body-secondary">Unique Bank Qs Attempted</p>
-              </div>
-            </div>
-            <span className="text-2xl font-black text-tnpsc-brand">
-              {analytics?.coverage_percentage ?? 0}%
-            </span>
+    <div className="bg-white rounded-2xl border border-surface-border shadow-subtle overflow-hidden flex flex-col">
+      {/* ── Summary Strip (Matching HTML Prototype) ──────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-5 bg-slate-50/70 border-b border-surface-border">
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-3.5">
+          <small className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
+            Overall Syllabus Mastery
+          </small>
+          <b className="block mt-1 text-2xl font-black text-indigo-900">
+            {overallMastery}%
+          </b>
+        </div>
+
+        <div className="bg-white border border-surface-border rounded-xl p-3.5">
+          <small className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
+            Strong Units (&ge;70%)
+          </small>
+          <b className="block mt-1 text-2xl font-black text-emerald-600">
+            {strongUnitsCount}
+          </b>
+        </div>
+
+        <div className="bg-white border border-surface-border rounded-xl p-3.5">
+          <small className="block text-[10px] font-bold text-red-600 uppercase tracking-wider">
+            Needs Revision (&lt;50%)
+          </small>
+          <b className="block mt-1 text-2xl font-black text-red-600">
+            {weakUnitsCount}
+          </b>
+        </div>
+
+        <div className="bg-white border border-surface-border rounded-xl p-3.5">
+          <small className="block text-[10px] font-bold text-body-secondary uppercase tracking-wider">
+            Units Covered
+          </small>
+          <b className="block mt-1 text-2xl font-black text-body-text">
+            {totalUnits} / {totalUnits}
+          </b>
+        </div>
+      </div>
+
+      {/* ── Split-Pane Body ─────────────────────────────────────────── */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-[580px]">
+        {/* ── Left Pane: Unit List (~42% width) ─────────────────────── */}
+        <div className="w-full lg:w-[42%] border-b lg:border-b-0 lg:border-r border-surface-border bg-white p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-body-text">{units.length} Syllabus Units</span>
+            <span className="text-[11px] text-body-secondary">Real-time candidate data</span>
           </div>
-          <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden my-2.5">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${getCoverageBarColor(analytics?.coverage_percentage ?? 0)}`}
-              style={{ width: `${Math.min(100, analytics?.coverage_percentage ?? 0)}%` }}
+
+          {/* Quick Search */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search units or topics…"
+              className="w-full pl-8 pr-3 py-1.5 text-xs border border-surface-border rounded-lg outline-none focus:ring-1 focus:ring-tnpsc-brand"
             />
           </div>
-          <div className="flex items-center justify-between text-xs text-body-secondary">
-            <span>
-              <strong className="text-body-text">{analytics?.attempted_questions ?? 0}</strong> / {analytics?.total_questions ?? 0} unique questions
-            </span>
-            <span className="text-[11px] font-medium text-slate-500">Deduplicated</span>
-          </div>
-        </div>
 
-        {/* Card 2: Overall Topic Accuracy (%) */}
-        <div className="bg-white rounded-2xl border border-surface-border p-5 shadow-subtle">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <Award className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-body-secondary uppercase tracking-wider">Topic Accuracy</p>
-                <p className="text-[11px] text-body-secondary">Correct / Total Attempts</p>
-              </div>
-            </div>
-            <span className="text-2xl font-black text-body-text">
-              {analytics?.accuracy_percentage ?? 0}%
-            </span>
-          </div>
-          <div className="my-2.5 flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${overallAccStyle.cls}`}>
-              <span className={`w-2 h-2 rounded-full ${overallAccStyle.dot}`} />
-              {overallAccStyle.text}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs text-body-secondary">
-            <span>
-              <strong className="text-body-text">{analytics?.correct_questions ?? 0}</strong> correct of {analytics?.total_attempts ?? 0} attempts
-            </span>
-            <button
-              onClick={loadSyllabusAnalytics}
-              className="text-tnpsc-brand hover:underline font-semibold flex items-center gap-1"
-              title="Refresh real-time metrics"
-            >
-              <RefreshCw className="w-3 h-3" /> Sync
-            </button>
-          </div>
-        </div>
+          {/* Units list */}
+          <div className="space-y-2 overflow-y-auto max-h-[520px] pr-1">
+            {filteredUnits.map((unit) => {
+              const originalIdx = units.findIndex(u => u.unit_id === unit.unit_id)
+              const isSelected = activeUnit.unit_id === unit.unit_id
+              const score = Number(unit.accuracy_percentage || 0)
+              const hasAttempts = Number(unit.total_attempts || 0) > 0
+              const isUnitWeak = !hasAttempts || score < 50
 
-        {/* Card 3: Taxonomy Hierarchy Summary */}
-        <div className="bg-white rounded-2xl border border-surface-border p-5 shadow-subtle flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-                <Layers className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-body-secondary uppercase tracking-wider">Taxonomy Tree</p>
-                <p className="text-[11px] text-body-secondary">{analytics?.group_name || selectedExam}</p>
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-              3-Tier Hierarchy
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 my-2 pt-1">
-            <div className="bg-slate-50 rounded-xl px-3 py-2 text-center border border-surface-border">
-              <p className="text-base font-black text-body-text">{totalUnits}</p>
-              <p className="text-[10px] font-semibold text-body-secondary uppercase">Units</p>
-            </div>
-            <div className="bg-slate-50 rounded-xl px-3 py-2 text-center border border-surface-border">
-              <p className="text-base font-black text-body-text">{totalMacros}</p>
-              <p className="text-[10px] font-semibold text-body-secondary uppercase">Macro-Topics</p>
-            </div>
-            <div className="bg-slate-50 rounded-xl px-3 py-2 text-center border border-surface-border">
-              <p className="text-base font-black text-body-text">{totalMicros}</p>
-              <p className="text-[10px] font-semibold text-body-secondary uppercase">Micro-Topics</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Search, Filters & Expand/Collapse Bar ────────────────────── */}
-      <div className="bg-white rounded-2xl border border-surface-border p-4 shadow-subtle flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-        {/* Search Input */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Filter by Unit, Macro-Topic (e.g. Indian Polity), or Micro-Topic..."
-            className="w-full pl-9 pr-8 py-2 text-xs border border-surface-border rounded-xl outline-none focus:ring-2 focus:ring-tnpsc-brand"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {[
-            { id: 'all',       label: 'All Topics' },
-            { id: 'attempted', label: 'Attempted (>0%)' },
-            { id: 'strong',    label: 'High Accuracy (≥70%)' },
-            { id: 'weak',      label: 'Needs Focus (<50%)' },
-            { id: 'untouched', label: 'Untouched (0%)' },
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setActiveFilter(f.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                activeFilter === f.id
-                  ? 'bg-tnpsc-brand text-white shadow-sm'
-                  : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Expand / Collapse All */}
-        <div className="flex items-center gap-1.5 shrink-0 border-l border-surface-border pl-3">
-          <button
-            onClick={handleExpandAll}
-            className="px-2.5 py-1.5 text-xs font-semibold text-body-secondary hover:text-tnpsc-brand hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-1"
-          >
-            <ChevronsUpDown className="w-3.5 h-3.5" /> Expand All
-          </button>
-          <button
-            onClick={handleCollapseAll}
-            className="px-2.5 py-1.5 text-xs font-semibold text-body-secondary hover:text-tnpsc-brand hover:bg-slate-50 rounded-lg transition-colors"
-          >
-            Collapse
-          </button>
-        </div>
-      </div>
-
-      {/* ── Focused Unit Drill-Down Banner (from Master Analytics) ───── */}
-      {(targetUnitId || targetUnitNumber) && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-subtle">
-          <div className="flex items-center gap-2.5 text-xs text-indigo-900">
-            <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-bold uppercase tracking-wider text-[10px]">
-              Unit Drill-Down
-            </span>
-            <span className="font-semibold">
-              Viewing targeted syllabus breakdown for{' '}
-              <strong className="font-bold">
-                {analytics?.units?.find(
-                  u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
-                )?.unit_name || `Unit ${targetUnitNumber || ''}`}
-              </strong>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/analytics')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> Back to Master Analytics
-            </button>
-            <button
-              onClick={() => setSearchParams({})}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" /> Clear Focus
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 3-Level Hierarchy Tree: Unit > Macro-Topic > Micro-Topic ── */}
-      {filteredUnits.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-surface-border p-12 text-center">
-          <BarChart3 className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-          <p className="text-sm font-bold text-body-text">No matching syllabus topics found</p>
-          <p className="text-xs text-body-secondary mt-1">
-            Try clearing your search filter or switching to "All Topics".
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredUnits.map(unit => {
-            const isUnitOpen = !!expandedUnits[unit.unit_id]
-            const isTargetUnit =
-              (targetUnitId && String(unit.unit_id) === String(targetUnitId)) ||
-              (targetUnitNumber && String(unit.unit_number) === String(targetUnitNumber))
-            const unitAccBadge = getAccuracyBadgeStyle(unit.accuracy_percentage, unit.total_attempts)
-            const unitCovColor = getCoverageBarColor(unit.coverage_percentage)
-
-            return (
-              <div
-                key={unit.unit_id}
-                id={`syllabus-unit-${unit.unit_number}`}
-                className={`bg-white rounded-2xl border shadow-subtle overflow-hidden transition-all ${
-                  isTargetUnit
-                    ? 'border-tnpsc-brand ring-2 ring-tnpsc-brand/20'
-                    : 'border-surface-border'
-                }`}
-              >
-                {/* ─── LEVEL 1: UNIT HEADER ─────────────────────────────── */}
+              return (
                 <div
-                  onClick={() => setExpandedUnits(prev => ({ ...prev, [unit.unit_id]: !prev[unit.unit_id] }))}
-                  className="w-full flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-6 py-4 bg-slate-50/80 hover:bg-slate-100/70 cursor-pointer transition-colors"
+                  key={unit.unit_id || unit.unit_number}
+                  onClick={() => {
+                    setSelectedUnitIdx(originalIdx !== -1 ? originalIdx : 0)
+                    if (targetUnitId || targetUnitNumber) setSearchParams({})
+                  }}
+                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-tnpsc-brand bg-indigo-50/50 shadow-sm ring-1 ring-tnpsc-brand/20'
+                      : 'border-surface-border bg-white hover:border-indigo-200 hover:bg-slate-50/60'
+                  }`}
                 >
-                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-                    <span className="w-9 h-9 rounded-xl bg-tnpsc-brand text-white text-xs font-black flex items-center justify-center shrink-0 shadow-sm">
-                      U{unit.unit_number}
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-xs font-bold text-body-text truncate">
+                      Unit {unit.unit_number} — {unit.unit_name}
                     </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-bold text-body-text">{unit.unit_name}</h3>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white border border-surface-border text-body-secondary">
-                          {unit.macro_topics?.length || 0} Macro-Topics
-                        </span>
-                      </div>
-                      {unit.description && (
-                        <p className="text-xs text-body-secondary mt-0.5 line-clamp-1">{unit.description}</p>
-                      )}
-                    </div>
+                    <span
+                      className={`text-xs font-black shrink-0 ${
+                        isUnitWeak ? 'text-red-600' : score >= 70 ? 'text-emerald-600' : 'text-indigo-600'
+                      }`}
+                    >
+                      {hasAttempts ? `${score}%` : '0%'}
+                    </span>
                   </div>
 
-                  {/* Unit Roll-Up Metrics: Coverage Bar + Accuracy Badge */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 shrink-0">
-                    {/* Unit Coverage Progress Bar */}
-                    <div className="w-40 sm:w-44">
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-semibold text-body-secondary">Unit Coverage</span>
-                        <span className="font-black text-body-text">
-                          {unit.coverage_percentage}%{' '}
-                          <span className="font-normal text-body-secondary">
-                            ({unit.attempted_questions}/{unit.total_questions})
-                          </span>
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${unitCovColor}`}
-                          style={{ width: `${Math.min(100, unit.coverage_percentage)}%` }}
-                        />
-                      </div>
-                    </div>
+                  <p className="text-[11px] text-body-secondary truncate">
+                    {unit.macro_topics?.length || 0} Topics · {unit.attempted_questions || 0}/{unit.total_questions || 0} attempted
+                  </p>
 
-                    {/* Unit Accuracy Badge */}
-                    <span
-                      className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border ${unitAccBadge.cls}`}
-                      title={`Correct: ${unit.correct_questions} / Total Attempts: ${unit.total_attempts}`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${unitAccBadge.dot}`} />
-                      {unitAccBadge.shortText}
-                    </span>
-
-                    {isUnitOpen ? (
-                      <ChevronDown className="w-5 h-5 text-body-secondary shrink-0" />
-                    ) : (
-                      <ChevronRight className="w-5 h-5 text-body-secondary shrink-0" />
-                    )}
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isUnitWeak ? 'bg-red-500' : score >= 70 ? 'bg-emerald-500' : 'bg-indigo-600'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(score, hasAttempts ? 4 : 0))}%` }}
+                    />
                   </div>
                 </div>
-
-                {/* ─── LEVEL 2: MACRO-TOPICS LIST ───────────────────────── */}
-                {isUnitOpen && (
-                  <div className="divide-y divide-surface-border border-t border-surface-border">
-                    {unit.macro_topics.map(macro => {
-                      const isMacroOpen = !!expandedMacros[macro.macro_topic_id]
-                      const macroAccBadge = getAccuracyBadgeStyle(macro.accuracy_percentage, macro.total_attempts)
-                      const macroCovColor = getCoverageBarColor(macro.coverage_percentage)
-                      const statusCfg = STATUS_CONFIG[macro.status] || STATUS_CONFIG.not_started
-                      const StatusIcon = statusCfg.icon
-
-                      return (
-                        <div key={macro.macro_topic_id} className="bg-white">
-                          {/* Macro-Topic Header Row */}
-                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-6 py-3.5 hover:bg-slate-50/60 transition-colors">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedMacros(prev => ({
-                                  ...prev,
-                                  [macro.macro_topic_id]: !prev[macro.macro_topic_id],
-                                }))
-                              }
-                              className="flex items-start sm:items-center gap-3 text-left min-w-0 flex-1"
-                            >
-                              <div className="flex items-center gap-1.5 text-body-secondary mt-0.5 sm:mt-0 shrink-0">
-                                {isMacroOpen ? (
-                                  <ChevronDown className="w-4 h-4 text-tnpsc-brand" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4 text-body-secondary" />
-                                )}
-                                <span className="w-6 h-6 rounded-lg bg-tnpsc-brand-light text-tnpsc-brand text-xs font-bold flex items-center justify-center">
-                                  {unit.unit_number}.{macro.macro_topic_number}
-                                </span>
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm font-bold text-body-text">
-                                    {macro.macro_topic_name}
-                                  </span>
-                                  <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5">
-                                    {macro.micro_topics?.length || 0} Micro-Topics
-                                  </span>
-                                </div>
-                                {macro.description && (
-                                  <p className="text-[11px] text-body-secondary mt-0.5 line-clamp-1">
-                                    {macro.description}
-                                  </p>
-                                )}
-                              </div>
-                            </button>
-
-                            {/* Macro-Topic Roll-Up Metrics & Controls */}
-                            <div className="flex flex-wrap items-center gap-3 pl-9 lg:pl-0 shrink-0">
-                              {/* Macro Coverage Progress Bar */}
-                              <div className="w-36 sm:w-40">
-                                <div className="flex items-center justify-between text-[10px] mb-1">
-                                  <span className="font-semibold text-body-secondary">Coverage</span>
-                                  <span className="font-bold text-body-text">
-                                    {macro.coverage_percentage}% ({macro.attempted_questions}/{macro.total_questions})
-                                  </span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${macroCovColor}`}
-                                    style={{ width: `${Math.min(100, macro.coverage_percentage)}%` }}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Macro Accuracy Badge */}
-                              <span
-                                className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${macroAccBadge.cls}`}
-                                title={`${macro.correct_questions} correct out of ${macro.total_attempts} attempts`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full ${macroAccBadge.dot}`} />
-                                {macroAccBadge.shortText}
-                              </span>
-
-                              {/* Status Selector */}
-                              {savingStatus[macro.macro_topic_id] ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-tnpsc-brand" />
-                              ) : (
-                                <select
-                                  value={macro.status || 'not_started'}
-                                  onChange={e => handleMacroStatusChange(macro.macro_topic_id, e.target.value)}
-                                  className={`text-[11px] font-bold rounded-lg px-2 py-1 border cursor-pointer outline-none ${statusCfg.color}`}
-                                  aria-label={`Status for ${macro.macro_topic_name}`}
-                                >
-                                  {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-                                    <option key={k} value={k}>{v.label}</option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* ─── LEVEL 3: MICRO-TOPICS TREE LEAF NODES ────── */}
-                          {isMacroOpen && (
-                            <div className="bg-slate-50/70 border-t border-surface-border pl-6 sm:pl-12 pr-4 sm:pr-6 py-2.5 space-y-2">
-                              {macro.micro_topics.map(micro => {
-                                const microAccBadge = getAccuracyBadgeStyle(micro.accuracy_percentage, micro.total_attempts)
-                                const microCovColor = getCoverageBarColor(micro.coverage_percentage)
-
-                                return (
-                                  <div
-                                    key={micro.micro_topic_id}
-                                    className="bg-white rounded-xl border border-surface-border px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-tnpsc-brand/40 transition-colors"
-                                  >
-                                    {/* Micro-Topic Title & Taxonomy Tags */}
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-[11px] font-bold text-tnpsc-brand bg-tnpsc-brand-light px-1.5 py-0.5 rounded">
-                                          {unit.unit_number}.{macro.macro_topic_number}.{micro.micro_topic_number}
-                                        </span>
-                                        <p className="text-xs sm:text-sm font-semibold text-body-text">
-                                          {micro.micro_topic_name}
-                                        </p>
-                                      </div>
-                                      <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] text-body-secondary">
-                                        <span>{micro.group_name}</span>
-                                        <span>•</span>
-                                        <span>{micro.unit_name}</span>
-                                        <span>•</span>
-                                        <span>{micro.macro_topic_name}</span>
-                                      </div>
-                                    </div>
-
-                                    {/* Micro-Topic Progress Indicators: Coverage Bar + Accuracy Badge + Practice Action */}
-                                    <div className="flex flex-wrap items-center gap-3 shrink-0">
-                                      {/* Coverage Progress Bar */}
-                                      <div className="w-36">
-                                        <div className="flex items-center justify-between text-[10px] mb-1">
-                                          <span className="text-body-secondary font-medium">Coverage</span>
-                                          <span className="font-bold text-body-text">
-                                            {micro.coverage_percentage}% ({micro.attempted_questions}/{micro.total_questions} Qs)
-                                          </span>
-                                        </div>
-                                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                          <div
-                                            className={`h-full rounded-full transition-all duration-500 ${microCovColor}`}
-                                          style={{ width: `${Math.min(100, micro.coverage_percentage)}%` }}
-                                          />
-                                        </div>
-                                      </div>
-
-                                      {/* Accuracy Performance Badge */}
-                                      <div className="flex flex-col items-end">
-                                        <span
-                                          className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg border ${microAccBadge.cls}`}
-                                        >
-                                          <span className={`w-1.5 h-1.5 rounded-full ${microAccBadge.dot}`} />
-                                          {microAccBadge.shortText}
-                                        </span>
-                                        <span className="text-[10px] text-body-secondary mt-0.5">
-                                          {micro.correct_questions}/{micro.total_attempts} correct
-                                        </span>
-                                      </div>
-
-                                      {/* Quick Practice Topic Button */}
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(`/practice?subject=${encodeURIComponent(unit.unit_name)}&topic=${encodeURIComponent(micro.micro_topic_name)}`)}
-                                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-tnpsc-brand hover:text-white text-body-text text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1"
-                                        title={`Practice questions for ${micro.micro_topic_name}`}
-                                      >
-                                        <Play className="w-3 h-3" /> Practice
-                                      </button>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      )}
+
+        {/* ── Right Pane: Unit Details & Practice Launcher (~58% width) */}
+        <div className="w-full lg:w-[58%] p-6 lg:p-8 bg-slate-50/30 flex flex-col justify-between overflow-y-auto">
+          <div className="space-y-6">
+            {/* Header: Unit #, Title & Generate Practice Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">
+              <div>
+                <span className="text-xs font-bold text-tnpsc-brand uppercase tracking-wider">
+                  Unit {activeUnit.unit_number}
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black text-body-text mt-0.5">
+                  {activeUnit.unit_name}
+                </h3>
+              </div>
+
+              <button
+                onClick={() =>
+                  navigate(
+                    `/practice?subject=${encodeURIComponent(activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}`
+                  )
+                }
+                className="px-5 py-3 rounded-xl bg-tnpsc-brand text-white font-black text-xs hover:bg-tnpsc-brand-dark transition-all shadow-brand shrink-0 flex items-center justify-center gap-1.5"
+              >
+                Generate Practice Set
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Mastery Strip (Matching HTML Prototype) */}
+            <div className="flex items-center gap-4 bg-white border border-surface-border rounded-2xl p-4 shadow-subtle">
+              <b className="text-2xl sm:text-3xl font-black text-body-text min-w-[58px]">
+                {Number(activeUnit.total_attempts || 0) > 0 ? `${activeScore}%` : '0%'}
+              </b>
+              <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isWeakZone ? 'bg-red-500' : isMastered ? 'bg-emerald-500' : 'bg-indigo-600'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(activeScore, Number(activeUnit.total_attempts) > 0 ? 5 : 0))}%` }}
+                />
+              </div>
+              <span
+                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shrink-0 border ${
+                  isWeakZone
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : isMastered
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                }`}
+              >
+                {isWeakZone ? 'WEAK ZONE' : isMastered ? 'MASTERED' : 'IN PROGRESS'}
+              </span>
+            </div>
+
+            {/* Structured Topic Breakdown (Clean rows, NO nested accordions) */}
+            <div className="space-y-4">
+              <div className="border-b border-surface-border pb-2 flex items-center justify-between">
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  CORE SYLLABUS TOPICS &amp; MASTERY
+                </h4>
+                <span className="text-[11px] text-body-secondary font-semibold">
+                  {activeUnit.macro_topics?.length || 0} Topics
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {(activeUnit.macro_topics || []).map((macro) => {
+                  const macroScore = Number(macro.accuracy_percentage || 0)
+                  const macroAttempts = Number(macro.total_attempts || 0)
+                  const status = getTopicStatus(macroScore, macroAttempts)
+
+                  return (
+                    <div
+                      key={macro.macro_topic_id}
+                      className="bg-white border border-surface-border rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:border-indigo-200 hover:shadow-subtle transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 border ${
+                            status.cls === 'mastered'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : status.cls === 'review'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}
+                        >
+                          {status.icon}
+                        </span>
+
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-body-text truncate">
+                            {macro.macro_topic_name}
+                          </p>
+                          <p className="text-[11px] text-body-secondary">
+                            {macro.micro_topics?.length || 0} Micro-Topics · {macro.attempted_questions || 0}/{macro.total_questions || 0} attempted
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span
+                          className={`text-xs font-black px-2.5 py-1 rounded-lg border ${status.badgeCls}`}
+                        >
+                          {status.label} {macroAttempts > 0 ? `(${macroScore}%)` : ''}
+                        </span>
+
+                        <button
+                          onClick={() =>
+                            navigate(
+                              `/practice?subject=${encodeURIComponent(activeUnit.unit_name)}&topic=${encodeURIComponent(macro.macro_topic_name)}`
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-tnpsc-brand bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                          title="Practice this specific topic"
+                        >
+                          Practice →
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Vina Insight Bottom Note */}
+          <div className="mt-6 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-100 rounded-xl p-3.5 text-xs text-indigo-900 leading-relaxed">
+            <span className="font-black text-tnpsc-brand mr-1">✨ Vina Insight:</span>
+            {isWeakZone ? (
+              <>
+                <strong>{activeUnit.unit_name}</strong> is currently flagged as a Weak Zone. Prioritize questions marked <em>Needs Review</em> to strengthen core fundamentals before attempting full mock tests.
+              </>
+            ) : isMastered ? (
+              <>
+                You have strong mastery in <strong>{activeUnit.unit_name}</strong> ({activeScore}%). Maintain momentum with occasional spaced-repetition drills.
+              </>
+            ) : (
+              <>
+                Continue practicing the remaining unattempted topics in <strong>{activeUnit.unit_name}</strong> to push unit accuracy above the 70% mastery threshold.
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
 /**
- * Modal wrapper for InteractiveSyllabus (when opened as an overlay)
+ * Modal wrapper for Interactive Syllabus (used from Dashboard)
  */
 export function InteractiveSyllabus({ onClose }) {
-  const { selectedExam } = useApp()
-
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-slate-50 rounded-2xl shadow-modal flex flex-col overflow-hidden animate-scale-in">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-surface-border shrink-0">
-          <div className="flex items-center gap-3">
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+        <div className="p-4 border-b border-surface-border flex items-center justify-between bg-white shrink-0">
+          <div className="flex items-center gap-2">
             <BookMarked className="w-5 h-5 text-tnpsc-brand" />
-            <div>
-              <h2 className="text-base font-bold text-body-text">Interactive Syllabus & Topic Analytics</h2>
-              <p className="text-xs text-body-secondary">{selectedExam} · Unit → Macro-Topic → Micro-Topic</p>
-            </div>
+            <h2 className="text-base font-black text-body-text">Interactive Syllabus &amp; Topic Analytics</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-            <X className="w-4 h-4 text-body-secondary" />
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <InteractiveSyllabusTree key={selectedExam} />
+        <div className="flex-1 overflow-y-auto p-4">
+          <InteractiveSyllabusTree />
         </div>
       </div>
     </div>

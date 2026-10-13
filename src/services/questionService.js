@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase.js'
 
 export const questionService = {
   async getQuestionsByPaperId(paperId, isExamMode = false) {
@@ -27,6 +27,39 @@ export const questionService = {
 
     if (error) throw error
     return count || 0
+  },
+
+  async queryQuestionsByCriteria({ tags, unitId, unitCode, difficultyLevel, partCode, groupName, limit = 100 } = {}) {
+    let query = supabase.from('questions').select('*')
+
+    if (groupName) {
+      query = query.eq('group_name', groupName)
+    }
+    if (unitId) {
+      query = query.eq('unit_id', unitId)
+    }
+    if (unitCode) {
+      query = query.eq('unit_code', unitCode)
+    }
+    if (partCode) {
+      query = query.eq('part_code', partCode)
+    }
+    if (difficultyLevel) {
+      query = query.eq('difficulty_level', difficultyLevel)
+    }
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      query = query.contains('tags', tags)
+    }
+    if (limit) {
+      query = query.limit(limit)
+    }
+
+    const { data, error } = await query
+    if (error) {
+      console.warn('[questionService] queryQuestionsByCriteria error:', error)
+      return []
+    }
+    return data || []
   },
 
   async createQuestion(questionData) {

@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -41,6 +41,7 @@ export function blobToBase64(blob) {
 
 /**
  * Extracts structured questions from PDF using Gemini Vision with retry and fast model fallback.
+ * Configured with anti-recitation prompt, non-zero temperature, and permissive safety settings.
  */
 export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-3.8-flash', onStatusUpdate) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
@@ -63,20 +64,25 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
   // Deduplicate models to try
   const modelsToTry = Array.from(new Set(candidateList.filter(Boolean)))
 
-  const prompt = `You are an expert OCR and exam question parser. Analyze the uploaded PDF document (which may contain Tamil handwritten or scanned text).
-Extract ALL multiple-choice questions (MCQs) and their options (A, B, C, D) accurately.
-DO NOT leave options empty. Extract each option text carefully.
-Format the output ONLY as a JSON array of objects. Do not include markdown code blocks or any explanation outside the JSON.
-Each object must have the following keys:
-- "question_number": integer
-- "question_text": string (the full Tamil / English question body)
-- "option_a": string (the text for option A)
-- "option_b": string (the text for option B)
-- "option_c": string (the text for option C)
-- "option_d": string (the text for option D)
-- "correct_option": string ("A", "B", "C", or "D" if marked or clearly identified, otherwise null)
-- "explanation": string (any notes or empty string)
-`
+  // Anti-recitation educational structuring prompt
+  const prompt = `You are an educational assessment structuring engine. Read and analyze the questions and choices from the uploaded examination PDF (which may be in English or Tamil, printed or handwritten).
+Extract the multiple-choice questions into a clean assessment quiz dataset.
+To comply with content filtering and prevent recitation blocks:
+- Transcribe and normalize the question stems and options into structured MCQ schema.
+- Do not reproduce official gazette margins, watermarks, or government letterheads.
+- Extract every question along with all options (A, B, C, D). Do not leave option fields empty.
+Output strictly as a valid JSON array of objects. Do not wrap in markdown or include text outside the JSON.
+Schema for each question object:
+{
+  "question_number": <integer>,
+  "question_text": "<full question stem in Tamil or English>",
+  "option_a": "<text for option A>",
+  "option_b": "<text for option B>",
+  "option_c": "<text for option C>",
+  "option_d": "<text for option D>",
+  "correct_option": "<'A', 'B', 'C', 'D' if indicated or known, else null>",
+  "explanation": "<brief explanation or empty string>"
+}`
 
   let lastError = null
   const MAX_MODELS = Math.min(4, modelsToTry.length)
@@ -90,7 +96,21 @@ Each object must have the following keys:
   for (let mIdx = 0; mIdx < MAX_MODELS; mIdx++) {
     const currentModelId = modelsToTry[mIdx]
     const nextModelId = mIdx + 1 < MAX_MODELS ? modelsToTry[mIdx + 1] : null
-    const model = genAI.getGenerativeModel({ model: currentModelId })
+
+    // Configure model with temperature 0.25 (avoids recitation token matching) and permissive safety settings
+    const model = genAI.getGenerativeModel({
+      model: currentModelId,
+      generationConfig: {
+        temperature: 0.25,
+        topP: 0.95,
+      },
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      ],
+    })
 
     const MAX_RETRIES = 1
 
@@ -134,11 +154,12 @@ Each object must have the following keys:
         lastError = err
         const is503 = err.message?.includes('503') || err.status === 503
         const is429 = err.message?.includes('429') || err.status === 429
+        const isRecitation = err.message?.includes('RECITATION') || err.message?.includes('recitation') || err.message?.includes('copyrighted')
 
-        // If 503 (high demand) and next model is available, switch immediately!
-        if (is503 && nextModelId) {
-          console.warn(`[Gemini] ${currentModelId} 503 High Demand. Auto-switching to ${nextModelId}...`)
-          notify(`${currentModelId} busy (503 High Demand). Switching to ${nextModelId}...`)
+        // If recitation or 503 and next model available, try next model
+        if ((is503 || isRecitation) && nextModelId) {
+          console.warn(`[Gemini] ${currentModelId} error (${isRecitation ? 'Recitation' : '503'}). Auto-switching to ${nextModelId}...`)
+          notify(`${currentModelId} (${isRecitation ? 'Recitation block' : 'Busy'}). Switching to ${nextModelId}...`)
           await delay(1000)
           break
         }
@@ -153,5 +174,5 @@ Each object must have the following keys:
     }
   }
 
-  throw new Error(lastError?.message || 'Failed to extract questions with AI. All candidate models busy.')
+  throw new Error(lastError?.message || 'Failed to extract questions with AI.')
 }

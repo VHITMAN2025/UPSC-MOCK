@@ -587,107 +587,113 @@ export function BYOPPage() {
       
       // Check if AI Vision extraction is requested (Best for Tamil / Scanned / Handwritten)
       if (mode === 'ai') {
-        setProgress({
-          stage: 'extracting',
-          currentPage: 1,
-          totalPages: 1,
-          pagesProcessed: 1,
-          questionsFound: 0,
-          statusText: 'Analyzing Tamil PDF with Gemini AI Vision...'
-        })
-
-        const base64Data = await blobToBase64(pdfBlob)
-        const aiQuestions = await extractQuestionsWithAi(
-          base64Data,
-          selectedModel,
-          (statusText) => setProgress({ stage: 'extracting', currentPage: 1, totalPages: 1, pagesProcessed: 1, questionsFound: 0, statusText })
-        )
-
-        const questions = aiQuestions.map((q, idx) => ({
-          ...q,
-          question_number: q.question_number || idx + 1,
-          parser_status: 'ready',
-          isValid: true,
-          extraction_status: 'complete',
-          source_page: 1,
-        }))
-
-        setResult({
-          processingJobId,
-          fileName: paper.file_name,
-          questions,
-          totalQuestions: questions.length,
-          totalPages: 1,
-          processedPages: 1,
-        })
-
-        // Auto-create playable paper in central papers table so Attempt Test works immediately
-        let newPaperId = null
         try {
-          const newPaper = await paperService.createPaper({
-            title:            paper.title || 'Custom Uploaded Paper',
-            exam_name:        'Custom Upload',
-            exam_type:        'Custom',
-            year:             new Date().getFullYear(),
-            subject:          'General',
-            description:      `BYOP upload: ${paper.file_name}`,
-            duration_minutes: Math.max(30, Math.round(questions.length * 1.5)),
-            total_questions:  questions.length,
-            status:           'published',
-            created_by:       user.id,
+          setProgress({
+            stage: 'extracting',
+            currentPage: 1,
+            totalPages: 1,
+            pagesProcessed: 1,
+            questionsFound: 0,
+            statusText: 'Analyzing PDF with Gemini AI Vision...'
           })
-          newPaperId = newPaper.id
 
-          const toSave = questions.map((q, i) => ({
-            question_number: parseInt(String(q.question_number), 10) || i + 1,
-            question_text:   [q.tamil_question, q.english_question].filter(Boolean).join('\n').trim()
-                             || q.question_text || `Question ${i + 1}`,
-            option_a:        q.option_a || q.options?.A || 'Option A',
-            option_b:        q.option_b || q.options?.B || 'Option B',
-            option_c:        q.option_c || q.options?.C || 'Option C',
-            option_d:        q.option_d || q.options?.D || 'Option D',
-            correct_option:  ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
-              ? (q.correct_option || q.correct_answer)
-              : null,
-            explanation:     q.explanation || null,
+          const base64Data = await blobToBase64(pdfBlob)
+          const aiQuestions = await extractQuestionsWithAi(
+            base64Data,
+            selectedModel,
+            (statusText) => setProgress({ stage: 'extracting', currentPage: 1, totalPages: 1, pagesProcessed: 1, questionsFound: 0, statusText })
+          )
+
+          const questions = aiQuestions.map((q, idx) => ({
+            ...q,
+            question_number: q.question_number || idx + 1,
+            parser_status: 'ready',
+            isValid: true,
+            extraction_status: 'complete',
+            source_page: 1,
           }))
 
-          await questionService.saveQuestionsToSupabase(newPaper.id, toSave, false)
-        } catch (autoCreateErr) {
-          console.warn('[BYOP] Auto-creating paper during AI process encountered issue:', autoCreateErr)
+          setResult({
+            processingJobId,
+            fileName: paper.file_name,
+            questions,
+            totalQuestions: questions.length,
+            totalPages: 1,
+            processedPages: 1,
+          })
+
+          // Auto-create playable paper in central papers table so Attempt Test works immediately
+          let newPaperId = null
+          try {
+            const newPaper = await paperService.createPaper({
+              title:            paper.title || 'Custom Uploaded Paper',
+              exam_name:        'Custom Upload',
+              exam_type:        'Custom',
+              year:             new Date().getFullYear(),
+              subject:          'General',
+              description:      `BYOP upload: ${paper.file_name}`,
+              duration_minutes: Math.max(30, Math.round(questions.length * 1.5)),
+              total_questions:  questions.length,
+              status:           'published',
+              created_by:       user.id,
+            })
+            newPaperId = newPaper.id
+
+            const toSave = questions.map((q, i) => ({
+              question_number: parseInt(String(q.question_number), 10) || i + 1,
+              question_text:   [q.tamil_question, q.english_question].filter(Boolean).join('\n').trim()
+                               || q.question_text || `Question ${i + 1}`,
+              option_a:        q.option_a || q.options?.A || 'Option A',
+              option_b:        q.option_b || q.options?.B || 'Option B',
+              option_c:        q.option_c || q.options?.C || 'Option C',
+              option_d:        q.option_d || q.options?.D || 'Option D',
+              correct_option:  ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
+                ? (q.correct_option || q.correct_answer)
+                : null,
+              explanation:     q.explanation || null,
+            }))
+
+            await questionService.saveQuestionsToSupabase(newPaper.id, toSave, false)
+          } catch (autoCreateErr) {
+            console.warn('[BYOP] Auto-creating paper during AI process encountered issue:', autoCreateErr)
+          }
+
+          const notesMsg = newPaperId
+            ? `${questions.length} questions extracted and saved to paper "${newPaperId}".`
+            : `${questions.length} questions extracted using AI Vision.`
+
+          const storagePayload = sanitizeUnicode({
+            processing_status: 'ready',
+            total_pages: 1,
+            processed_pages: 1,
+            extracted_count: questions.length,
+            questions_json: sanitizeUnicode(questions),
+            batch_progress_json: [],
+            notes: notesMsg,
+          })
+
+          await byopService.update(paper.id, user.id, storagePayload)
+
+          setPapers(prev => prev.map(p => p.id === paper.id
+            ? {
+                ...p,
+                processing_status: 'ready',
+                extracted_count: questions.length,
+                notes: notesMsg,
+                questions_json: questions
+              }
+            : p
+          ))
+
+          setReviewPaperId(paper.id)
+          setShowReview(true)
+          toast.success(`AI extracted ${questions.length} questions accurately! Paper is ready for test.`)
+          return
+        } catch (aiErr) {
+          console.warn('[BYOP] AI Vision extraction encountered issue. Cascading to Local PDF Engine...', aiErr.message)
+          toast.info(`AI Vision blocked/busy (${aiErr.message?.includes('RECITATION') ? 'Recitation safety' : 'AI busy'}). Cascading to Local PDF Engine...`)
+          // Fall through to Step 2 (PDF.js local text extraction)
         }
-
-        const notesMsg = newPaperId
-          ? `${questions.length} questions extracted and saved to paper "${newPaperId}".`
-          : `${questions.length} questions extracted using AI Vision.`
-
-        const storagePayload = sanitizeUnicode({
-          processing_status: 'ready',
-          total_pages: 1,
-          processed_pages: 1,
-          extracted_count: questions.length,
-          questions_json: sanitizeUnicode(questions),
-          batch_progress_json: [],
-          notes: notesMsg,
-        })
-
-        await byopService.update(paper.id, user.id, storagePayload)
-
-        setPapers(prev => prev.map(p => p.id === paper.id
-          ? {
-              ...p,
-              processing_status: 'ready',
-              extracted_count: questions.length,
-              notes: notesMsg,
-              questions_json: questions
-            }
-          : p
-        ))
-
-        setReviewPaperId(paper.id)
-        setShowReview(true)
-        toast.success(`AI extracted ${questions.length} questions accurately! Paper is ready for test.`)
-        return
       }
       
       console.log('[BYOP] PDF Blob fetched:', {

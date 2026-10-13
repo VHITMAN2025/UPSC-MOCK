@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase.js'
 
 export const attemptService = {
   async startOrGetAttempt(userId, paperId) {
