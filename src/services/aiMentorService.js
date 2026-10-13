@@ -14,6 +14,43 @@ function getApiKey() {
   return env.VITE_GEMINI_API_KEY || ''
 }
 
+/**
+ * Sanitizes chat history to conform strictly to Gemini requirements:
+ * 1. The first entry MUST have role: 'user' (strips leading greeting).
+ * 2. Strictly alternates: user -> model -> user -> model.
+ * 3. History ends on 'model' (or empty) so chat.sendMessage() supplies the next 'user' message.
+ */
+function cleanGeminiHistory(rawHistory = []) {
+  const result = []
+  let expectedRole = 'user'
+
+  const recent = rawHistory.slice(-10)
+  for (const msg of recent) {
+    if (!msg || !msg.text) continue
+    const role = (msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user'
+
+    // Skip any leading model greeting before the first user message
+    if (result.length === 0 && role !== 'user') {
+      continue
+    }
+
+    if (role === expectedRole) {
+      result.push({
+        role,
+        parts: [{ text: msg.text }]
+      })
+      expectedRole = expectedRole === 'user' ? 'model' : 'user'
+    }
+  }
+
+  // If history ends on a user turn, pop it so startChat history ends on model
+  if (result.length > 0 && result[result.length - 1].role === 'user') {
+    result.pop()
+  }
+
+  return result
+}
+
 export const aiMentorService = {
   /**
    * Sends a message to Vina AI Mentor using live Google Gemini API
@@ -41,19 +78,7 @@ Your Guidelines:
 4. Formatting: Use concise bullet points, bold key terms, and numbered steps. Keep responses focused and readable.
 5. Motivation: Be encouraging, disciplined, and practical.`
 
-    // Format previous turns for Gemini SDK: { role: 'user' | 'model', parts: [{ text: ... }] }
-    const formattedHistory = []
-    // Take up to the last 10 messages for context
-    const recentHistory = history.slice(-10)
-    for (const msg of recentHistory) {
-      if (!msg.text) continue
-      const role = msg.role === 'assistant' ? 'model' : 'user'
-      formattedHistory.push({
-        role,
-        parts: [{ text: msg.text }]
-      })
-    }
-
+    const formattedHistory = cleanGeminiHistory(history)
     let lastError = null
 
     // Try candidate models in order
@@ -72,23 +97,36 @@ Your Guidelines:
           }
         })
 
-        const chat = model.startChat({
-          history: formattedHistory,
-        })
+        // Try conversational multi-turn chat first
+        try {
+          const chat = model.startChat({
+            history: formattedHistory,
+          })
+          const result = await chat.sendMessage(message)
+          const responseText = result.response.text()
 
-        const result = await chat.sendMessage(message)
-        const responseText = result.response.text()
+          if (responseText && responseText.trim().length > 0) {
+            return {
+              text: responseText.trim(),
+              modelUsed: modelName,
+            }
+          }
+        } catch (chatErr) {
+          console.warn(`[aiMentorService] startChat failed on '${modelName}', trying generateContent:`, chatErr.message)
+          // Failsafe fallback: direct generateContent with context
+          const result = await model.generateContent(message)
+          const responseText = result.response.text()
 
-        if (responseText && responseText.trim().length > 0) {
-          return {
-            text: responseText.trim(),
-            modelUsed: modelName,
+          if (responseText && responseText.trim().length > 0) {
+            return {
+              text: responseText.trim(),
+              modelUsed: modelName,
+            }
           }
         }
       } catch (err) {
-        console.warn(`[aiMentorService] Model '${modelName}' failed:`, err.message)
+        console.warn(`[aiMentorService] Model '${modelName}' error:`, err.message)
         lastError = err
-        // Continue to fallback model
       }
     }
 
