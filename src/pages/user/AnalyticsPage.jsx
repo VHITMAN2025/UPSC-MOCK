@@ -96,7 +96,7 @@ export function AnalyticsPage() {
     if (count === 0) {
       return {
         count: 0,
-        avgTimeSec: 48,
+        avgTimeSec: 0,
         netDeltaSec: 0,
         behindPaceCount: 0,
         watchPaceCount: 0,
@@ -154,10 +154,13 @@ export function AnalyticsPage() {
   const displayHistory = timeFilter === 'last5' ? mockTestHistory.slice(-5) : mockTestHistory
   const trendSummary = data?.trendSummary ?? {}
 
-  // Readiness Index: weighted combination of accuracy (70%) and coverage (30%)
-  const overallAcc = Number(data?.avgAccuracy || 70)
-  const overallCov = Number(syllabusData?.coverage_percentage || 60)
-  const readinessIndex = Math.min(100, Math.round(overallAcc * 0.7 + overallCov * 0.3))
+  // Readiness Index: strictly computed from user test accuracy and syllabus coverage
+  const hasAttempts = Boolean(data?.hasData && (data?.totalAttempts > 0))
+  const overallAcc = hasAttempts ? Number(data?.avgAccuracy || 0) : 0
+  const overallCov = Number(syllabusData?.coverage_percentage || 0)
+  const readinessIndex = hasAttempts
+    ? Math.min(100, Math.round(overallAcc * 0.7 + overallCov * 0.3))
+    : (overallCov > 0 ? Math.round(overallCov * 0.3) : 0)
 
   if (loading) {
     return (
@@ -229,7 +232,12 @@ export function AnalyticsPage() {
                 Readiness Index
               </small>
               <b className="block text-xl font-black text-[#a9a4ff] mt-1">
-                {readinessIndex} / 100 <span className="text-xs text-emerald-400 font-bold ml-1">↑ 8</span>
+                {readinessIndex} / 100
+                {trendSummary.hasMultipleTests && trendSummary.latestDeltaScore !== 0 && (
+                  <span className={`text-xs font-bold ml-1.5 ${trendSummary.latestDeltaScore > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {trendSummary.latestDeltaScore > 0 ? `↑ ${trendSummary.latestDeltaScore}` : `↓ ${Math.abs(trendSummary.latestDeltaScore)}`}
+                  </span>
+                )}
               </b>
             </div>
 
@@ -238,7 +246,7 @@ export function AnalyticsPage() {
                 Average Score
               </small>
               <b className="block text-xl font-black text-white mt-1">
-                {data?.avgScore ?? '0'}%
+                {hasAttempts ? `${data.avgScore}%` : '—'}
               </b>
             </div>
 
@@ -247,7 +255,7 @@ export function AnalyticsPage() {
                 Accuracy
               </small>
               <b className="block text-xl font-black text-emerald-400 mt-1">
-                {data?.avgAccuracy ?? '0'}%
+                {hasAttempts ? `${data.avgAccuracy}%` : '—'}
               </b>
             </div>
 
@@ -256,7 +264,7 @@ export function AnalyticsPage() {
                 Avg Time / Q
               </small>
               <b className="block text-xl font-black text-white mt-1">
-                {pacingSummary.avgTimeSec} sec
+                {pacingSummary.count > 0 ? `${pacingSummary.avgTimeSec} sec` : '—'}
               </b>
             </div>
 
@@ -265,7 +273,7 @@ export function AnalyticsPage() {
                 Consistency
               </small>
               <b className="block text-xl font-black text-white mt-1">
-                {Math.min(5, data?.totalAttempts || 4)} / 5
+                {Math.min(5, data?.totalAttempts || 0)} / 5
               </b>
             </div>
 
