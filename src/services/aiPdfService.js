@@ -41,8 +41,79 @@ export function blobToBase64(blob) {
 }
 
 /**
- * Extracts structured questions from PDF using Gemini Vision with retry and fast model fallback.
- * Configured with anti-recitation prompt, non-zero temperature, and permissive safety settings.
+ * Helper to safely extract JSON array of questions from response text or candidate parts
+ */
+function parseJsonQuestions(rawText) {
+  if (!rawText || typeof rawText !== 'string') return null
+  const cleaned = rawText.replace(/```(?:json)?/gi, '').trim()
+
+  try {
+    const parsed = JSON.parse(cleaned)
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed
+  } catch {}
+
+  const startIdx = cleaned.indexOf('[')
+  const lastIdx = cleaned.lastIndexOf(']')
+  if (startIdx !== -1 && lastIdx !== -1 && lastIdx > startIdx) {
+    try {
+      const slice = cleaned.slice(startIdx, lastIdx + 1)
+      const parsed = JSON.parse(slice)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    } catch {}
+  }
+
+  // Attempt to repair trailing truncated JSON array if needed
+  if (startIdx !== -1) {
+    const lastBrace = cleaned.lastIndexOf('}')
+    if (lastBrace > startIdx) {
+      try {
+        const repaired = cleaned.slice(startIdx, lastBrace + 1) + ']'
+        const parsed = JSON.parse(repaired)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      } catch {}
+    }
+  }
+
+  return null
+}
+
+const SYSTEM_INSTRUCTION = `You are an expert educational assessment parser and quiz generator.
+Your role is to analyze examination papers (in Tamil or English, printed or handwritten) and convert the questions into structured interactive practice quiz items for students.
+Important guidelines:
+1. Create an entry for each multiple-choice question found in the document.
+2. Formulate clear, self-contained question stems. Do not reproduce document borders, page numbers, instructions to candidates, or official headers.
+3. Keep the original language (Tamil questions in Tamil, English questions in English).
+4. Accurately capture all 4 options (A, B, C, D) and identify the correct option if indicated by tick marks, keys, or standard knowledge.
+5. Provide the output strictly as a JSON array of question objects.`
+
+const PRIMARY_PROMPT = `Analyze the attached PDF exam document and generate a structured student practice quiz dataset.
+Extract each question with its options (A, B, C, D).
+Ensure each question is clear and student-ready:
+Return a JSON array of objects with the following schema:
+[
+  {
+    "question_number": 1,
+    "question_text": "<clear question text in original language>",
+    "option_a": "<option A text>",
+    "option_b": "<option B text>",
+    "option_c": "<option C text>",
+    "option_d": "<option D text>",
+    "correct_option": "<'A', 'B', 'C', 'D' if indicated or known, else null>",
+    "explanation": "<short explanation or empty string>"
+  }
+]
+Output valid JSON only.`
+
+const ANTI_RECITATION_PROMPT = `The previous extraction was flagged by automated recitation filters.
+Please re-generate the practice quiz items from this document with educational paraphrasing:
+1. Rephrase the question stems using your own clear, concise wording so it does not match copyrighted published texts verbatim, while strictly preserving the technical concepts, factual meaning, and correct answer.
+2. Capture options A, B, C, D clearly.
+3. Keep the original language (Tamil in Tamil, English in English).
+4. Output strictly as a valid JSON array of objects.`
+
+/**
+ * Extracts structured questions from PDF using Gemini Vision with multi-pass anti-recitation defense.
+ * Overcomes RECITATION blocks via educational paraphrasing, higher sampling temperature, and model cascade.
  */
 export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-2.5-flash', onStatusUpdate, customApiKey = null) {
   const apiKey = (customApiKey && customApiKey.trim().length > 0)
@@ -67,29 +138,7 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
     ...availableModels.map((m) => m.id),
   ]
 
-  // Deduplicate models to try
   const modelsToTry = Array.from(new Set(candidateList.filter(Boolean)))
-
-  // Anti-recitation educational structuring prompt
-  const prompt = `You are an educational assessment structuring engine. Read and analyze the questions and choices from the uploaded examination PDF (which may be in English or Tamil, printed or handwritten).
-Extract the multiple-choice questions into a clean assessment quiz dataset.
-To comply with content filtering and prevent recitation blocks:
-- Transcribe and normalize the question stems and options into structured MCQ schema.
-- Do not reproduce official gazette margins, watermarks, or government letterheads.
-- Extract every question along with all options (A, B, C, D). Do not leave option fields empty.
-Output strictly as a valid JSON array of objects. Do not wrap in markdown or include text outside the JSON.
-Schema for each question object:
-{
-  "question_number": <integer>,
-  "question_text": "<full question stem in Tamil or English>",
-  "option_a": "<text for option A>",
-  "option_b": "<text for option B>",
-  "option_c": "<text for option C>",
-  "option_d": "<text for option D>",
-  "correct_option": "<'A', 'B', 'C', 'D' if indicated or known, else null>",
-  "explanation": "<brief explanation or empty string>"
-}`
-
   let lastError = null
   const MAX_MODELS = Math.min(4, modelsToTry.length)
 
@@ -103,28 +152,39 @@ Schema for each question object:
     const currentModelId = modelsToTry[mIdx]
     const nextModelId = mIdx + 1 < MAX_MODELS ? modelsToTry[mIdx + 1] : null
 
-    // Configure model with temperature 0.25 (avoids recitation token matching) and permissive safety settings
-    const model = genAI.getGenerativeModel({
-      model: currentModelId,
-      generationConfig: {
-        temperature: 0.25,
-        topP: 0.95,
-      },
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-      ],
-    })
+    // Two passes per model: Pass 1 with PRIMARY_PROMPT, Pass 2 with ANTI_RECITATION_PROMPT if recitation triggers
+    const passes = [
+      { prompt: PRIMARY_PROMPT, temp: 0.7, label: 'primary' },
+      { prompt: ANTI_RECITATION_PROMPT, temp: 0.85, label: 'anti-recitation' },
+    ]
 
-    const MAX_RETRIES = 1
+    for (let pIdx = 0; pIdx < passes.length; pIdx++) {
+      const { prompt: activePrompt, temp: activeTemp, label: passLabel } = passes[pIdx]
 
-    for (let retry = 0; retry <= MAX_RETRIES; retry++) {
       try {
-        notify(`Analyzing PDF with AI (${currentModelId})...`)
+        notify(passLabel === 'primary'
+          ? `Analyzing PDF with AI (${currentModelId})...`
+          : `Bypassing recitation filter with educational rephrasing (${currentModelId})...`
+        )
+
+        const model = genAI.getGenerativeModel({
+          model: currentModelId,
+          systemInstruction: SYSTEM_INSTRUCTION,
+          generationConfig: {
+            temperature: activeTemp,
+            topP: 0.95,
+            responseMimeType: 'application/json',
+          },
+          safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+          ],
+        })
+
         const response = await model.generateContent([
-          prompt,
+          activePrompt,
           {
             inlineData: {
               data: base64Data,
@@ -133,10 +193,25 @@ Schema for each question object:
           },
         ])
 
-        const text = response.response.text()
-        const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim()
-        const parsed = JSON.parse(cleanedText)
+        // Safely extract text from candidate parts or response.text()
+        let rawText = ''
+        const candidate = response?.response?.candidates?.[0]
+        if (candidate?.content?.parts?.length > 0) {
+          rawText = candidate.content.parts.map(p => p.text || '').join('').trim()
+        }
 
+        if (!rawText) {
+          try {
+            rawText = response.response.text()
+          } catch (textErr) {
+            if (candidate?.finishReason === 'RECITATION' || textErr.message?.includes('RECITATION')) {
+              throw new Error('Candidate was blocked due to RECITATION')
+            }
+            throw textErr
+          }
+        }
+
+        const parsed = parseJsonQuestions(rawText)
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((q, idx) => ({
             question_number: q.question_number || idx + 1,
@@ -155,26 +230,43 @@ Schema for each question object:
             source_page: 1,
           }))
         }
+
+        if (candidate?.finishReason === 'RECITATION') {
+          throw new Error('Candidate was blocked due to RECITATION')
+        }
+
         throw new Error('AI returned an empty question list.')
       } catch (err) {
         lastError = err
+        const isRecitation = err.message?.includes('RECITATION') || err.message?.includes('recitation') || err.message?.includes('copyrighted')
         const is503 = err.message?.includes('503') || err.status === 503
         const is429 = err.message?.includes('429') || err.status === 429
-        const isRecitation = err.message?.includes('RECITATION') || err.message?.includes('recitation') || err.message?.includes('copyrighted')
 
-        // If recitation or 503 and next model available, try next model
-        if ((is503 || isRecitation) && nextModelId) {
-          console.warn(`[Gemini] ${currentModelId} error (${isRecitation ? 'Recitation' : '503'}). Auto-switching to ${nextModelId}...`)
-          notify(`${currentModelId} (${isRecitation ? 'Recitation block' : 'Busy'}). Switching to ${nextModelId}...`)
-          await delay(1000)
+        if (isRecitation) {
+          console.warn(`[Gemini] ${currentModelId} hit RECITATION filter (${passLabel}).`)
+          if (pIdx === 0) {
+            // Attempt Pass 2 (anti-recitation rephrasing) immediately on this model!
+            notify(`Adapting questions to pass copyright safety filters...`)
+            await delay(1000)
+            continue
+          }
+          // If Pass 2 also failed on this model, switch to next model in list
+          if (nextModelId) {
+            notify(`Recitation detected. Trying alternate model (${nextModelId})...`)
+            await delay(1000)
+            break
+          }
+        }
+
+        if ((is503 || is429) && nextModelId) {
+          notify(`Model busy. Trying alternate model (${nextModelId})...`)
+          await delay(1500)
           break
         }
 
-        if ((is503 || is429) && retry < MAX_RETRIES) {
-          notify(`Model ${currentModelId} busy. Retrying in 2s...`)
-          await delay(2000)
-        } else {
-          break
+        if (pIdx === 0 && !isRecitation) {
+          // If non-recitation error (e.g. invalid response format), try pass 2
+          continue
         }
       }
     }
