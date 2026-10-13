@@ -25,6 +25,7 @@ import { questionService } from '../../services/questionService'
 import { extractPdfText } from '../../services/pdfTextExtractor'
 import { parseMcqQuestions } from '../../services/mcqParser'
 import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
+import { apiKeyService } from '../../services/apiKeyService'
 
 // ─── Progress Display ──────────────────────────────────────────────────────────
 function ExtractionProgress({ stage, currentPage, totalPages, statusText }) {
@@ -202,7 +203,7 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
 
 // ─── Main Text PDF Tab ─────────────────────────────────────────────────────────
 export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
-  const { toast } = useApp()
+  const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const fileRef = useRef(null)
 
   const [file, setFile] = useState(null)
@@ -239,6 +240,14 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
       return
     }
 
+    if (mode === 'ai') {
+      const activeKey = geminiApiKey || apiKeyService.getUserApiKey()
+      if (!activeKey) {
+        toast.error('Google Gemini API Key is required for AI extraction. Please configure your key in Profile & Settings.')
+        return
+      }
+    }
+
     setProcessing(true)
     setProgress({ stage: 'extracting', currentPage: 0, totalPages: 0, statusText: 'Initializing PDF extraction...' })
     setResult(null)
@@ -247,18 +256,20 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
 
     try {
       if (mode === 'ai') {
+        const activeKey = geminiApiKey || apiKeyService.getUserApiKey()
         setProgress({
           stage: 'ai',
           currentPage: 1,
           totalPages: 1,
-          statusText: 'Analyzing PDF with Gemini AI (using VITE_GEMINI_API_KEY)...'
+          statusText: 'Analyzing PDF with Gemini AI...'
         })
 
         const base64Data = await blobToBase64(file)
         const aiQuestions = await extractQuestionsWithAi(
           base64Data,
-          'gemini-3.8-flash',
-          (msg) => setProgress({ stage: 'ai', currentPage: 1, totalPages: 1, statusText: msg })
+          'gemini-2.5-flash',
+          (msg) => setProgress({ stage: 'ai', currentPage: 1, totalPages: 1, statusText: msg }),
+          activeKey
         )
 
         const formatted = aiQuestions.map((q, idx) => ({
@@ -299,8 +310,14 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
       })
 
       if (!extractResult.hasSelectableText) {
-        toast.error('PDF contains no selectable text. Switching to Gemini AI extraction...')
-        return handleExtract('ai')
+        const activeKey = geminiApiKey || apiKeyService.getUserApiKey()
+        if (activeKey) {
+          toast.error('PDF contains no selectable text. Switching to Gemini AI extraction...')
+          return handleExtract('ai')
+        } else {
+          toast.error('PDF contains no selectable text. Configure your Gemini API key in Profile & Settings to extract with AI.')
+          return
+        }
       }
 
       setProgress({ stage: 'parsing', currentPage: 0, totalPages: extractResult.totalPages, statusText: 'Parsing MCQ structure...' })
@@ -443,13 +460,34 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
 
   return (
     <div className="space-y-5">
+      {/* Missing API key warning */}
+      {!hasGeminiApiKey && !apiKeyService.hasUserApiKey() && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-3 shadow-subtle">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-amber-900">Google Gemini API Key Required for AI Extraction</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                To extract questions using Google Gemini AI, please configure your personal API key in Settings.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/profile#api-key"
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors shadow-subtle"
+          >
+            Configure Key →
+          </Link>
+        </div>
+      )}
+
       {/* Info banner */}
       <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-bold text-purple-800">AI-Powered PDF Question Import</p>
           <p className="text-xs text-body-secondary mt-0.5">
-            Extracts questions and options A/B/C/D accurately using Google Gemini AI (via your configured <code>VITE_GEMINI_API_KEY</code>). Also includes an offline fallback option.
+            Extracts questions and options A/B/C/D accurately using Google Gemini AI with your personal API key. Also includes a local offline fallback option.
           </p>
         </div>
       </div>

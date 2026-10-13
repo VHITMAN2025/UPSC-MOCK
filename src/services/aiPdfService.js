@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
+import { apiKeyService } from './apiKeyService.js'
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -16,10 +17,10 @@ export async function fetchAvailableGeminiModels(apiKey) {
     console.error('Failed to fetch Gemini models', e)
   }
   return [
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
-    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
-    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
     { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
   ]
 }
 
@@ -43,10 +44,15 @@ export function blobToBase64(blob) {
  * Extracts structured questions from PDF using Gemini Vision with retry and fast model fallback.
  * Configured with anti-recitation prompt, non-zero temperature, and permissive safety settings.
  */
-export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-3.8-flash', onStatusUpdate) {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-  if (!apiKey || apiKey.includes('your_gemini')) {
-    throw new Error('VITE_GEMINI_API_KEY is not configured in .env')
+export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-2.5-flash', onStatusUpdate, customApiKey = null) {
+  const apiKey = (customApiKey && customApiKey.trim().length > 0)
+    ? customApiKey.trim()
+    : apiKeyService.getUserApiKey()
+
+  if (!apiKey) {
+    const err = new Error('NO_API_KEY_CONFIGURED')
+    err.code = 'NO_API_KEY_CONFIGURED'
+    throw err
   }
 
   const genAI = new GoogleGenerativeAI(apiKey)
@@ -54,10 +60,10 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
 
   const candidateList = [
     preferredModel,
-    'gemini-3.8-flash',
-    'gemini-3.5-flash',
-    'gemini-3.1-pro-preview',
+    'gemini-2.5-flash',
     'gemini-flash-latest',
+    'gemini-2.5-flash-lite',
+    'gemini-3.5-flash',
     ...availableModels.map((m) => m.id),
   ]
 

@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { apiKeyService } from './apiKeyService.js'
 
 const CANDIDATE_MODELS = [
   'gemini-2.5-flash',
@@ -7,11 +8,11 @@ const CANDIDATE_MODELS = [
   'gemini-3.5-flash',
 ]
 
-function getApiKey() {
-  const env = (typeof import.meta !== 'undefined' && import.meta.env)
-    ? import.meta.env
-    : (typeof process !== 'undefined' && process.env ? process.env : {})
-  return env.VITE_GEMINI_API_KEY || ''
+function getApiKey(overrideKey = null) {
+  if (overrideKey && overrideKey.trim().length > 0) return overrideKey.trim()
+  const userKey = apiKeyService.getUserApiKey()
+  if (userKey && userKey.trim().length > 0) return userKey.trim()
+  return ''
 }
 
 /**
@@ -56,10 +57,12 @@ export const aiMentorService = {
    * Sends a message to Vina AI Mentor using live Google Gemini API
    * with multi-turn conversation history and exam context.
    */
-  async sendMessage({ message, history = [], examContext = 'TNPSC Group 1', userName = 'Candidate', language = 'en' }) {
-    const apiKey = getApiKey()
-    if (!apiKey || apiKey.includes('your_gemini')) {
-      throw new Error('Gemini API key is not configured. Please add VITE_GEMINI_API_KEY to your environment.')
+  async sendMessage({ message, history = [], examContext = 'TNPSC Group 1', userName = 'Candidate', language = 'en', userApiKey = null }) {
+    const apiKey = getApiKey(userApiKey)
+    if (!apiKey) {
+      const err = new Error('NO_API_KEY_CONFIGURED')
+      err.code = 'NO_API_KEY_CONFIGURED'
+      throw err
     }
 
     const genAI = new GoogleGenerativeAI(apiKey)

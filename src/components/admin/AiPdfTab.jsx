@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Upload, Loader2, Sparkles, CheckCircle2, Eye, Save, Trash2, Edit2
+  Upload, Loader2, Sparkles, CheckCircle2, Eye, Save, Trash2, Edit2, AlertTriangle
 } from 'lucide-react'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { questionService } from '../../services/questionService'
 import { useApp } from '../../contexts/AppContext'
-import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
+import { extractQuestionsWithAi, blobToBase64, fetchAvailableGeminiModels } from '../../services/aiPdfService'
+import { apiKeyService } from '../../services/apiKeyService'
 
 export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
-  const { toast } = useApp()
+  const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -18,28 +18,24 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const [questions, setQuestions] = useState([])
   const [importMsg, setImportMsg] = useState('')
   const [modelsList, setModelsList] = useState([
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Recommended)' }
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
+    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
   ])
-  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const fileRef = useRef(null)
 
   useEffect(() => {
     const fetchModels = async () => {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-      if (!apiKey || apiKey.includes('your_gemini')) return
+      const apiKey = geminiApiKey || apiKeyService.getUserApiKey()
+      if (!apiKey) return
       try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`)
-        const data = await res.json()
-        if (data.models) {
-          const validModels = data.models
-            .filter(m => m.supportedGenerationMethods.includes('generateContent') && m.name.includes('gemini'))
-            .map(m => ({ id: m.name.split('/')[1], name: m.displayName || m.name.split('/')[1] }))
-          
-          if (validModels.length > 0) {
-            setModelsList(validModels)
-            // Auto-select 3.8 flash if available, else first in list
-            const has38 = validModels.find(m => m.id === 'gemini-3.8-flash')
-            setSelectedModel(has38 ? 'gemini-3.8-flash' : validModels[0].id)
+        const validModels = await fetchAvailableGeminiModels(apiKey)
+        if (validModels && validModels.length > 0) {
+          setModelsList(validModels)
+          if (!validModels.some(m => m.id === selectedModel)) {
+            setSelectedModel(validModels[0].id)
           }
         }
       } catch (e) {
@@ -47,7 +43,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
       }
     }
     fetchModels()
-  }, [])
+  }, [geminiApiKey])
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -61,6 +57,12 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
 
   const handleExtract = async () => {
     if (!file) return
+
+    const activeKey = geminiApiKey || apiKeyService.getUserApiKey()
+    if (!activeKey) {
+      toast.error('Google Gemini API Key is required. Please configure your key in Profile & Settings.')
+      return
+    }
 
     setLoading(true)
     setStatusMsg('Reading PDF file...')
@@ -76,7 +78,8 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
           setStatusMsg(msg)
           if (typeof toast === 'function') toast(msg)
           else if (toast?.info) toast.info(msg)
-        }
+        },
+        activeKey
       )
 
       setQuestions(parsedQuestions)
@@ -86,7 +89,11 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
       toast.success(`Successfully extracted ${parsedQuestions.length} questions!`)
     } catch (err) {
       console.error(err)
-      toast.error(err.message || 'Failed to process PDF.')
+      if (err.message === 'NO_API_KEY_CONFIGURED' || err.code === 'NO_API_KEY_CONFIGURED') {
+        toast.error('Gemini API key is missing. Please configure your key in Profile & Settings.')
+      } else {
+        toast.error(err.message || 'Failed to process PDF.')
+      }
     } finally {
       setLoading(false)
     }
@@ -143,6 +150,27 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
 
   return (
     <div className="space-y-5">
+      {/* Missing API key warning */}
+      {!hasGeminiApiKey && !apiKeyService.hasUserApiKey() && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-3 shadow-subtle">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-amber-900">Google Gemini API Key Required</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                You must configure your personal Gemini API key in Settings before using AI Vision extraction.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/profile#api-key"
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors shadow-subtle"
+          >
+            Configure Key →
+          </Link>
+        </div>
+      )}
+
       {/* Info banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />

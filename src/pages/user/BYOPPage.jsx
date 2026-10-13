@@ -12,6 +12,7 @@ import { byopService } from '../../services/tnpscService'
 import { extractPdfText } from '../../services/pdfTextExtractor'
 import { parseMcqQuestions } from '../../services/mcqParser'
 import { extractQuestionsWithAi, blobToBase64, fetchAvailableGeminiModels } from '../../services/aiPdfService'
+import { apiKeyService } from '../../services/apiKeyService'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
 import { formatDate } from '../../lib/utils'
@@ -467,7 +468,8 @@ function AttemptButton({ paperId, userId }) {
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export function BYOPPage() {
   const { user } = useAuth()
-  const { toast } = useApp()
+  const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
+  const navigate = useNavigate()
   const fileRef   = useRef(null)
 
   const [papers, setPapers]   = useState([])
@@ -481,29 +483,32 @@ export function BYOPPage() {
   const [showReview, setShowReview] = useState(false)
   const [reviewPaperId, setReviewPaperId] = useState(null)
   const [saving, setSaving]         = useState(false)
-  const [selectedModel, setSelectedModel] = useState('gemini-3.8-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const [modelsList, setModelsList] = useState([
-    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Recommended)' },
-    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
-    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
     { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
   ])
 
   useEffect(() => {
     async function loadModels() {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY
+      const apiKey = geminiApiKey || apiKeyService.getUserApiKey()
       if (!apiKey) return
       try {
         const list = await fetchAvailableGeminiModels(apiKey)
         if (list && list.length > 0) {
           setModelsList(list)
+          if (!list.some(m => m.id === selectedModel)) {
+            setSelectedModel(list[0].id)
+          }
         }
       } catch (e) {
         console.warn('Error loading models in BYOP:', e)
       }
     }
     loadModels()
-  }, [])
+  }, [geminiApiKey])
 
   useEffect(() => { if (user?.id) fetchPapers() }, [user?.id])
 
@@ -587,6 +592,22 @@ export function BYOPPage() {
       
       // Check if AI Vision extraction is requested (Best for Tamil / Scanned / Handwritten)
       if (mode === 'ai') {
+        const effectiveKey = geminiApiKey || apiKeyService.getUserApiKey()
+        if (!effectiveKey) {
+          toast.error('Gemini API key is required for AI Vision extraction. Please configure your key in Profile & Settings.')
+          setActiveId(null)
+          setProgress(null)
+          await byopService.update(paper.id, user.id, {
+            processing_status: paper.processing_status || 'uploaded',
+          })
+          setPapers(prev => prev.map(p => p.id === paper.id
+            ? { ...p, processing_status: paper.processing_status || 'uploaded' }
+            : p
+          ))
+          navigate('/profile#api-key')
+          return
+        }
+
         try {
           setProgress({
             stage: 'extracting',
@@ -601,7 +622,8 @@ export function BYOPPage() {
           const aiQuestions = await extractQuestionsWithAi(
             base64Data,
             selectedModel,
-            (statusText) => setProgress({ stage: 'extracting', currentPage: 1, totalPages: 1, pagesProcessed: 1, questionsFound: 0, statusText })
+            (statusText) => setProgress({ stage: 'extracting', currentPage: 1, totalPages: 1, pagesProcessed: 1, questionsFound: 0, statusText }),
+            effectiveKey
           )
 
           const questions = aiQuestions.map((q, idx) => ({
@@ -690,6 +712,21 @@ export function BYOPPage() {
           toast.success(`AI extracted ${questions.length} questions accurately! Paper is ready for test.`)
           return
         } catch (aiErr) {
+          if (aiErr.message === 'NO_API_KEY_CONFIGURED' || aiErr.code === 'NO_API_KEY_CONFIGURED') {
+            toast.error('Gemini API key is not configured. Please add your key in Profile & Settings.')
+            setActiveId(null)
+            setProgress(null)
+            await byopService.update(paper.id, user.id, {
+              processing_status: 'failed',
+              notes: 'Gemini API key missing. Please configure your API key in Settings.',
+            })
+            setPapers(prev => prev.map(p => p.id === paper.id
+              ? { ...p, processing_status: 'failed', notes: 'Gemini API key missing.' }
+              : p
+            ))
+            navigate('/profile#api-key')
+            return
+          }
           console.warn('[BYOP] AI Vision extraction encountered issue. Cascading to Local PDF Engine...', aiErr.message)
           toast.info(`AI Vision blocked/busy (${aiErr.message?.includes('RECITATION') ? 'Recitation safety' : 'AI busy'}). Cascading to Local PDF Engine...`)
           // Fall through to Step 2 (PDF.js local text extraction)
@@ -1195,7 +1232,28 @@ export function BYOPPage() {
         <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFileSelect} />
       </div>
 
-            {/* Model selector & info bar */}
+      {/* API Key Missing Notification Banner */}
+      {!hasGeminiApiKey && !apiKeyService.hasUserApiKey() && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-subtle">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-amber-900">Personal Google Gemini API Key Required for AI Vision</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                To extract questions from Tamil, handwritten, or scanned PDFs using Gemini AI, please configure your free Gemini API key in Settings.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/profile#api-key')}
+            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shrink-0 transition-colors shadow-subtle"
+          >
+            Configure Key →
+          </button>
+        </div>
+      )}
+
+      {/* Model selector & info bar */}
       <div className="bg-white border border-surface-border rounded-2xl p-4 shadow-subtle flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Sparkles className="w-5 h-5 text-tnpsc-brand shrink-0" />

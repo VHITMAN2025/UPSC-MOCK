@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { apiKeyService } from '../services/apiKeyService.js'
 
 // ─── i18n strings ────────────────────────────────────────────────────────────
 const translations = {
@@ -83,6 +84,7 @@ export function AppProvider({ children }) {
   const [selectedExam, setSelectedExamState] = useState('TNPSC Group 4')
   const [language, setLanguageState]         = useState('en')
   const [group2LanguagePref, setGroup2LanguagePrefState] = useState('General Tamil')
+  const [geminiApiKey, setGeminiApiKeyState] = useState(() => apiKeyService.getUserApiKey())
   const [toasts, setToasts]                  = useState([])
   const toastTimeouts = useRef({})
 
@@ -91,7 +93,15 @@ export function AppProvider({ children }) {
     if (profile?.selected_exam)        setSelectedExamState(profile.selected_exam)
     if (profile?.preferred_language)   setLanguageState(profile.preferred_language)
     if (profile?.group2_language_pref) setGroup2LanguagePrefState(profile.group2_language_pref)
-  }, [profile?.selected_exam, profile?.preferred_language, profile?.group2_language_pref])
+    if (profile?.gemini_api_key) {
+      apiKeyService.setCachedProfileKey(profile.gemini_api_key)
+      setGeminiApiKeyState(profile.gemini_api_key)
+    } else {
+      // Check local storage
+      const local = apiKeyService.getUserApiKey()
+      if (local) setGeminiApiKeyState(local)
+    }
+  }, [profile?.selected_exam, profile?.preferred_language, profile?.group2_language_pref, profile?.gemini_api_key])
 
   // Persist exam selection to Supabase profile
   const setSelectedExam = useCallback(async (exam) => {
@@ -116,6 +126,20 @@ export function AppProvider({ children }) {
       await supabase.from('profiles').update({ group2_language_pref: pref }).eq('id', user.id)
     }
   }, [user?.id])
+
+  // Save personal Gemini API key
+  const saveGeminiApiKey = useCallback(async (key) => {
+    await apiKeyService.saveUserApiKey(key, user?.id)
+    setGeminiApiKeyState(key ? key.trim() : null)
+  }, [user?.id])
+
+  // Remove personal Gemini API key
+  const removeGeminiApiKey = useCallback(async () => {
+    await apiKeyService.removeUserApiKey(user?.id)
+    setGeminiApiKeyState(null)
+  }, [user?.id])
+
+  const hasGeminiApiKey = Boolean(geminiApiKey && geminiApiKey.length > 5)
 
   // i18n helper
   const t = useCallback((key) => {
@@ -161,6 +185,10 @@ export function AppProvider({ children }) {
       setLanguage,
       group2LanguagePref,
       setGroup2LanguagePref,
+      geminiApiKey,
+      saveGeminiApiKey,
+      removeGeminiApiKey,
+      hasGeminiApiKey,
       t,
       toast,
       toasts,

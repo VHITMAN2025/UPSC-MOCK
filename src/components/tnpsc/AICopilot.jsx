@@ -1,5 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { MessageCircle, X, Send, Loader2, Sparkles, ChevronDown, RotateCcw, Bot } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  MessageCircle, X, Send, Loader2, Sparkles, ChevronDown,
+  RotateCcw, Bot, Key, ExternalLink, ArrowRight, ShieldCheck
+} from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
 import { aiMentorService } from '../../services/aiMentorService'
@@ -7,7 +11,8 @@ import { cn } from '../../lib/utils'
 
 export function AICopilot() {
   const { profile } = useAuth()
-  const { selectedExam, language } = useApp()
+  const { selectedExam, language, geminiApiKey, hasGeminiApiKey } = useApp()
+  const navigate = useNavigate()
 
   const [open, setOpen]         = useState(false)
   const [messages, setMessages] = useState([
@@ -58,6 +63,20 @@ export function AICopilot() {
     setInput('')
     const updatedMessages = [...messages, { role: 'user', text: query }]
     setMessages(updatedMessages)
+
+    // Check if user has configured their Gemini API key
+    if (!hasGeminiApiKey) {
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `🔑 **Google Gemini API Key Required**\n\nTo ensure dedicated AI access without shared rate limits, please configure your personal Google Gemini API key in **Profile & Settings**.\n\nIt is 100% free from Google AI Studio and takes 30 seconds to set up.`,
+          isApiKeyMissing: true,
+        },
+      ])
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -67,6 +86,7 @@ export function AICopilot() {
         examContext: selectedExam,
         userName: profile?.full_name || 'Aspirant',
         language: language || 'en',
+        userApiKey: geminiApiKey,
       })
 
       setLastModel(response.modelUsed)
@@ -80,12 +100,16 @@ export function AICopilot() {
       ])
     } catch (err) {
       console.error('[AICopilot] Error communicating with AI mentor:', err)
+      const isMissing = err.message?.includes('NO_API_KEY_CONFIGURED')
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          text: `⚠️ **Vina Mentor Note:** ${err.message || 'I encountered a brief connection issue. Please check your network or try asking again.'}`,
-          isError: true,
+          text: isMissing
+            ? `🔑 **Google Gemini API Key Required**\n\nPlease add your personal Google Gemini API key in **Settings** to chat with Vina AI Mentor.`
+            : `⚠️ **Vina Mentor Note:** ${err.message || 'I encountered a brief connection issue. Please check your network or try asking again.'}`,
+          isError: !isMissing,
+          isApiKeyMissing: isMissing,
         },
       ])
     } finally {
@@ -164,7 +188,10 @@ export function AICopilot() {
         ) : (
           <div className="relative">
             <Sparkles className="w-6 h-6 text-white" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white animate-pulse" />
+            <span className={cn(
+              'absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white',
+              hasGeminiApiKey ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+            )} />
           </div>
         )}
       </button>
@@ -181,8 +208,13 @@ export function AICopilot() {
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-black tracking-tight">Vina AI Mentor</span>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-400/30">
-                    Gemini Live
+                  <span className={cn(
+                    'text-[9px] px-1.5 py-0.2 rounded font-bold border',
+                    hasGeminiApiKey
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                      : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                  )}>
+                    {hasGeminiApiKey ? 'Gemini Live' : 'Key Needed'}
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-400 leading-none mt-0.5">{selectedExam}</p>
@@ -206,6 +238,30 @@ export function AICopilot() {
             </div>
           </div>
 
+          {/* Missing Key Notification Banner */}
+          {!hasGeminiApiKey && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200/80 p-3 text-xs flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800">
+                  <Key className="w-3.5 h-3.5 text-amber-600" />
+                  Configure Your Free Gemini API Key
+                </span>
+              </div>
+              <p className="text-[10px] text-amber-700 leading-tight">
+                Add your personal Google Gemini API key to unlock unlimited AI mentor chats and PDF extraction.
+              </p>
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  navigate('/profile#api-key')
+                }}
+                className="mt-1 w-full py-1.5 px-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-lg font-bold text-[10px] text-center transition-all shadow-xs flex items-center justify-center gap-1"
+              >
+                Configure in Settings <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           {/* Messages Stream */}
           <div className="flex-1 overflow-y-auto p-3.5 space-y-3 max-h-80 min-h-[260px] bg-slate-50/50">
             {messages.map((m, i) => (
@@ -221,6 +277,8 @@ export function AICopilot() {
                     'max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs shadow-subtle',
                     m.role === 'user'
                       ? 'bg-gradient-to-r from-[#635bff] to-[#7c3aed] text-white rounded-br-xs'
+                      : m.isApiKeyMissing
+                      ? 'bg-amber-50 text-amber-900 border border-amber-200 rounded-bl-xs'
                       : m.isError
                       ? 'bg-red-50 text-red-800 border border-red-200 rounded-bl-xs'
                       : 'bg-white text-slate-800 border border-slate-200/80 rounded-bl-xs'
@@ -229,7 +287,20 @@ export function AICopilot() {
                   {m.role === 'user' ? (
                     <p className="leading-relaxed whitespace-pre-wrap">{m.text}</p>
                   ) : (
-                    renderFormattedMessage(m.text)
+                    <div>
+                      {renderFormattedMessage(m.text)}
+                      {m.isApiKeyMissing && (
+                        <button
+                          onClick={() => {
+                            setOpen(false)
+                            navigate('/profile#api-key')
+                          }}
+                          className="mt-2.5 w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[10px] text-center transition-all flex items-center justify-center gap-1 shadow-2xs"
+                        >
+                          <Key className="w-3 h-3" /> Open Settings to Add Key →
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -268,7 +339,7 @@ export function AICopilot() {
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKey}
                 disabled={loading}
-                placeholder={`Ask Vina about ${selectedExam}…`}
+                placeholder={hasGeminiApiKey ? `Ask Vina about ${selectedExam}…` : 'Configure Gemini API Key in Settings…'}
                 className="flex-1 bg-transparent text-xs text-body-text outline-none placeholder-slate-400"
               />
               <button
