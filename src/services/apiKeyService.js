@@ -37,7 +37,7 @@ export const apiKeyService = {
    */
   hasUserApiKey() {
     const key = this.getUserApiKey()
-    return Boolean(key && key.length > 5)
+    return Boolean(key && key.trim().length > 0)
   },
 
   /**
@@ -95,18 +95,13 @@ export const apiKeyService = {
 
   /**
    * Validates an API key against Google Gemini API with a lightweight probe.
+   * Accepts all valid Google API key formats without hardcoded prefix checks.
    * Returns { valid: true } or { valid: false, error: string }.
    */
   async validateApiKey(key) {
     const cleanKey = (key || '').trim()
     if (!cleanKey) {
       return { valid: false, error: 'API key cannot be empty.' }
-    }
-    if (!cleanKey.startsWith('AIzaSy')) {
-      return {
-        valid: false,
-        error: 'Invalid Google Gemini API key format. Google API keys typically start with "AIzaSy...".',
-      }
     }
 
     try {
@@ -120,11 +115,24 @@ export const apiKeyService = {
       if (text !== undefined) {
         return { valid: true }
       }
-      return { valid: false, error: 'Unexpected response format from Gemini API.' }
+      return { valid: true }
     } catch (err) {
       const msg = err.message || ''
-      if (msg.includes('API_KEY_INVALID') || msg.includes('400')) {
-        return { valid: false, error: 'Invalid API key. Please check that you copied it accurately from Google AI Studio.' }
+      // Fallback model attempt if specific model was not found
+      if (msg.includes('404') || msg.includes('not found')) {
+        try {
+          const genAI = new GoogleGenerativeAI(cleanKey)
+          const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+          await fallbackModel.generateContent({
+            contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
+            generationConfig: { maxOutputTokens: 5 },
+          })
+          return { valid: true }
+        } catch {}
+      }
+
+      if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+        return { valid: false, error: 'Invalid API key. Please check that you copied it accurately.' }
       }
       if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
         return { valid: false, error: 'This API key has exceeded its quota or rate limit in Google AI Studio.' }
@@ -135,10 +143,11 @@ export const apiKeyService = {
 
   /**
    * Returns a masked preview of the API key for safe UI rendering.
-   * E.g. "AIzaSy...7x9Q"
    */
   maskKey(key) {
-    if (!key || key.length < 10) return '••••••••'
-    return `${key.slice(0, 6)}••••••••${key.slice(-4)}`
+    if (!key || key.length < 8) return '••••••••'
+    const start = key.slice(0, 4)
+    const end = key.slice(-4)
+    return `${start}••••••••${end}`
   },
 }

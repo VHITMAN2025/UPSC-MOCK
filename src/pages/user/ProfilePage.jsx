@@ -89,7 +89,7 @@ export function ProfilePage() {
         await refreshProfile()
       } else {
         setValidationStatus({ valid: false, error: res.error })
-        toast.error(`Key validation failed: ${res.error}`)
+        toast.error(`Key validation: ${res.error}`)
       }
     } catch (err) {
       setValidationStatus({ valid: false, error: err.message })
@@ -97,6 +97,19 @@ export function ProfilePage() {
     } finally {
       setValidatingKey(false)
     }
+  }
+
+  async function handleDirectSaveKey() {
+    const raw = keyInput.trim()
+    if (!raw) {
+      toast.error('Please enter an API key to save.')
+      return
+    }
+    await saveGeminiApiKey(raw)
+    setKeyInput('')
+    setValidationStatus({ valid: true, note: 'Saved directly.' })
+    toast.success('Gemini API Key saved successfully!')
+    await refreshProfile()
   }
 
   async function handleRemoveKey() {
@@ -284,7 +297,7 @@ export function ProfilePage() {
                 setKeyInput(e.target.value)
                 setValidationStatus(null)
               }}
-              placeholder={hasGeminiApiKey ? 'Paste a new key to replace existing…' : 'Paste your API key here (AIzaSy…)'}
+              placeholder={hasGeminiApiKey ? 'Paste a new key to replace existing…' : 'Paste your Google Gemini API key here…'}
               className="w-full border border-surface-border rounded-xl pl-3 pr-10 py-2.5 text-xs font-mono outline-none focus:ring-2 focus:ring-tnpsc-brand bg-slate-50/50"
             />
             <button
@@ -309,16 +322,27 @@ export function ProfilePage() {
               <>
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold">API Key Verified!</p>
-                  <p className="text-[11px] mt-0.5">Connected successfully to Google Gemini. You are ready to chat with Vina AI Mentor and parse PDFs.</p>
+                  <p className="font-bold">API Key Saved!</p>
+                  <p className="text-[11px] mt-0.5">Connected to Google Gemini. You are ready to chat with Vina AI Mentor and extract PDF questions.</p>
                 </div>
               </>
             ) : (
               <>
                 <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">Validation Error</p>
+                <div className="flex-1">
+                  <p className="font-bold">Validation Notice</p>
                   <p className="text-[11px] mt-0.5">{validationStatus.error}</p>
+                  {keyInput.trim().length > 0 && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={handleDirectSaveKey}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition-colors"
+                      >
+                        Save Key Anyway
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -346,6 +370,17 @@ export function ProfilePage() {
             )}
           </button>
 
+          {keyInput.trim().length > 0 && (
+            <button
+              type="button"
+              onClick={handleDirectSaveKey}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-body-text text-xs font-bold rounded-xl transition-all border border-slate-200"
+            >
+              <Save className="w-3.5 h-3.5" />
+              Save Directly
+            </button>
+          )}
+
           {hasGeminiApiKey && (
             <button
               type="button"
@@ -372,13 +407,13 @@ export function ProfilePage() {
         <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 text-[11px] text-slate-600 space-y-1.5">
           <p className="font-bold text-slate-800 flex items-center gap-1.5">
             <Key className="w-3.5 h-3.5 text-tnpsc-brand" />
-            How to get your free Google Gemini API key (30 seconds):
+            How to get your free Google Gemini API key:
           </p>
           <ol className="list-decimal list-inside space-y-1 pl-1 text-slate-600">
             <li>Open <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-tnpsc-brand underline font-semibold">Google AI Studio</a> and sign in with your Google Account.</li>
-            <li>Click the blue <strong>"Create API key"</strong> button.</li>
-            <li>Copy your key (starts with <code className="bg-white px-1 py-0.5 rounded border border-slate-200">AIzaSy…</code>) and paste it into the box above.</li>
-            <li>Click <strong>"Verify &amp; Save Key"</strong>. Google provides a generous free tier with ample daily requests for your personal exam preparation.</li>
+            <li>Click <strong>"Create API key"</strong>.</li>
+            <li>Copy your API key and paste it into the box above.</li>
+            <li>Click <strong>"Verify &amp; Save Key"</strong> or <strong>"Save Directly"</strong>.</li>
           </ol>
         </div>
       </div>
