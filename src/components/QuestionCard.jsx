@@ -11,14 +11,31 @@ export function QuestionCard({
   onToggleMarkForReview,
   mode = 'exam', // 'exam' | 'review'
   correctOption = null,
-  explanation = null
+  explanation = null,
+  language = 'english' // 'english' | 'tamil'
 }) {
   const options = [
-    { key: 'A', text: question.option_a },
-    { key: 'B', text: question.option_b },
-    { key: 'C', text: question.option_c },
-    { key: 'D', text: question.option_d }
+    { 
+      key: 'A', 
+      text: language === 'tamil' ? question.option_a_tamil || question.option_a : question.option_a 
+    },
+    { 
+      key: 'B', 
+      text: language === 'tamil' ? question.option_b_tamil || question.option_b : question.option_b 
+    },
+    { 
+      key: 'C', 
+      text: language === 'tamil' ? question.option_c_tamil || question.option_c : question.option_c 
+    },
+    { 
+      key: 'D', 
+      text: language === 'tamil' ? question.option_d_tamil || question.option_d : question.option_d 
+    }
   ]
+
+  const questionText = language === 'tamil' 
+    ? question.question_text_tamil || question.question_text 
+    : question.question_text
 
   const isReviewMode = mode === 'review'
   const isCorrect = isReviewMode && selectedOption === correctOption
@@ -35,6 +52,11 @@ export function QuestionCard({
           <span className="text-xs text-body-secondary font-medium">
             Question {question.question_number} of {totalQuestions}
           </span>
+          {question.topic_name && (
+            <span className="hidden sm:inline-block text-[11px] font-semibold text-tnpsc-brand bg-tnpsc-brand-light px-2 py-0.5 rounded-full border border-tnpsc-brand/20">
+              {question.topic_name}
+            </span>
+          )}
         </div>
 
         {/* Review mode status pill OR Exam mode flag button */}
@@ -74,7 +96,7 @@ export function QuestionCard({
 
       {/* Question Text */}
       <div className="text-base text-body-text font-medium leading-relaxed whitespace-pre-line">
-        {question.question_text}
+        {questionText}
       </div>
 
       {/* Options List */}

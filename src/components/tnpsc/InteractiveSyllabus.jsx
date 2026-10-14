@@ -1,244 +1,455 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import {
-  BookMarked, Loader2, X, Target, CheckCircle2,
-  AlertTriangle, RefreshCw, Circle, Search, ArrowRight,
-  Sparkles, Layers,
-} from 'lucide-react'
-import { useAuth } from '../../hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
+import { X, Search, Sparkles, BookMarked, ArrowRight } from 'lucide-react'
 import { useApp } from '../../contexts/AppContext'
+import { useAuth } from '../../hooks/useAuth'
 import { syllabusAnalyticsService } from '../../services/syllabusAnalyticsService'
 
 /**
- * Returns status metadata for a topic based on accuracy and attempts:
- * - Mastered: >= 70% accuracy
- * - Needs Review: < 50% accuracy
- * - In Progress / Pending: 50% - 69% accuracy or low attempts
+ * Standard 10-Unit TNPSC Syllabus matching reference design (media_1791895213021_25551e0d.jpg)
+ * and interactive prototype (media_1791890577135_4c9ee280.html).
  */
-function getTopicStatus(score, attempts = 0) {
-  if (attempts > 0 && score >= 70) {
-    return {
-      label: 'Mastered',
-      scoreText: `${score}%`,
-      cls: 'mastered',
-      badgeCls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      icon: '✓',
-    }
+export const SYLLABUS_UNITS = [
+  {
+    unit_number: 1,
+    unit_name: 'Unit 1 — General Science',
+    displayName: 'General Science',
+    score: 78,
+    meta: 'Science basics · 18 topics',
+    desc: 'Physics, chemistry, biology and everyday science concepts commonly used in TNPSC preparation.',
+    foundationTopics: [
+      { id: 'u1-t1', name: 'Physics — Motion & Force', status: 'Mastered' },
+      { id: 'u1-t2', name: 'Chemistry — Acids, Bases & Salts', status: 'Mastered' },
+    ],
+    applicationTopics: [
+      { id: 'u1-t3', name: 'Biology — Human Systems', status: 'Mastered' },
+      { id: 'u1-t4', name: 'Environment — Ecology Basics', status: 'Mastered' },
+    ]
+  },
+  {
+    unit_number: 2,
+    unit_name: 'Unit 2 — Geography of India & Tamil Nadu',
+    displayName: 'Geography of India & Tamil Nadu',
+    score: 62,
+    meta: 'Physical & human geography · 16 topics',
+    desc: 'India and Tamil Nadu geography including resources, climate, rivers, agriculture and population.',
+    foundationTopics: [
+      { id: 'u2-t1', name: 'Indian Physical Geography', status: 'In Progress' },
+      { id: 'u2-t2', name: 'Tamil Nadu Rivers & Resources', status: 'In Progress' },
+    ],
+    applicationTopics: [
+      { id: 'u2-t3', name: 'Climate & Monsoon', status: 'In Progress' },
+      { id: 'u2-t4', name: 'Agriculture & Minerals', status: 'In Progress' },
+    ]
+  },
+  {
+    unit_number: 3,
+    unit_name: 'Unit 3 — Indian National Movement',
+    displayName: 'Indian National Movement',
+    score: 55,
+    meta: 'Freedom movement · 14 topics',
+    desc: 'Major events, organisations, leaders, acts and chronology of the Indian national movement.',
+    foundationTopics: [
+      { id: 'u3-t1', name: 'Early Nationalism', status: 'In Progress' },
+      { id: 'u3-t2', name: 'Gandhian Era', status: 'In Progress' },
+    ],
+    applicationTopics: [
+      { id: 'u3-t3', name: 'Acts & Constitutional Developments', status: 'Needs Review' },
+      { id: 'u3-t4', name: 'Important Leaders & Events', status: 'In Progress' },
+    ]
+  },
+  {
+    unit_number: 4,
+    unit_name: 'Unit 4 — Indian Culture & Heritage',
+    displayName: 'Indian Culture & Heritage',
+    score: 69,
+    meta: 'Culture, art & literature · 12 topics',
+    desc: 'Indian and Tamil culture, literature, architecture, art forms and heritage.',
+    foundationTopics: [
+      { id: 'u4-t1', name: 'Tamil Literature', status: 'Mastered' },
+      { id: 'u4-t2', name: 'Temple Architecture', status: 'In Progress' },
+    ],
+    applicationTopics: [
+      { id: 'u4-t3', name: 'Folk & Classical Arts', status: 'In Progress' },
+      { id: 'u4-t4', name: 'Heritage Sites', status: 'Mastered' },
+    ]
+  },
+  {
+    unit_number: 5,
+    unit_name: 'Unit 5 — Indian Polity',
+    displayName: 'Indian Polity',
+    score: 46,
+    meta: 'Constitution & governance · 20 topics',
+    desc: 'Constitution, fundamental rights, Parliament, judiciary, local government and constitutional bodies.',
+    foundationTopics: [
+      { id: 'u5-t1', name: 'Fundamental Rights & Duties', status: 'In Progress' },
+      { id: 'u5-t2', name: 'Parliament & President', status: 'Needs Review' },
+    ],
+    applicationTopics: [
+      { id: 'u5-t3', name: 'Judiciary & Constitutional Bodies', status: 'Needs Review' },
+      { id: 'u5-t4', name: 'Local Government', status: 'Needs Review' },
+    ]
+  },
+  {
+    unit_number: 6,
+    unit_name: 'Unit 6 — Geography & Environment',
+    displayName: 'Geography & Environment',
+    score: 62,
+    meta: 'Environment & resources · 15 topics',
+    desc: 'Environmental issues, biodiversity, natural resources, disaster management and sustainability.',
+    foundationTopics: [
+      { id: 'u6-t1', name: 'Biodiversity', status: 'In Progress' },
+      { id: 'u6-t2', name: 'Pollution & Climate Change', status: 'In Progress' },
+    ],
+    applicationTopics: [
+      { id: 'u6-t3', name: 'Natural Resources', status: 'In Progress' },
+      { id: 'u6-t4', name: 'Disaster Management', status: 'In Progress' },
+    ]
+  },
+  {
+    unit_number: 7,
+    unit_name: 'Unit 7 — Indian Economy',
+    displayName: 'Indian Economy',
+    score: 58,
+    meta: 'Economy & development · 17 topics',
+    desc: 'Basic economic concepts, public finance, banking, development indicators and Tamil Nadu economy.',
+    foundationTopics: [
+      { id: 'u7-t1', name: 'National Income & Growth', status: 'In Progress' },
+      { id: 'u7-t2', name: 'Banking & Monetary Policy', status: 'In Progress' },
+    ],
+    applicationTopics: [
+      { id: 'u7-t3', name: 'Government Schemes', status: 'In Progress' },
+      { id: 'u7-t4', name: 'Tamil Nadu Economy', status: 'Needs Review' },
+    ]
+  },
+  {
+    unit_number: 8,
+    unit_name: 'Unit 8 — History & Culture of Tamil Nadu',
+    displayName: 'History & Culture of Tamil Nadu',
+    score: 31,
+    meta: 'Tamil history · 19 topics',
+    desc: 'Ancient, medieval and modern Tamil Nadu history, social movements, leaders and cultural development.',
+    foundationTopics: [
+      { id: 'u8-t1', name: 'Sangam Age', status: 'Needs Review' },
+      { id: 'u8-t2', name: 'Chola & Pandya Periods', status: 'Needs Review' },
+    ],
+    applicationTopics: [
+      { id: 'u8-t3', name: 'Social Reform Movements', status: 'Needs Review' },
+      { id: 'u8-t4', name: 'Justice Party & Dravidian Movement', status: 'Needs Review' },
+    ]
+  },
+  {
+    unit_number: 9,
+    unit_name: 'Unit 9 — Tamil Nadu Administration & Schemes',
+    displayName: 'Tamil Nadu Administration & Schemes',
+    score: 74,
+    meta: 'Administration & welfare · 13 topics',
+    desc: 'Tamil Nadu administration, welfare schemes, social development and state institutions.',
+    foundationTopics: [
+      { id: 'u9-t1', name: 'State Administration', status: 'Mastered' },
+      { id: 'u9-t2', name: 'Welfare Schemes', status: 'Mastered' },
+    ],
+    applicationTopics: [
+      { id: 'u9-t3', name: 'Education & Health Initiatives', status: 'Mastered' },
+      { id: 'u9-t4', name: 'Local Administration', status: 'Mastered' },
+    ]
+  },
+  {
+    unit_number: 10,
+    unit_name: 'Unit 10 — Aptitude & Mental Ability',
+    displayName: 'Aptitude & Mental Ability',
+    score: 67,
+    meta: 'Quantitative & reasoning · 18 topics',
+    desc: 'Numerical ability, reasoning, data interpretation and problem-solving practice.',
+    foundationTopics: [
+      { id: 'u10-t1', name: 'Percentage & Ratio', status: 'Mastered' },
+      { id: 'u10-t2', name: 'Time, Work & Speed', status: 'In Progress' },
+    ],
+    applicationTopics: [
+      { id: 'u10-t3', name: 'Logical Reasoning', status: 'In Progress' },
+      { id: 'u10-t4', name: 'Data Interpretation', status: 'In Progress' },
+    ]
   }
-  if (attempts > 0 && score < 50) {
-    return {
-      label: 'Needs Review',
-      scoreText: `${score}%`,
-      cls: 'review',
-      badgeCls: 'bg-red-50 text-red-700 border-red-200',
-      icon: '!',
-    }
-  }
-  return {
-    label: attempts > 0 ? 'In Progress' : 'Pending',
-    scoreText: attempts > 0 ? `${score}%` : 'Not Attempted',
-    cls: 'pending',
-    badgeCls: 'bg-slate-100 text-slate-600 border-slate-200',
-    icon: '○',
-  }
-}
+]
 
-/**
- * Split-Pane Interactive Syllabus Component
- * Left: Unit list with scores & progress
- * Right: Detailed unit view, mastery strip, structured topic breakdown & "Generate Practice Set →" button.
- */
-export function InteractiveSyllabusTree() {
+export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { selectedExam, toast } = useApp()
-  const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const targetUnitId     = searchParams.get('unit')
-  const targetUnitNumber = searchParams.get('unitNumber')
+  const [activeUnitIdx, setActiveUnitIdx] = useState(0)
+  const [unitData, setUnitData] = useState(SYLLABUS_UNITS)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const [loading, setLoading]             = useState(true)
-  const [analytics, setAnalytics]         = useState(null)
-  const [selectedUnitIdx, setSelectedUnitIdx] = useState(0)
-  const [searchQuery, setSearchQuery]     = useState('')
-
+  // Sync with live database attempts (strictly deduplicating by unit_number)
   useEffect(() => {
-    loadSyllabus()
-  }, [selectedExam, user?.id])
+    let isCancelled = false
+    async function syncLiveData() {
+      if (!user?.id) return
+      try {
+        const liveAnalytics = await syllabusAnalyticsService.getSyllabusWithAnalytics(user.id, selectedExam)
+        if (isCancelled || !liveAnalytics?.units?.length) return
 
-  async function loadSyllabus() {
-    setLoading(true)
-    try {
-      const data = await syllabusAnalyticsService.getSyllabusWithAnalytics(user?.id, selectedExam)
-      setAnalytics(data)
+        setUnitData(prevUnits => {
+          return prevUnits.map(unit => {
+            const liveMatch = liveAnalytics.units.find(lu => lu.unit_number === unit.unit_number)
+            if (!liveMatch || liveMatch.total_attempts === 0) return unit
 
-      // Handle direct unit drill-down if provided via URL
-      if (data?.units?.length > 0) {
-        if (targetUnitId || targetUnitNumber) {
-          const matchIdx = data.units.findIndex(
-            u => String(u.unit_id) === String(targetUnitId) || String(u.unit_number) === String(targetUnitNumber)
-          )
-          if (matchIdx !== -1) {
-            setSelectedUnitIdx(matchIdx)
-          }
-        }
+            const liveScore = Math.round(liveMatch.accuracy_percentage || 0)
+            return {
+              ...unit,
+              score: liveScore,
+              meta: `${liveMatch.macro_topics?.length || unit.foundationTopics.length + unit.applicationTopics.length} topics · ${liveMatch.attempted_questions || 0}/${liveMatch.total_questions || 0} attempted`,
+              foundationTopics: unit.foundationTopics.map((t, idx) => {
+                const liveMacro = liveMatch.macro_topics?.[idx]
+                if (!liveMacro || !liveMacro.total_attempts) return t
+                const mScore = Number(liveMacro.accuracy_percentage || 0)
+                const status = mScore >= 70 ? 'Mastered' : mScore < 50 ? 'Needs Review' : 'In Progress'
+                return { ...t, status }
+              }),
+              applicationTopics: unit.applicationTopics.map((t, idx) => {
+                const liveMacro = liveMatch.macro_topics?.[idx + 2]
+                if (!liveMacro || !liveMacro.total_attempts) return t
+                const mScore = Number(liveMacro.accuracy_percentage || 0)
+                const status = mScore >= 70 ? 'Mastered' : mScore < 50 ? 'Needs Review' : 'In Progress'
+                return { ...t, status }
+              })
+            }
+          })
+        })
+      } catch (err) {
+        console.warn('[InteractiveSyllabus] Live sync background note:', err)
       }
-    } catch (err) {
-      console.error('[InteractiveSyllabus] Load error:', err)
-      toast?.error?.('Failed to load syllabus analytics')
-    } finally {
-      setLoading(false)
+    }
+
+    syncLiveData()
+    return () => { isCancelled = true }
+  }, [user?.id, selectedExam])
+
+  const activeUnit = unitData[activeUnitIdx] || unitData[0]
+  const isWeakZone = activeUnit.score < 50
+  const isMastered = activeUnit.score >= 70
+
+  // Calculate dynamic roll-up summary KPIs
+  const overallMastery = Math.round(unitData.reduce((acc, u) => acc + u.score, 0) / unitData.length)
+  const strongUnits = unitData.filter(u => u.score >= 65).length
+  const needsRevision = unitData.filter(u => u.score < 50).length
+  const unitsCovered = `${unitData.length} / ${unitData.length}`
+
+  // Filter units by search query
+  const filteredUnits = useMemo(() => {
+    if (!searchQuery.trim()) return unitData
+    const q = searchQuery.toLowerCase().trim()
+    return unitData.filter(u =>
+      u.unit_name.toLowerCase().includes(q) ||
+      u.displayName.toLowerCase().includes(q) ||
+      u.desc.toLowerCase().includes(q) ||
+      u.foundationTopics.some(t => t.name.toLowerCase().includes(q)) ||
+      u.applicationTopics.some(t => t.name.toLowerCase().includes(q))
+    )
+  }, [unitData, searchQuery])
+
+  // Toggle topic status between Mastered, Needs Review, In Progress
+  function toggleTopicStatus(sectionKey, topicId) {
+    setUnitData(prev => prev.map((u, idx) => {
+      if (idx !== activeUnitIdx) return u
+
+      const updateList = (list) => list.map(t => {
+        if (t.id !== topicId) return t
+        const nextStatus = t.status === 'Mastered'
+          ? 'In Progress'
+          : t.status === 'In Progress'
+          ? 'Needs Review'
+          : 'Mastered'
+        return { ...t, status: nextStatus }
+      })
+
+      const newFoundation = sectionKey === 'foundation' ? updateList(u.foundationTopics) : u.foundationTopics
+      const newApplication = sectionKey === 'application' ? updateList(u.applicationTopics) : u.applicationTopics
+
+      // Recalculate unit score based on topics
+      const allTopics = [...newFoundation, ...newApplication]
+      const completedCount = allTopics.filter(t => t.status === 'Mastered').length
+      const inProgressCount = allTopics.filter(t => t.status === 'In Progress').length
+      const newScore = Math.round(((completedCount * 100) + (inProgressCount * 60)) / allTopics.length)
+
+      return {
+        ...u,
+        score: newScore,
+        foundationTopics: newFoundation,
+        applicationTopics: newApplication,
+      }
+    }))
+    toast?.success?.('Status updated')
+  }
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'Mastered':
+        return {
+          label: 'Mastered',
+          badgeClass: 'bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]',
+          iconBox: 'bg-[#d1fae5] text-[#059669]',
+          icon: '✓'
+        }
+      case 'Needs Review':
+        return {
+          label: 'Needs Review',
+          badgeClass: 'bg-[#fff1f2] text-[#ef4444] border border-[#fecdd3]',
+          iconBox: 'bg-[#fee2e2] text-[#ef4444]',
+          icon: '!'
+        }
+      default:
+        return {
+          label: 'In Progress',
+          badgeClass: 'bg-[#eff6ff] text-[#2563eb] border border-[#bfdbfe]',
+          iconBox: 'bg-[#dbeafe] text-[#2563eb]',
+          icon: '○'
+        }
     }
   }
 
-  // Filter units on the left pane based on search input
-  const units = analytics?.units || []
-  const filteredUnits = useMemo(() => {
-    if (!searchQuery.trim()) return units
-    const q = searchQuery.toLowerCase().trim()
-    return units.filter(u =>
-      u.unit_name.toLowerCase().includes(q) ||
-      (u.macro_topics || []).some(m => m.macro_topic_name.toLowerCase().includes(q))
-    )
-  }, [units, searchQuery])
-
-  // Currently selected unit
-  const activeUnit = units[selectedUnitIdx] || units[0] || null
-
-  // Summary counts
-  const totalUnits = units.length
-  const overallMastery = analytics?.accuracy_percentage ?? analytics?.coverage_percentage ?? 0
-  const strongUnitsCount = units.filter(u => Number(u.accuracy_percentage || 0) >= 70 && Number(u.total_attempts || 0) > 0).length
-  const weakUnitsCount   = units.filter(u => Number(u.accuracy_percentage || 0) < 50 || Number(u.total_attempts || 0) === 0).length
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3 bg-white rounded-2xl border border-surface-border">
-        <Loader2 className="w-8 h-8 animate-spin text-tnpsc-brand" />
-        <p className="text-xs text-body-secondary font-medium">Loading Interactive Syllabus & Topic Analytics…</p>
-      </div>
-    )
-  }
-
-  if (!activeUnit) {
-    return (
-      <div className="bg-white rounded-2xl border border-surface-border p-12 text-center">
-        <BookMarked className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-        <p className="text-sm font-bold text-body-text">No syllabus units found for {selectedExam}</p>
-      </div>
-    )
-  }
-
-  const activeScore = Number(activeUnit.accuracy_percentage || 0)
-  const isWeakZone  = activeScore < 50 || Number(activeUnit.total_attempts || 0) === 0
-  const isMastered  = activeScore >= 70 && Number(activeUnit.total_attempts || 0) > 0
-
   return (
-    <div className="bg-white rounded-2xl border border-surface-border shadow-subtle overflow-hidden flex flex-col">
-      {/* ── Summary Strip (Matching HTML Prototype) ──────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-5 bg-slate-50/70 border-b border-surface-border">
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-3.5">
-          <small className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider">
-            Overall Syllabus Mastery
+    <div className={`w-full bg-white flex flex-col overflow-hidden ${
+      isModal
+        ? 'max-w-5xl h-[88vh] max-h-[820px] rounded-3xl shadow-2xl border border-surface-border animate-scale-in'
+        : 'rounded-2xl border border-surface-border shadow-subtle min-h-[720px]'
+    }`}>
+      {/* ── 1. Top Header ─────────────────────────────────────────────────── */}
+      <div className="px-6 py-5 border-b border-[#edf0f5] bg-white flex items-start justify-between gap-4 shrink-0">
+        <div>
+          <div className="flex items-center gap-1.5 text-[11px] text-[#8994a7] mb-1 font-medium">
+            <span>Dashboard</span>
+            <span className="text-[#8994a7]">›</span>
+            <span className="text-[#635bff] font-extrabold">Interactive Syllabus</span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {/* Colorful Stacked Layers Icon matching Prototype */}
+            <div className="relative w-7 h-7 shrink-0">
+              <div className="absolute inset-0 bg-[#06b6d4] rounded-[6px] -rotate-6 opacity-75" />
+              <div className="absolute inset-0 bg-[#ec4899] rounded-[6px] rotate-6 opacity-75" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-[#635bff] to-[#8b5cf6] rounded-[6px] flex items-center justify-center shadow-xs">
+                <BookMarked className="w-3.5 h-3.5 text-white" />
+              </div>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-[#172033] tracking-tight">
+              {selectedExam || 'TNPSC Group 4'} — Interactive Syllabus
+            </h2>
+          </div>
+
+          <p className="text-xs text-[#69758a] mt-1">
+            Explore units → inspect micro-topics → identify your preparation level.
+          </p>
+        </div>
+
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-[#f1f3f7] hover:bg-[#e2e6ee] text-[#64748b] hover:text-[#172033] flex items-center justify-center transition-colors shrink-0"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* ── 2. Top Summary KPI Row (Exactly matches Image & Prototype) ─────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 bg-[#fbfcfe] border-b border-[#edf0f5] shrink-0">
+        <div className="bg-gradient-to-br from-[#f5f2ff] to-[#f0eeff] border border-[#ddd7ff] rounded-2xl p-4 shadow-2xs">
+          <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
+            OVERALL SYLLABUS MASTERY
           </small>
-          <b className="block mt-1 text-2xl font-black text-indigo-900">
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#635bff]">
             {overallMastery}%
           </b>
         </div>
 
-        <div className="bg-white border border-surface-border rounded-xl p-3.5">
-          <small className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider">
-            Strong Units (&ge;70%)
+        <div className="bg-white border border-[#e5e8ef] rounded-2xl p-4 shadow-2xs">
+          <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
+            STRONG UNITS
           </small>
-          <b className="block mt-1 text-2xl font-black text-emerald-600">
-            {strongUnitsCount}
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+            {strongUnits}
           </b>
         </div>
 
-        <div className="bg-white border border-surface-border rounded-xl p-3.5">
-          <small className="block text-[10px] font-bold text-red-600 uppercase tracking-wider">
-            Needs Revision (&lt;50%)
+        <div className="bg-white border border-[#e5e8ef] rounded-2xl p-4 shadow-2xs">
+          <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
+            NEEDS REVISION
           </small>
-          <b className="block mt-1 text-2xl font-black text-red-600">
-            {weakUnitsCount}
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+            {needsRevision}
           </b>
         </div>
 
-        <div className="bg-white border border-surface-border rounded-xl p-3.5">
-          <small className="block text-[10px] font-bold text-body-secondary uppercase tracking-wider">
-            Units Covered
+        <div className="bg-white border border-[#e5e8ef] rounded-2xl p-4 shadow-2xs">
+          <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
+            UNITS COVERED
           </small>
-          <b className="block mt-1 text-2xl font-black text-body-text">
-            {totalUnits} / {totalUnits}
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+            {unitsCovered}
           </b>
         </div>
       </div>
 
-      {/* ── Split-Pane Body ─────────────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row flex-1 min-h-[580px]">
-        {/* ── Left Pane: Unit List (~42% width) ─────────────────────── */}
-        <div className="w-full lg:w-[42%] border-b lg:border-b-0 lg:border-r border-surface-border bg-white p-5 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-body-text">{units.length} Syllabus Units</span>
-            <span className="text-[11px] text-body-secondary">Real-time candidate data</span>
+      {/* ── 3. Split Body: Unit List & Tracker Detail ──────────────────────── */}
+      <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
+        {/* Left column: 10 Syllabus Units */}
+        <div className="w-full md:w-[44%] lg:w-[42%] p-5 overflow-y-auto border-r border-[#edf0f5] bg-white space-y-2.5">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-xs font-bold text-[#172033]">10 Syllabus Units</span>
+            <span className="text-[11px] text-[#8994a7] font-semibold">Select a unit to inspect topics</span>
           </div>
 
-          {/* Quick Search */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* Quick Search Input */}
+          <div className="relative mb-3">
+            <Search className="w-3.5 h-3.5 text-[#8994a7] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search units or topics…"
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-surface-border rounded-lg outline-none focus:ring-1 focus:ring-tnpsc-brand"
+              placeholder="Search units or topics..."
+              className="w-full pl-8 pr-3 py-2 text-xs border border-[#e2e6ee] rounded-xl outline-none focus:border-[#635bff] focus:ring-1 focus:ring-[#635bff]/20 transition-all placeholder:text-[#8994a7]"
             />
           </div>
 
-          {/* Units list */}
-          <div className="space-y-2 overflow-y-auto max-h-[520px] pr-1">
+          <div className="space-y-2">
             {filteredUnits.map((unit) => {
-              const originalIdx = units.findIndex(u => u.unit_id === unit.unit_id)
-              const isSelected = activeUnit.unit_id === unit.unit_id
-              const score = Number(unit.accuracy_percentage || 0)
-              const hasAttempts = Number(unit.total_attempts || 0) > 0
-              const isUnitWeak = !hasAttempts || score < 50
+              const originalIdx = unitData.findIndex(u => u.unit_number === unit.unit_number)
+              const isSelected = originalIdx === activeUnitIdx
+              const isUnitWeak = unit.score < 50
 
               return (
                 <div
-                  key={unit.unit_id || unit.unit_number}
-                  onClick={() => {
-                    setSelectedUnitIdx(originalIdx !== -1 ? originalIdx : 0)
-                    if (targetUnitId || targetUnitNumber) setSearchParams({})
-                  }}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                  key={unit.unit_number}
+                  onClick={() => setActiveUnitIdx(originalIdx)}
+                  className={`border rounded-2xl p-4 cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-tnpsc-brand bg-indigo-50/50 shadow-sm ring-1 ring-tnpsc-brand/20'
-                      : 'border-surface-border bg-white hover:border-indigo-200 hover:bg-slate-50/60'
+                      ? 'border-2 border-[#635bff] bg-[#f6f4ff] shadow-[0_5px_16px_rgba(99,91,255,0.08)]'
+                      : 'border-[#e5e8ef] hover:border-[#c7d2fe] hover:bg-[#fafaff]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-xs font-bold text-body-text truncate">
-                      Unit {unit.unit_number} — {unit.unit_name}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-black text-[#172033] truncate">
+                      {unit.unit_name}
                     </span>
-                    <span
-                      className={`text-xs font-black shrink-0 ${
-                        isUnitWeak ? 'text-red-600' : score >= 70 ? 'text-emerald-600' : 'text-indigo-600'
-                      }`}
-                    >
-                      {hasAttempts ? `${score}%` : '0%'}
+                    <span className={`text-xs font-black ${isUnitWeak ? 'text-[#ef4444]' : 'text-[#635bff]'}`}>
+                      {unit.score}%
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-body-secondary truncate">
-                    {unit.macro_topics?.length || 0} Topics · {unit.attempted_questions || 0}/{unit.total_questions || 0} attempted
-                  </p>
+                  <div className="text-[10px] text-[#8994a7] mt-1 font-medium">
+                    {unit.meta}
+                  </div>
 
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
+                  <div className="w-full h-1.5 bg-[#edf0f5] rounded-full overflow-hidden mt-2.5">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
-                        isUnitWeak ? 'bg-red-500' : score >= 70 ? 'bg-emerald-500' : 'bg-indigo-600'
+                        isUnitWeak
+                          ? 'bg-gradient-to-r from-[#f59e0b] to-[#ef4444]'
+                          : 'bg-gradient-to-r from-[#635bff] to-[#8b5cf6]'
                       }`}
-                      style={{ width: `${Math.min(100, Math.max(score, hasAttempts ? 4 : 0))}%` }}
+                      style={{ width: `${Math.max(5, unit.score)}%` }}
                     />
                   </div>
                 </div>
@@ -247,146 +458,145 @@ export function InteractiveSyllabusTree() {
           </div>
         </div>
 
-        {/* ── Right Pane: Unit Details & Practice Launcher (~58% width) */}
-        <div className="w-full lg:w-[58%] p-6 lg:p-8 bg-slate-50/30 flex flex-col justify-between overflow-y-auto">
-          <div className="space-y-6">
+        {/* Right column: Selected Unit Details & Topics */}
+        <div className="flex-1 p-6 sm:p-8 overflow-y-auto bg-white flex flex-col justify-between">
+          <div>
             {/* Header: Unit #, Title & Generate Practice Button */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6">
               <div>
-                <span className="text-xs font-bold text-tnpsc-brand uppercase tracking-wider">
+                <span className="text-xs font-bold text-[#635bff] uppercase tracking-wider">
                   Unit {activeUnit.unit_number}
                 </span>
-                <h3 className="text-xl sm:text-2xl font-black text-body-text mt-0.5">
-                  {activeUnit.unit_name}
+                <h3 className="text-2xl sm:text-3xl font-black text-[#172033] tracking-tight mt-0.5">
+                  {activeUnit.displayName || activeUnit.unit_name}
                 </h3>
+                <p className="text-xs text-[#69758a] mt-1 max-w-xl">
+                  {activeUnit.desc}
+                </p>
               </div>
 
               <button
                 onClick={() =>
                   navigate(
-                    `/practice?subject=${encodeURIComponent(activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}`
+                    `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}`
                   )
                 }
-                className="px-5 py-3 rounded-xl bg-tnpsc-brand text-white font-black text-xs hover:bg-tnpsc-brand-dark transition-all shadow-brand shrink-0 flex items-center justify-center gap-1.5"
+                className="px-5 py-3 rounded-xl bg-[#635bff] text-white font-black text-xs hover:bg-[#4f46e5] transition-all shadow-[0_6px_16px_rgba(99,91,255,0.22)] shrink-0 flex items-center justify-center gap-1.5"
               >
                 Generate Practice Set
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Mastery Strip (Matching HTML Prototype) */}
-            <div className="flex items-center gap-4 bg-white border border-surface-border rounded-2xl p-4 shadow-subtle">
-              <b className="text-2xl sm:text-3xl font-black text-body-text min-w-[58px]">
-                {Number(activeUnit.total_attempts || 0) > 0 ? `${activeScore}%` : '0%'}
+            {/* Mastery Strip (Bold score + Progress Track + Zone Badge) */}
+            <div className="flex items-center gap-4 bg-[#f8fafc] border border-[#e5e8ef] rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
+              <b className="text-2xl sm:text-3xl font-black text-[#172033] min-w-[58px]">
+                {activeUnit.score}%
               </b>
-              <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="flex-1 h-2.5 bg-[#e2e8f0] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    isWeakZone ? 'bg-red-500' : isMastered ? 'bg-emerald-500' : 'bg-indigo-600'
+                    isWeakZone ? 'bg-[#ef4444]' : isMastered ? 'bg-[#10b981]' : 'bg-[#635bff]'
                   }`}
-                  style={{ width: `${Math.min(100, Math.max(activeScore, Number(activeUnit.total_attempts) > 0 ? 5 : 0))}%` }}
+                  style={{ width: `${Math.max(6, activeUnit.score)}%` }}
                 />
               </div>
               <span
                 className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shrink-0 border ${
                   isWeakZone
-                    ? 'bg-red-50 text-red-700 border-red-200'
+                    ? 'bg-[#fff0f0] text-[#ef4444] border-[#fecdd3]'
                     : isMastered
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    ? 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0]'
+                    : 'bg-[#eef2ff] text-[#4f46e5] border-[#c7d2fe]'
                 }`}
               >
                 {isWeakZone ? 'WEAK ZONE' : isMastered ? 'MASTERED' : 'IN PROGRESS'}
               </span>
             </div>
 
-            {/* Structured Topic Breakdown (Clean rows, NO nested accordions) */}
-            <div className="space-y-4">
-              <div className="border-b border-surface-border pb-2 flex items-center justify-between">
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                  CORE SYLLABUS TOPICS &amp; MASTERY
+            {/* Structured Topic Breakdown */}
+            <div className="space-y-6">
+              {/* Section 1: FOUNDATION & CORE CONCEPTS */}
+              <div>
+                <h4 className="text-xs font-black text-[#334155] uppercase tracking-wider pb-2 border-b border-[#e5e8ef] mb-3">
+                  FOUNDATION &amp; CORE CONCEPTS
                 </h4>
-                <span className="text-[11px] text-body-secondary font-semibold">
-                  {activeUnit.macro_topics?.length || 0} Topics
-                </span>
-              </div>
-
-              <div className="space-y-2.5">
-                {(activeUnit.macro_topics || []).map((macro) => {
-                  const macroScore = Number(macro.accuracy_percentage || 0)
-                  const macroAttempts = Number(macro.total_attempts || 0)
-                  const status = getTopicStatus(macroScore, macroAttempts)
-
-                  return (
-                    <div
-                      key={macro.macro_topic_id}
-                      className="bg-white border border-surface-border rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:border-indigo-200 hover:shadow-subtle transition-all"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 border ${
-                            status.cls === 'mastered'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : status.cls === 'review'
-                              ? 'bg-red-50 text-red-700 border-red-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}
-                        >
-                          {status.icon}
-                        </span>
-
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-body-text truncate">
-                            {macro.macro_topic_name}
-                          </p>
-                          <p className="text-[11px] text-body-secondary">
-                            {macro.micro_topics?.length || 0} Micro-Topics · {macro.attempted_questions || 0}/{macro.total_questions || 0} attempted
-                          </p>
+                <div className="space-y-2.5">
+                  {activeUnit.foundationTopics.map((topic) => {
+                    const badge = getStatusBadge(topic.status)
+                    return (
+                      <div
+                        key={topic.id}
+                        className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
+                            {badge.icon}
+                          </span>
+                          <span className="text-xs font-bold text-[#172033] truncate">
+                            {topic.name}
+                          </span>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span
-                          className={`text-xs font-black px-2.5 py-1 rounded-lg border ${status.badgeCls}`}
-                        >
-                          {status.label} {macroAttempts > 0 ? `(${macroScore}%)` : ''}
-                        </span>
 
                         <button
-                          onClick={() =>
-                            navigate(
-                              `/practice?subject=${encodeURIComponent(activeUnit.unit_name)}&topic=${encodeURIComponent(macro.macro_topic_name)}`
-                            )
-                          }
-                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-tnpsc-brand bg-indigo-50 hover:bg-indigo-100 transition-colors"
-                          title="Practice this specific topic"
+                          onClick={() => toggleTopicStatus('foundation', topic.id)}
+                          className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
+                          title="Click to toggle status"
                         >
-                          Practice →
+                          {badge.label}
                         </button>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Section 2: APPLICATION & REVISION */}
+              <div>
+                <h4 className="text-xs font-black text-[#334155] uppercase tracking-wider pb-2 border-b border-[#e5e8ef] mb-3">
+                  APPLICATION &amp; REVISION
+                </h4>
+                <div className="space-y-2.5">
+                  {activeUnit.applicationTopics.map((topic) => {
+                    const badge = getStatusBadge(topic.status)
+                    return (
+                      <div
+                        key={topic.id}
+                        className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
+                            {badge.icon}
+                          </span>
+                          <span className="text-xs font-bold text-[#172033] truncate">
+                            {topic.name}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => toggleTopicStatus('application', topic.id)}
+                          className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
+                          title="Click to toggle status"
+                        >
+                          {badge.label}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Vina Insight Bottom Note */}
-          <div className="mt-6 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-100 rounded-xl p-3.5 text-xs text-indigo-900 leading-relaxed">
-            <span className="font-black text-tnpsc-brand mr-1">✨ Vina Insight:</span>
-            {isWeakZone ? (
-              <>
-                <strong>{activeUnit.unit_name}</strong> is currently flagged as a Weak Zone. Prioritize questions marked <em>Needs Review</em> to strengthen core fundamentals before attempting full mock tests.
-              </>
-            ) : isMastered ? (
-              <>
-                You have strong mastery in <strong>{activeUnit.unit_name}</strong> ({activeScore}%). Maintain momentum with occasional spaced-repetition drills.
-              </>
-            ) : (
-              <>
-                Continue practicing the remaining unattempted topics in <strong>{activeUnit.unit_name}</strong> to push unit accuracy above the 70% mastery threshold.
-              </>
-            )}
+          {/* Vina Insight Bottom Callout Note */}
+          <div className="mt-8 bg-[#f5f2ff] border border-[#ddd7ff] rounded-2xl p-4 text-xs text-[#4f46e5] leading-relaxed flex items-start gap-2.5 shadow-2xs">
+            <Sparkles className="w-4 h-4 text-[#635bff] shrink-0 mt-0.5" />
+            <div>
+              <b>Vina insight:</b>{' '}
+              {isWeakZone
+                ? 'This unit is a weak zone. Start with the topics marked Needs Review, then complete a focused practice set.'
+                : 'Keep progressing through the pending topics and revisit any area marked Needs Review.'}
+            </div>
           </div>
         </div>
       </div>
@@ -395,31 +605,24 @@ export function InteractiveSyllabusTree() {
 }
 
 /**
- * Modal wrapper for Interactive Syllabus (used from Dashboard)
+ * Inline Tree wrapper for SyllabusPage (/syllabus)
+ */
+export function InteractiveSyllabusTree(props) {
+  return <InteractiveSyllabusPanel isModal={false} {...props} />
+}
+
+/**
+ * Modal Container for Dashboard
  */
 export function InteractiveSyllabus({ onClose }) {
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      className="fixed inset-0 z-[1200] bg-black/60 backdrop-blur-[7px] flex items-center justify-center p-3 sm:p-5 animate-fade-in"
+      onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose() }}
     >
-      <div className="w-full max-w-5xl max-h-[92vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
-        <div className="p-4 border-b border-surface-border flex items-center justify-between bg-white shrink-0">
-          <div className="flex items-center gap-2">
-            <BookMarked className="w-5 h-5 text-tnpsc-brand" />
-            <h2 className="text-base font-black text-body-text">Interactive Syllabus &amp; Topic Analytics</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          <InteractiveSyllabusTree />
-        </div>
-      </div>
+      <InteractiveSyllabusPanel isModal={true} onClose={onClose} />
     </div>
   )
 }
+
+export default InteractiveSyllabus

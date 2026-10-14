@@ -39,6 +39,11 @@ export function MockTestsPage() {
   }
 
   async function startMock(paper) {
+    if (!user) {
+      toast.error('Please log in to start a mock test.')
+      navigate('/login')
+      return
+    }
     setStarting(paper.id)
     try {
       const attempt = await attemptService.startOrGetAttempt(user.id, paper.id)
@@ -50,6 +55,7 @@ export function MockTestsPage() {
   async function handleGenerateIntelligentTest() {
     if (!user) {
       toast.error('Please log in to generate an intelligent mock test.')
+      navigate('/login')
       return
     }
 
@@ -69,8 +75,14 @@ export function MockTestsPage() {
           strict: false,
           allowFallback: true,
         })
+      } else if (selectedExam === 'TNPSC Group 4') {
+        generatedTest = await testGeneratorService.generateGroup4Test({
+          languageSpecialization: selectedLanguage,
+          strict: false,
+          allowFallback: true,
+        })
       } else {
-        // Fallback or Group 4 test generation using Group 1 matrix standard
+        // Fallback test generation using Group 1 matrix standard
         generatedTest = await testGeneratorService.generateGroup1Test({
           quotaResolutionMode: 'normalize_to_200',
           strict: false,
@@ -93,6 +105,7 @@ export function MockTestsPage() {
 
   const isGroup1 = selectedExam === 'TNPSC Group 1'
   const isGroup2 = selectedExam === 'TNPSC Group 2/2A'
+  const isGroup4 = selectedExam === 'TNPSC Group 4'
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -126,7 +139,8 @@ export function MockTestsPage() {
             <h2 className="text-lg font-bold tracking-tight">
               {isGroup1 && 'TNPSC Group 1 · Full 200-Question Exam Simulation'}
               {isGroup2 && 'TNPSC Group 2/2A · Specialized 200-Question Exam Simulation'}
-              {!isGroup1 && !isGroup2 && `${selectedExam} · 200-Question Blueprint Mock Test`}
+              {isGroup4 && 'TNPSC Group 4 · Full 200-Question Exam Simulation'}
+              {!isGroup1 && !isGroup2 && !isGroup4 && `${selectedExam} · 200-Question Blueprint Mock Test`}
             </h2>
             <p className="text-xs text-slate-300 mt-1 max-w-xl">
               Strictly balances official syllabus quotas and difficulty distribution (30% Easy · 50% Medium · 20% Hard) without duplicate items.
@@ -158,7 +172,7 @@ export function MockTestsPage() {
           <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2.5">
             <div className="flex items-center gap-2 text-indigo-300 font-bold uppercase tracking-wider text-[11px]">
               <Layers className="w-4 h-4" />
-              {isGroup2 ? 'Language Specialization (Part 1)' : 'Syllabus Weightage Quotas'}
+              {(isGroup2 || isGroup4) ? 'Language Specialization (Part 1)' : 'Syllabus Weightage Quotas'}
             </div>
 
             {isGroup1 && (
@@ -174,7 +188,7 @@ export function MockTestsPage() {
               </div>
             )}
 
-            {isGroup2 && (
+            {(isGroup2 || isGroup4) && (
               <div className="space-y-2">
                 <p className="text-slate-300 text-[11px]">
                   Select your optional subject preference for Part 1 (Questions 1–100):
@@ -202,12 +216,14 @@ export function MockTestsPage() {
                   ))}
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Part 2 automatically allocates 75 General Studies + 25 Aptitude questions.
+                  {isGroup4
+                    ? 'Part 2 allocates 75 General Studies (SSLC Standard) + Part 3 allocates 25 Aptitude questions.'
+                    : 'Part 2 automatically allocates 75 General Studies + 25 Aptitude questions.'}
                 </p>
               </div>
             )}
 
-            {!isGroup1 && !isGroup2 && (
+            {!isGroup1 && !isGroup2 && !isGroup4 && (
               <div className="text-slate-300 text-[11px]">
                 Stratified across General Studies (100 Qs), General Tamil/English (75 Qs), and Aptitude (25 Qs).
               </div>

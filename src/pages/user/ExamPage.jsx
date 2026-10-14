@@ -22,6 +22,7 @@ export function ExamPage() {
 
   const [answers, setAnswers] = useState({})
   const [markedForReview, setMarkedForReview] = useState({})
+  const [language, setLanguage] = useState('english')
 
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -217,6 +218,32 @@ export function ExamPage() {
 
           {/* Right Header Actions */}
           <div className="flex items-center space-x-3">
+            {/* Language Toggle */}
+            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-surface-border text-xs">
+              <button
+                type="button"
+                onClick={() => setLanguage('english')}
+                className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                  language === 'english'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-body-secondary hover:text-body-text'
+                }`}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('tamil')}
+                className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                  language === 'tamil'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-body-secondary hover:text-body-text'
+                }`}
+              >
+                தமிழ்
+              </button>
+            </div>
+
             <Timer secondsLeft={timeLeftSeconds} />
 
             <button
@@ -252,6 +279,7 @@ export function ExamPage() {
             isMarkedForReview={!!markedForReview[currentQuestion.id]}
             onToggleMarkForReview={handleToggleMarkForReview}
             mode="exam"
+            language={language}
           />
 
           {/* Bottom Navigation Control Bar */}

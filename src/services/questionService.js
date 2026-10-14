@@ -6,7 +6,7 @@ export const questionService = {
     
     // In exam mode, do not expose correct_option or explanation to client network responses
     if (isExamMode) {
-      selectFields = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d'
+      selectFields = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil'
     }
 
     const { data, error } = await supabase

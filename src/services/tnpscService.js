@@ -300,7 +300,25 @@ export const syllabusService = {
       .eq('exam_id', exam.id)
       .order('unit_number')
     if (error) throw error
-    return units ?? []
+
+    // Deduplicate units by unit_number and merge their topics to prevent duplicate display
+    const unitMap = new Map()
+    for (const u of (units || [])) {
+      const key = u.unit_number || u.unit_name
+      if (!unitMap.has(key)) {
+        unitMap.set(key, { ...u, syllabus_topics: [...(u.syllabus_topics || [])] })
+      } else {
+        const existing = unitMap.get(key)
+        const existingTopicIds = new Set(existing.syllabus_topics.map(t => t.id || t.topic_name))
+        for (const t of (u.syllabus_topics || [])) {
+          if (!existingTopicIds.has(t.id || t.topic_name)) {
+            existing.syllabus_topics.push(t)
+            existingTopicIds.add(t.id || t.topic_name)
+          }
+        }
+      }
+    }
+    return Array.from(unitMap.values())
   },
 
   async getUserProgress(userId) {

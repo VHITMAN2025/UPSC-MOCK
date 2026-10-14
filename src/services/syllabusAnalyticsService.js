@@ -1,159 +1,91 @@
 import { supabase } from '../lib/supabase'
-import { FALLBACK_RECALL_POOL } from './tnpscService'
+const FALLBACK_RECALL_POOL = []
 
 /**
- * Canonical 3-Level Taxonomy Blueprint (Unit -> Macro-Topic -> Micro-Topic)
- * Used to enrich database units/topics with granular Micro-Topics and keyword matchers
- * for both English and Tamil questions.
+ * Canonical 10-Unit TNPSC General Studies Taxonomy (Unit -> Macro-Topic -> Micro-Topic)
+ * Standardized across TNPSC Group 1, Group 2/2A, and Group 4 (Part B).
+ * Enriched with rich keywords (English & Tamil) for automatic question classification.
  */
 export const CANONICAL_SYLLABUS_TAXONOMY = [
   {
     unit_number: 1,
-    unit_name: 'General Studies',
-    subject: 'General Studies',
-    description: 'Core History, Polity, Geography, Economy, National Movement & Current Events',
+    unit_name: 'Unit 1 — General Science',
+    subject: 'General Science',
+    description: 'Physics, Chemistry, Biology and Everyday Science Principles',
     macro_topics: [
       {
         topic_number: 1,
-        macro_topic_name: 'History of India',
-        description: 'Ancient, Medieval & Cultural Heritage of India and Tamil Nadu',
+        macro_topic_name: 'Physics',
+        description: 'Mechanics, Properties of Matter, Light, Sound, Electricity & Universe',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Indus Valley Civilization & Vedic Period',
-            keywords: ['indus', 'harappa', 'mohenjo', 'vedic', 'rigveda', 'lothal', 'சிந்து', 'ஹரப்பா', 'வேத'],
-            baseline_questions: ['ivc-1', 'ivc-2', 'ivc-3', 'ivc-4', 'ivc-5'],
+            micro_topic_name: 'Mechanics, Force, Motion & Properties of Matter',
+            keywords: ['force', 'motion', 'newton', 'gravity', 'pressure', 'density', 'elasticity', 'viscosity', 'surface tension', 'work', 'energy', 'விசை', 'இயக்கம்', 'ஈர்ப்பு', 'அழுத்தம்'],
+            baseline_questions: ['phy-1', 'phy-2', 'phy-3'],
           },
           {
             micro_topic_number: 2,
-            micro_topic_name: 'Mauryan, Gupta & South Indian Empires (Chola, Pandya, Pallava)',
-            keywords: ['maurya', 'ashoka', 'gupta', 'chola', 'pandya', 'pallava', 'thanjavur', 'brihadisvara', 'rajaraja', 'rajendra', 'sangam', 'சோழ', 'பாண்டிய', 'பல்லவ', 'சங்க', 'மௌரிய', 'தஞ்சை'],
-            baseline_questions: ['pyq-2', 'emp-1', 'emp-2', 'emp-3', 'emp-4'],
+            micro_topic_name: 'Light, Sound, Heat, Electricity & Magnetism',
+            keywords: ['light', 'lens', 'mirror', 'refraction', 'sound', 'frequency', 'electric', 'current', 'ohm', 'magnetic', 'heat', 'temperature', 'ஒளி', 'ஒலி', 'வெப்பம்', 'மின்னோட்டம்'],
+            baseline_questions: ['phy-4', 'phy-5', 'phy-6'],
           },
           {
             micro_topic_number: 3,
-            micro_topic_name: 'Delhi Sultanate, Mughal Empire & Vijayanagar-Bahmani',
-            keywords: ['sultanate', 'mughal', 'akbar', 'babur', 'aurangzeb', 'vijayanagar', 'krishnadevaraya', 'bahmani', 'maratha', 'shivaji', 'முகலாய', 'டெல்லி சுல்தான்', 'விஜயநகர'],
-            baseline_questions: ['med-1', 'med-2', 'med-3', 'med-4'],
+            micro_topic_name: 'Universe & Solar System',
+            keywords: ['universe', 'solar system', 'planet', 'sun', 'moon', 'galaxy', 'satellite', 'orbit', 'விண்வெளி', 'சூரிய குடும்பம்', 'கோள்'],
+            baseline_questions: ['phy-7', 'phy-8'],
           },
         ],
       },
       {
         topic_number: 2,
-        macro_topic_name: 'National Movement',
-        description: 'Indian Freedom Struggle & Tamil Nadu Role in Freedom Movement',
+        macro_topic_name: 'Chemistry',
+        description: 'Elements, Compounds, Acids, Bases, Salts, Fertilizers & Everyday Chemistry',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: '1857 Revolt & Early Nationalist Movements',
-            keywords: ['1857', 'sepoys', 'congress', 'moderates', 'extremists', 'partition of bengal', 'swadeshi', 'புரட்சி', 'காங்கிரஸ்', 'சுதேசி'],
-            baseline_questions: ['inm-1', 'inm-2', 'inm-3', 'inm-4'],
+            micro_topic_name: 'Elements, Compounds, Acids, Bases & Salts',
+            keywords: ['element', 'compound', 'acid', 'base', 'salt', 'ph', 'litmus', 'neutralization', 'periodic table', 'தனிமம்', 'சேர்மம்', 'அமிலம்', 'காரம்', 'உப்பு'],
+            baseline_questions: ['chem-1', 'chem-2', 'chem-3'],
           },
           {
             micro_topic_number: 2,
-            micro_topic_name: 'Gandhian Era, Non-Cooperation, Civil Disobedience & Quit India',
-            keywords: ['gandhi', 'non-cooperation', 'dandi', 'quit india', 'poona pact', 'ambedkar', 'khudai khidmatgar', 'ghaffar khan', 'bose', 'ina', 'காந்தி', 'வெள்ளையனே வெளியேறு', 'பூனா'],
-            baseline_questions: ['pyq-4', 'syn-4', 'inm-5', 'inm-6', 'inm-7'],
-          },
-          {
-            micro_topic_number: 3,
-            micro_topic_name: 'Tamil Nadu Freedom Fighters & Social Reformers',
-            keywords: ['chidambaram', 'kappalottiya', 'bharati', 'bharathiar', 'periyar', 'evr', 'kamaraj', 'rajaji', 'velu nachiyar', 'kattabomman', 'tiruppur kumaran', 'justice party', 'வ.உ.சி', 'பாரதியார்', 'பெரியார்', 'காமராஜர்', 'கட்டபொம்மன்', 'வேலுநாச்சியார்'],
-            baseline_questions: ['pyq-6', 'tnm-1', 'tnm-2', 'tnm-3', 'tnm-4'],
+            micro_topic_name: 'Fertilizers, Pesticides & Carbon Compounds',
+            keywords: ['fertilizer', 'pesticide', 'urea', 'polymer', 'plastic', 'carbon', 'petroleum', 'fuel', 'உரம்', 'பூச்சிக்கொல்லி', 'நெகிழி'],
+            baseline_questions: ['chem-4', 'chem-5'],
           },
         ],
       },
       {
         topic_number: 3,
-        macro_topic_name: 'Geography of India',
-        description: 'Physical Features, Climate, Rivers, Soil & Resources of India and Tamil Nadu',
+        macro_topic_name: 'Biology',
+        description: 'Cell Biology, Human Systems, Nutrition & Diseases',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Physical Features, Location & Climate of India',
-            keywords: ['tropic of cancer', 'himalaya', 'monsoon', 'western ghats', 'eastern ghats', 'latitude', 'longitude', 'island', 'plateau', 'இமயமலை', 'மேற்கு தொடர்ச்சி', 'பருவமழை', 'கடகரேகை'],
-            baseline_questions: ['pyq-5', 'geo-1', 'geo-2', 'geo-3'],
+            micro_topic_name: 'Blood, Circulation & Human Organ Systems',
+            keywords: ['blood', 'circulation', 'heart', 'kidney', 'lung', 'digestive', 'nervous', 'brain', 'hormone', 'cell', 'இரத்தம்', 'இதயம்', 'சிறுநீரகம்', 'நுரையீரல்'],
+            baseline_questions: ['bio-1', 'bio-2', 'bio-3'],
           },
           {
             micro_topic_number: 2,
-            micro_topic_name: 'Rivers, Water Resources & Drainage Systems',
-            keywords: ['river', 'ganga', 'godavari', 'dakshin ganga', 'cauvery', 'kaveri', 'krishna', 'vaigai', 'tamirabarani', 'dam', 'tributary', 'ஆறு', 'காவிரி', 'கோதாவரி', 'வைகை', 'தாமிரபரணி'],
-            baseline_questions: ['syn-5', 'geo-4', 'geo-5', 'geo-6'],
-          },
-          {
-            micro_topic_number: 3,
-            micro_topic_name: 'Soils, Agriculture, Minerals & Population Geography',
-            keywords: ['soil', 'alluvial', 'black soil', 'crop', 'agriculture', 'mineral', 'coal', 'census', 'population', 'literacy', 'மண்', 'வேளாண்மை', 'மக்கள் தொகை'],
-            baseline_questions: ['geo-7', 'geo-8', 'geo-9'],
+            micro_topic_name: 'Nutrition, Vitamins & Human Diseases',
+            keywords: ['vitamin', 'protein', 'carbohydrate', 'deficiency', 'disease', 'virus', 'bacteria', 'vaccine', 'malaria', 'dengue', 'ஊட்டச்சத்து', 'வைட்டமின்', 'நோய்'],
+            baseline_questions: ['bio-4', 'bio-5'],
           },
         ],
       },
       {
         topic_number: 4,
-        macro_topic_name: 'Indian Polity',
-        description: 'Constitution of India, Fundamental Rights, Union & State Executive, Judiciary & Local Governance',
+        macro_topic_name: 'Environment & Ecology',
+        description: 'Ecology Basics, Biodiversity & Environmental Conservation',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Preamble, Fundamental Rights, DPSP & Fundamental Duties',
-            keywords: ['preamble', 'fundamental right', 'fundamental duties', 'dpsp', 'article 14', 'article 17', 'article 19', 'article 21', 'article 32', 'writs', 'swaran singh', 'untouchability', 'அடிப்படை உரிமை', 'அடிப்படை கடமை', 'முகவுரை', 'விதி'],
-            baseline_questions: ['pyq-3', 'pyq-7', 'pol-1', 'pol-2', 'pol-3'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Union & State Legislature, President, Parliament & Governor',
-            keywords: ['president', 'parliament', 'lok sabha', 'rajya sabha', 'nominated', 'prime minister', 'governor', 'chief minister', 'speaker', 'money bill', 'குடியரசுத் தலைவர்', 'பாராளுமன்றம்', 'ஆளுநர்', 'மக்களவை', 'மாநிலங்களவை'],
-            baseline_questions: ['syn-6', 'pol-4', 'pol-5', 'pol-6'],
-          },
-          {
-            micro_topic_number: 3,
-            micro_topic_name: 'Constitutional Bodies, Panchayati Raj & Amendments',
-            keywords: ['finance commission', 'article 280', 'election commission', 'cag', 'upsc', 'panchayat', '73rd', '74th', 'balwant rai', 'sarkaria', 'amendment', 'supreme court', 'high court', 'நிதி ஆணையம்', 'தேர்தல் ஆணையம்', 'பஞ்சாயத்து', 'சட்டத்திருத்தம்'],
-            baseline_questions: ['pyq-1', 'pol-7', 'pol-8', 'pol-9'],
-          },
-        ],
-      },
-      {
-        topic_number: 5,
-        macro_topic_name: 'Indian Economy',
-        description: 'Planning, RBI, Fiscal Policy, Banking, Poverty Alleviation & TN Economy',
-        micro_topics: [
-          {
-            micro_topic_number: 1,
-            micro_topic_name: 'National Income, NITI Aayog & Five-Year Plans',
-            keywords: ['gdp', 'gnp', 'national income', 'niti aayog', 'planning commission', 'five year plan', 'per capita', 'தேசிய வருமானம்', 'நிதி ஆயோக்', 'ஐந்தாண்டு திட்டம்'],
-            baseline_questions: ['eco-1', 'eco-2', 'eco-3', 'eco-4'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Reserve Bank of India, Monetary Policy, GST & Banking',
-            keywords: ['rbi', 'reserve bank', 'repo rate', 'inflation', 'gst', 'tax', 'fiscal', 'budget', 'bank', 'nabard', 'ரிசர்வ் வங்கி', 'பணவீக்கம்', 'ஜிஎஸ்டி', 'வங்கி'],
-            baseline_questions: ['eco-5', 'eco-6', 'eco-7'],
-          },
-          {
-            micro_topic_number: 3,
-            micro_topic_name: 'Social Welfare Schemes & Tamil Nadu Economic Development',
-            keywords: ['welfare', 'poverty', 'employment', 'mgnrega', 'magalir', 'pudhumai penn', 'human development', 'hdi', 'tn economy', 'சமூக நல', 'மகளிர்', 'புதுமைப் பெண்', 'வறுமை'],
-            baseline_questions: ['eco-8', 'eco-9', 'eco-10'],
-          },
-        ],
-      },
-      {
-        topic_number: 6,
-        macro_topic_name: 'Current Events',
-        description: 'National & International Events, Government Schemes, Awards, Sports & Space',
-        micro_topics: [
-          {
-            micro_topic_number: 1,
-            micro_topic_name: 'National & Tamil Nadu Government Schemes & Policies',
-            keywords: ['scheme', 'policy', 'portal', 'mission', 'initiative', 'chief minister', 'tamil nadu government', 'திட்டம்', 'நடப்பு நிகழ்வு'],
-            baseline_questions: ['ca-1', 'ca-2', 'ca-3', 'ca-4'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Science & Tech, ISRO Missions, Defence & International Summits',
-            keywords: ['isro', 'satellite', 'chandrayaan', 'gaganyaan', 'aditya', 'summit', 'g20', 'brics', 'award', 'nobel', 'sports', 'olympic', 'இஸ்ரோ', 'சந்திரயான்', 'விருது'],
-            baseline_questions: ['ca-5', 'ca-6', 'ca-7'],
+            micro_topic_name: 'Ecosystems, Food Chain & Environmental Balance',
+            keywords: ['ecosystem', 'ecology', 'food chain', 'biodiversity', 'wildlife', 'conservation', 'சுற்றுச்சூழல்', 'உயிர்க்கோளம்', 'உணவுச் சங்கிலி'],
+            baseline_questions: ['env-1', 'env-2'],
           },
         ],
       },
@@ -161,83 +93,59 @@ export const CANONICAL_SYLLABUS_TAXONOMY = [
   },
   {
     unit_number: 2,
-    unit_name: 'General Science',
-    subject: 'General Science',
-    description: 'Physics, Chemistry, Biology, Human Health & Environment and Ecology',
+    unit_name: 'Unit 2 — Geography of India & Tamil Nadu',
+    subject: 'Geography',
+    description: 'Physical Features, Rivers, Climate, Soil, Minerals and Agriculture',
     macro_topics: [
       {
         topic_number: 1,
-        macro_topic_name: 'Physics',
-        description: 'Mechanics, Light, Sound, Electricity, Magnetism & Universe',
+        macro_topic_name: 'Physical Geography',
+        description: 'Location, Physical Features, Relief & Mountains of India and Tamil Nadu',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Universe, Solar System, Mechanics & Properties of Matter',
-            keywords: ['planet', 'solar system', 'density', 'force', 'newton', 'gravity', 'motion', 'pressure', 'energy', 'work', 'கோள்', 'சூரிய குடும்பம்', 'ஈர்ப்பு', 'விசை'],
-            baseline_questions: ['syn-1', 'phy-1', 'phy-2', 'phy-3'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Light, Sound, Heat, Electricity & Nuclear Physics',
-            keywords: ['light', 'lens', 'mirror', 'refraction', 'sound', 'frequency', 'electric', 'ohm', 'current', 'magnetic', 'nuclear', 'laser', 'ஒளி', 'ஒலி', 'மின்சாரம்', 'காந்தம்'],
-            baseline_questions: ['phy-4', 'phy-5', 'phy-6'],
+            micro_topic_name: 'Indian Physical Geography & Relief Features',
+            keywords: ['himalaya', 'peninsular plateau', 'western ghats', 'eastern ghats', 'coastal plain', 'island', 'latitude', 'tropic of cancer', 'இமயமலை', 'தக்காண பீடபூமி', 'கடற்கரை'],
+            baseline_questions: ['geo-1', 'geo-2'],
           },
         ],
       },
       {
         topic_number: 2,
-        macro_topic_name: 'Chemistry',
-        description: 'Elements, Compounds, Acids, Bases, Salts & Everyday Chemistry',
+        macro_topic_name: 'Climate & Monsoon',
+        description: 'Monsoon, Rainfall Distribution & Weather Patterns',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Elements, Periodic Table, Acids, Bases & Salts',
-            keywords: ['acid', 'base', 'salt', 'ph', 'element', 'periodic', 'atom', 'electron', 'oxidation', 'chemical', 'அமிலம்', 'காரம்', 'உப்பு', 'தனிமம்'],
-            baseline_questions: ['chem-1', 'chem-2', 'chem-3', 'chem-4'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Fertilizers, Polymers, Metals & Chemistry in Daily Life',
-            keywords: ['fertilizer', 'polymer', 'plastic', 'metal', 'alloy', 'carbon', 'petroleum', 'soap', 'உரம்', 'உலோகம்', 'கார்பன்'],
-            baseline_questions: ['chem-5', 'chem-6', 'chem-7'],
+            micro_topic_name: 'Monsoon & Climate Patterns',
+            keywords: ['monsoon', 'southwest monsoon', 'northeast monsoon', 'rainfall', 'cyclone', 'weather', 'climate', 'பருவமழை', 'மழைப்பொழிவு', 'புயல்'],
+            baseline_questions: ['geo-3', 'geo-4'],
           },
         ],
       },
       {
         topic_number: 3,
-        macro_topic_name: 'Biology',
-        description: 'Cell Biology, Human Physiology, Nutrition, Genetics & Diseases',
+        macro_topic_name: 'Rivers & Water Resources',
+        description: 'Drainage Systems, Rivers and Water Resources of India and Tamil Nadu',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Human Organ Systems, Blood Circulation & Excretion',
-            keywords: ['organ', 'kidney', 'heart', 'blood', 'liver', 'lung', 'brain', 'nervous', 'digestive', 'cell', 'genetics', 'dna', 'சிறுநீரகம்', 'இதயம்', 'இரத்தம்', 'செல்'],
-            baseline_questions: ['bio-1', 'bio-2', 'bio-3', 'bio-4'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Nutrition, Vitamins, Deficiency & Communicable Diseases',
-            keywords: ['vitamin', 'sunlight', 'protein', 'carbohydrate', 'disease', 'virus', 'bacteria', 'vaccine', 'immunity', 'வைட்டமின்', 'நோய்', 'ஊட்டச்சத்து'],
-            baseline_questions: ['syn-3', 'bio-5', 'bio-6', 'bio-7'],
+            micro_topic_name: 'Tamil Nadu & Indian River Systems',
+            keywords: ['river', 'kaveri', 'cauvery', 'vaigai', 'tamirabarani', 'ganga', 'godavari', 'dam', 'irrigation', 'ஆறு', 'காவிரி', 'வைகை', 'தாமிரபரணி', 'அணை'],
+            baseline_questions: ['geo-5', 'geo-6'],
           },
         ],
       },
       {
         topic_number: 4,
-        macro_topic_name: 'Environment & Ecology',
-        description: 'Biodiversity, Biosphere Reserves, Climate Change & Pollution Control',
+        macro_topic_name: 'Agriculture & Minerals',
+        description: 'Soil Types, Cropping Patterns, Minerals & Natural Resources',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Ecosystems, National Parks, Wildlife Sanctuaries & Biosphere Reserves',
-            keywords: ['biosphere', 'nilgiri', 'sundarbans', 'mannar', 'national park', 'wildlife', 'sanctuary', 'biodiversity', 'wetland', 'ramsar', 'project tiger', 'உயிர்க்கோள', 'நீலகிரி', 'வனவிலங்கு', 'தேசிய பூங்கா'],
-            baseline_questions: ['syn-2', 'env-1', 'env-2', 'env-3'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Climate Change, Greenhouse Effect & Environmental Conventions',
-            keywords: ['climate change', 'global warming', 'ozone', 'greenhouse', 'carbon footprint', 'pollution', 'kyoto', 'paris agreement', 'cop', 'புவி வெப்பமடைதல்', 'ஓசோன்', 'மாசுபாடு'],
-            baseline_questions: ['env-4', 'env-5', 'env-6'],
+            micro_topic_name: 'Soils, Crops & Natural Resources',
+            keywords: ['soil', 'alluvial', 'black soil', 'red soil', 'paddy', 'cotton', 'mineral', 'iron ore', 'coal', 'bauxite', 'மண்', 'விவசாயம்', 'கனிமம்'],
+            baseline_questions: ['geo-7', 'geo-8'],
           },
         ],
       },
@@ -245,102 +153,479 @@ export const CANONICAL_SYLLABUS_TAXONOMY = [
   },
   {
     unit_number: 3,
-    unit_name: 'Aptitude & Mental Ability',
-    subject: 'Aptitude',
-    description: 'Quantitative Aptitude, Logical Reasoning & Data Analysis',
+    unit_name: 'Unit 3 — Indian National Movement',
+    subject: 'National Movement',
+    description: 'Indian Freedom Struggle, Early Uprisings, Gandhian Era & Constitutional Developments',
     macro_topics: [
       {
         topic_number: 1,
-        macro_topic_name: 'Simplification',
-        description: 'BODMAS, Fractions, Decimals, Square Roots & Algebraic Identities',
+        macro_topic_name: 'Early Nationalism',
+        description: '1857 Revolt & Early Nationalist Awakenings',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'BODMAS, Fractions, Surds & Algebraic Simplification',
-            keywords: ['simplify', 'simplification', 'bodmas', 'fraction', 'square root', 'cube root', 'value of', 'சுருக்குக', 'வர்க்கமூலம்'],
-            baseline_questions: ['apt-1', 'apt-2', 'apt-3'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'HCF & LCM of Numbers',
-            keywords: ['hcf', 'lcm', 'greatest common', 'least common', 'divisible', 'remainder', 'மீ.பொ.வ', 'மீ.சி.ம'],
-            baseline_questions: ['apt-4', 'apt-5', 'apt-6'],
+            micro_topic_name: '1857 Revolt & Swadeshi Movement',
+            keywords: ['1857', 'sepoy', 'revolt', 'swadeshi', 'boycott', 'partition of bengal', 'moderates', 'extremists', 'புரட்சி', 'சுதேசி இயக்கம்', 'வங்கப் பிரிவினை'],
+            baseline_questions: ['inm-1', 'inm-2'],
           },
         ],
       },
       {
         topic_number: 2,
-        macro_topic_name: 'Percentage',
-        description: 'Percentage Calculations, Profit & Loss, Simple & Compound Interest',
+        macro_topic_name: 'Gandhian Era',
+        description: 'Non-Cooperation, Civil Disobedience & Quit India Movements',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Percentage, Profit & Loss and Discount',
-            keywords: ['percentage', 'percent', '%', 'profit', 'loss', 'cost price', 'selling price', 'discount', 'சதவீதம்', 'இலாபம்', 'நட்டம்'],
-            baseline_questions: ['apt-7', 'apt-8', 'apt-9'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Simple Interest (SI) & Compound Interest (CI)',
-            keywords: ['simple interest', 'compound interest', 'principal', 'rate of interest', 'per annum', 'தனிவட்டி', 'கூட்டுவட்டி', 'அசல்'],
-            baseline_questions: ['apt-10', 'apt-11', 'apt-12'],
+            micro_topic_name: 'Gandhian Mass Movements',
+            keywords: ['gandhi', 'non-cooperation', 'civil disobedience', 'dandi', 'salt satyagraha', 'quit india', 'poona pact', 'காந்தி', 'ஒத்துழையாமை', 'சட்டமறுப்பு', 'வெள்ளையனே வெளியேறு'],
+            baseline_questions: ['inm-3', 'inm-4', 'inm-5'],
           },
         ],
       },
       {
         topic_number: 3,
-        macro_topic_name: 'Ratio & Proportion',
-        description: 'Ratios, Proportions, Time & Work, Ages and Partnerships',
+        macro_topic_name: 'Acts & Constitutional Developments',
+        description: 'British Acts, Reforms & March to Independence',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Ratio, Proportion, Ages & Mixtures',
-            keywords: ['ratio', 'proportion', 'age', 'father and son', 'mixture', 'partnership', 'விகிதம்', 'விகிதாச்சாரம்', 'வயது'],
-            baseline_questions: ['apt-13', 'apt-14', 'apt-15'],
-          },
-          {
-            micro_topic_number: 2,
-            micro_topic_name: 'Time & Work, Pipes & Cisterns and Time-Speed-Distance',
-            keywords: ['time and work', 'days to complete', 'efficiency', 'pipe', 'cistern', 'train', 'speed', 'distance', 'காலமும் வேலையும்', 'வேகம்'],
-            baseline_questions: ['apt-16', 'apt-17', 'apt-18'],
+            micro_topic_name: 'Government of India Acts & Partition',
+            keywords: ['morley minto', 'montagu chelmsford', 'act 1935', 'simon commission', 'cripps', 'cabinet mission', 'mountbatten', 'independence', 'சட்டம்', 'சைமன் குழு'],
+            baseline_questions: ['inm-6', 'inm-7'],
           },
         ],
       },
       {
         topic_number: 4,
-        macro_topic_name: 'Number Series',
-        description: 'Arithmetic, Geometric, Missing Number & Logical Reasoning Series',
+        macro_topic_name: 'Important Leaders & Events',
+        description: 'National Leaders, Revolutionaries & TN Freedom Fighters',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Missing Number Series, AP & GP Progressions',
-            keywords: ['series', 'next in the series', 'missing number', 'sequence', 'nth term', 'arithmetic progression', 'தொடர்', 'விடுபட்ட எண்'],
-            baseline_questions: ['ns-1', 'ns-2', 'ns-3', 'ns-4'],
+            micro_topic_name: 'Leaders of Freedom Struggle',
+            keywords: ['ambedkar', 'bhagat singh', 'subhash chandra bose', 'ina', 'tilak', 'nehru', 'patel', 'வ.உ.சி', 'பாரதியார்', 'காமராஜர்'],
+            baseline_questions: ['inm-8', 'inm-9'],
           },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 4,
+    unit_name: 'Unit 4 — Indian Culture & Heritage',
+    subject: 'History & Culture',
+    description: 'Ancient & Medieval History, Heritage, Architecture and Art Forms',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'Ancient & Medieval Empires',
+        description: 'Indus Valley, Guptas, Delhi Sultanate, Mughals & Vijayanagar',
+        micro_topics: [
           {
-            micro_topic_number: 2,
-            micro_topic_name: 'Coding-Decoding, Puzzles, Dice & Visual Reasoning',
-            keywords: ['coding', 'decoding', 'puzzle', 'dice', 'alphanumeric', 'blood relation', 'direction', 'குறியீடு', 'பகடை'],
-            baseline_questions: ['ns-5', 'ns-6', 'ns-7'],
+            micro_topic_number: 1,
+            micro_topic_name: 'Indus Valley Civilization & Great Empires',
+            keywords: ['indus', 'harappa', 'mohenjo', 'gupta', 'delhi sultanate', 'mughal', 'akbar', 'vijayanagar', 'krishnadevaraya', 'சிந்து சமவெளி', 'குப்தர்', 'முகலாயர்', 'விஜயநகரம்'],
+            baseline_questions: ['cul-1', 'cul-2'],
           },
         ],
       },
       {
-        topic_number: 5,
-        macro_topic_name: 'Data Interpretation',
-        description: 'Tables, Bar Charts, Pie Charts, Area & Volume Mensuration',
+        topic_number: 2,
+        macro_topic_name: 'Temple Architecture',
+        description: 'Dravidian, Nagara & Vesara Temple Architecture',
         micro_topics: [
           {
             micro_topic_number: 1,
-            micro_topic_name: 'Tabulation, Bar Graphs, Pie Charts & Averages',
-            keywords: ['average', 'mean', 'median', 'chart', 'pie', 'graph', 'table', 'data interpretation', 'சராசரி', 'வரைபடம்'],
-            baseline_questions: ['di-1', 'di-2', 'di-3'],
+            micro_topic_name: 'Temple Architecture & Heritage Sites',
+            keywords: ['temple', 'architecture', 'brihadisvara', 'thanjavur', 'mahabalipuram', 'chola', 'pallava', 'gopuram', 'sculpture', 'கோவில்', 'கட்டிடக்கலை', 'தஞ்சை பெரிய கோவில்'],
+            baseline_questions: ['cul-3', 'cul-4'],
           },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Tamil Literature',
+        description: 'Sangam Literature, Epics & Classical Works',
+        micro_topics: [
           {
-            micro_topic_number: 2,
-            micro_topic_name: 'Mensuration — Area, Perimeter, Surface Area & Volume (2D/3D)',
-            keywords: ['area', 'perimeter', 'volume', 'cylinder', 'cone', 'sphere', 'triangle', 'rectangle', 'circle', 'radius', 'பரப்பளவு', 'சுற்றளவு', 'கனஅளவு'],
-            baseline_questions: ['di-4', 'di-5', 'di-6'],
+            micro_topic_number: 1,
+            micro_topic_name: 'Classical Tamil Works & Epics',
+            keywords: ['sangam', 'ettuthogai', 'paththuppaattu', 'silappathikaram', 'manimekalai', 'thirukkural', 'சங்க இலக்கியம்', 'எட்டுத்தொகை', 'சிலப்பதிகாரம்'],
+            baseline_questions: ['cul-5', 'cul-6'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Folk & Classical Arts',
+        description: 'Dance, Music, Folk Arts & Cultural Traditions',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Arts, Heritage & Classical Dances',
+            keywords: ['bharatanatyam', 'carnatic', 'folk dance', 'karagattam', 'heritage', 'festival', 'பரதநாட்டியம்', 'நாட்டுப்புறக் கலை'],
+            baseline_questions: ['cul-7', 'cul-8'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 5,
+    unit_name: 'Unit 5 — Indian Polity',
+    subject: 'Polity',
+    description: 'Constitution, Fundamental Rights, Parliament, Judiciary & Local Governance',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'Fundamental Rights & Duties',
+        description: 'Preamble, Fundamental Rights, DPSP & Fundamental Duties',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Preamble, Rights & Directive Principles',
+            keywords: ['preamble', 'fundamental rights', 'article 14', 'article 19', 'article 21', 'article 32', 'writs', 'dpsp', 'duties', 'அடிப்படை உரிமைகள்', 'முகவுரை', 'அடிப்படை கடமைகள்'],
+            baseline_questions: ['pol-1', 'pol-2', 'pol-3'],
+          },
+        ],
+      },
+      {
+        topic_number: 2,
+        macro_topic_name: 'Parliament & President',
+        description: 'Union Executive, President, Prime Minister, Lok Sabha & Rajya Sabha',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'President, Prime Minister & Parliament',
+            keywords: ['president', 'prime minister', 'parliament', 'lok sabha', 'rajya sabha', 'speaker', 'money bill', 'குடியரசுத் தலைவர்', 'பிரதமர்', 'நாடாளுமன்றம்'],
+            baseline_questions: ['pol-4', 'pol-5'],
+          },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Judiciary & Constitutional Bodies',
+        description: 'Supreme Court, High Courts, Election Commission & CAG',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Courts & Constitutional Authorities',
+            keywords: ['supreme court', 'high court', 'judicial review', 'election commission', 'cag', 'finance commission', 'upsc', 'நீதிமன்றம்', 'தேர்தல் ஆணையம்'],
+            baseline_questions: ['pol-6', 'pol-7'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Local Government',
+        description: 'Panchayati Raj & Urban Local Bodies (73rd & 74th Amendments)',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Panchayati Raj & Local Bodies',
+            keywords: ['panchayat', 'municipality', '73rd amendment', '74th amendment', 'gram sabha', 'balwant rai', 'பஞ்சாயத்து ராஜ்', 'கிராம சபை'],
+            baseline_questions: ['pol-8', 'pol-9'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 6,
+    unit_name: 'Unit 6 — Geography & Environment',
+    subject: 'Environment',
+    description: 'Biodiversity, Pollution, Natural Resources & Disaster Management',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'Biodiversity',
+        description: 'Biosphere Reserves, National Parks & Wildlife Sanctuaries',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Wildlife Sanctuaries & Biosphere Reserves',
+            keywords: ['biodiversity', 'national park', 'wildlife sanctuary', 'biosphere reserve', 'nilgiri', 'gulf of mannar', 'project tiger', 'வனவிலங்கு சரணாலயம்', 'தேசிய பூங்கா'],
+            baseline_questions: ['env-3', 'env-4'],
+          },
+        ],
+      },
+      {
+        topic_number: 2,
+        macro_topic_name: 'Pollution & Climate Change',
+        description: 'Greenhouse Gases, Ozone Depletion & Climate Agreements',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Climate Change, Ozone & Pollution',
+            keywords: ['climate change', 'global warming', 'greenhouse gas', 'ozone', 'carbon footprint', 'paris agreement', 'air pollution', 'புவி வெப்பமடைதல்', 'மாசுபாடு'],
+            baseline_questions: ['env-5', 'env-6'],
+          },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Natural Resources',
+        description: 'Forests, Mineral Resources & Renewable Energy',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Forests & Renewable Energy',
+            keywords: ['forest', 'solar energy', 'wind energy', 'water conservation', 'sustainable development', 'காடுகள்', 'புதுப்பிக்கத்தக்க ஆற்றல்'],
+            baseline_questions: ['env-7', 'env-8'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Disaster Management',
+        description: 'Natural Calamities, Cyclone, Flood & Disaster Mitigation',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Disaster Mitigation & Management',
+            keywords: ['disaster management', 'ndma', 'cyclone', 'flood', 'earthquake', 'tsunami', 'பேரிடர் மேலாண்மை', 'வெள்ளம்', 'புயல்'],
+            baseline_questions: ['env-9', 'env-10'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 7,
+    unit_name: 'Unit 7 — Indian Economy',
+    subject: 'Economy',
+    description: 'Planning, Five-Year Plans, RBI, Fiscal Policy, GST & TN Economy',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'National Income & Growth',
+        description: 'GDP, GNP, NITI Aayog & Five-Year Plans',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'GDP, Five-Year Plans & NITI Aayog',
+            keywords: ['gdp', 'gnp', 'national income', 'five year plan', 'niti aayog', 'planning commission', 'per capita', 'தேசிய வருமானம்', 'நிதி ஆயோக்', 'ஐந்தாண்டு திட்டம்'],
+            baseline_questions: ['eco-1', 'eco-2'],
+          },
+        ],
+      },
+      {
+        topic_number: 2,
+        macro_topic_name: 'Banking & Monetary Policy',
+        description: 'Reserve Bank of India, Repo Rate, Inflation & Commercial Banks',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'RBI, Monetary Policy & Inflation',
+            keywords: ['rbi', 'reserve bank', 'monetary policy', 'repo rate', 'inflation', 'banking', 'nabard', 'ரிசர்வ் வங்கி', 'பணவீக்கம்', 'வங்கி'],
+            baseline_questions: ['eco-3', 'eco-4'],
+          },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Government Schemes',
+        description: 'Poverty Alleviation, Employment & Social Welfare Initiatives',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Welfare Schemes & Employment Generation',
+            keywords: ['mgnrega', 'scheme', 'poverty alleviation', 'employment', 'self help group', 'திட்டம்', 'வறுமை ஒழிப்பு'],
+            baseline_questions: ['eco-5', 'eco-6'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Tamil Nadu Economy',
+        description: 'Economic Growth, Industrial Clusters & State Revenue of TN',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Economic Growth & Industries in TN',
+            keywords: ['tamil nadu economy', 'industrial corridor', 'sipcot', 'tidco', 'gst', 'state revenue', 'தமிழ்நாடு பொருளாதாரம்', 'தொழில்துறை'],
+            baseline_questions: ['eco-7', 'eco-8'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 8,
+    unit_name: 'Unit 8 — History & Culture of Tamil Nadu',
+    subject: 'Tamil History',
+    description: 'Sangam Age, Thirukkural, Freedom Movement in TN & Dravidian Movement',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'Sangam Age',
+        description: 'Ancient Tamil Society, Archaeological Discoveries (Keezhadi) & Sangam Literature',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Keezhadi, Archaeology & Sangam Society',
+            keywords: ['sangam', 'keezhadi', 'adichanallur', 'kodumanal', 'tholkappiyam', 'chola', 'pandya', 'cherar', 'கீழடி', 'ஆதிச்சநல்லூர்', 'சங்க காலம்'],
+            baseline_questions: ['tn-1', 'tn-2'],
+          },
+        ],
+      },
+      {
+        topic_number: 2,
+        macro_topic_name: 'Chola & Pandya Periods',
+        description: 'Imperial Cholas, Pandyas & Medieval Tamil History',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Imperial Cholas & Later Pandyas',
+            keywords: ['rajaraja', 'rajendra chola', 'kudavolai', 'local administration', 'pandya', 'மாமன்னன் ராஜராஜன்', 'குடவோலை முறை'],
+            baseline_questions: ['tn-3', 'tn-4'],
+          },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Social Reform Movements',
+        description: 'Self-Respect Movement, EVR Periyar, Justice Party & Social Justice',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Periyar, Justice Party & Self-Respect Movement',
+            keywords: ['periyar', 'evr', 'self respect movement', 'justice party', 'dravidian movement', 'annadurai', 'tyagaraja chetti', 'பெரியார்', 'சுயமரியாதை இயக்கம்', 'நீதிக்கட்சி'],
+            baseline_questions: ['tn-5', 'tn-6'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Justice Party & Dravidian Movement',
+        description: 'Reservation, Women Empowerment & Non-Brahmin Movement',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Reservation, Social Reform & Women Leaders',
+            keywords: ['muthulakshmi reddy', 'moovalur ramamirtham', 'velu nachiyar', 'communal go', 'social justice', 'முத்துலட்சுமி ரெட்டி', 'வேலு நாச்சியார்', 'சமூக நீதி'],
+            baseline_questions: ['tn-7', 'tn-8'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 9,
+    unit_name: 'Unit 9 — Tamil Nadu Administration & Schemes',
+    subject: 'TN Administration',
+    description: 'Human Development, Social Welfare Schemes, Education, Health & E-Governance in TN',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'State Administration',
+        description: 'Government Machinery, District Administration & Public Delivery',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Administration & Public Services',
+            keywords: ['administration', 'secretariat', 'district collector', 'revenue department', 'public service delivery', 'மாநில அரசு நிர்வாகம்', 'மாவட்ட ஆட்சியர்'],
+            baseline_questions: ['adm-1', 'adm-2'],
+          },
+        ],
+      },
+      {
+        topic_number: 2,
+        macro_topic_name: 'Welfare Schemes',
+        description: 'Flagship Schemes (Magalir Urimai, Pudhumai Penn, Moovalur Ramamirtham)',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Flagship Welfare Programs',
+            keywords: ['magalir urimai', 'pudhumai penn', 'mid day meal', 'breakfast scheme', 'welfare scheme', 'மகளிர் உரிமைத் தொகை', 'புதுமைப் பெண் திட்டம்', 'மதிய உணவு'],
+            baseline_questions: ['adm-3', 'adm-4'],
+          },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Education & Health Initiatives',
+        description: 'Human Development Index, Medical Infrastructure & Education Reforms',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Health System & Higher Education in TN',
+            keywords: ['human development index', 'hdi', 'phc', 'maternal mortality', 'higher education', 'gross enrolment ratio', 'கல்வி', 'சுகாதாரம்', 'மனித மேம்பாட்டு குறியீடு'],
+            baseline_questions: ['adm-5', 'adm-6'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Local Administration',
+        description: 'E-Governance, Digital Initiatives & Local Body Empowerment',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'E-Governance & Digital Delivery',
+            keywords: ['e-governance', 'tnega', 'digital tamil nadu', 'meesevai', 'உள்ளாட்சி அமைப்பு', 'மின் ஆளுமை'],
+            baseline_questions: ['adm-7', 'adm-8'],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    unit_number: 10,
+    unit_name: 'Unit 10 — Aptitude & Mental Ability',
+    subject: 'Aptitude',
+    description: 'Simplification, Percentage, Ratio, Time & Work, Logical Reasoning & Data Interpretation',
+    macro_topics: [
+      {
+        topic_number: 1,
+        macro_topic_name: 'Percentage & Ratio',
+        description: 'Percentage, Ratio & Proportion, Simple & Compound Interest',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Percentage, Ratio & Proportion',
+            keywords: ['percentage', 'ratio', 'proportion', 'simple interest', 'compound interest', 'profit', 'loss', 'சதவீதம்', 'விகிதம்', 'தனிவட்டி', 'கூட்டுவட்டி'],
+            baseline_questions: ['apt-1', 'apt-2', 'apt-3'],
+          },
+        ],
+      },
+      {
+        topic_number: 2,
+        macro_topic_name: 'Time, Work & Speed',
+        description: 'Time & Work, Pipes & Cisterns, Speed, Distance & Mensuration',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Time, Work & Mensuration (Area/Volume)',
+            keywords: ['time and work', 'pipes and cisterns', 'speed', 'area', 'perimeter', 'volume', 'நேரம் மற்றும் வேலை', 'பரப்பளவு', 'கனஅளவு'],
+            baseline_questions: ['apt-4', 'apt-5'],
+          },
+        ],
+      },
+      {
+        topic_number: 3,
+        macro_topic_name: 'Logical Reasoning',
+        description: 'Number Series, Puzzles, Dice & Visual Reasoning',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Logical Reasoning & Series',
+            keywords: ['number series', 'reasoning', 'puzzle', 'dice', 'alphabet series', 'coding decoding', 'தருக்க அறிவு', 'எண் தொடர்'],
+            baseline_questions: ['apt-6', 'apt-7'],
+          },
+        ],
+      },
+      {
+        topic_number: 4,
+        macro_topic_name: 'Data Interpretation',
+        description: 'Tables, Bar Graphs, Pie Charts & Mean/Median',
+        micro_topics: [
+          {
+            micro_topic_number: 1,
+            micro_topic_name: 'Charts, Graphs & Data Interpretation',
+            keywords: ['data interpretation', 'pie chart', 'bar graph', 'table', 'mean', 'median', 'mode', 'average', 'வரைபடம்', 'சராசரி'],
+            baseline_questions: ['apt-8', 'apt-9'],
           },
         ],
       },
@@ -371,6 +656,7 @@ export const syllabusAnalyticsService = {
   /**
    * Builds the full 3-level hierarchy (Unit -> Macro-Topic -> Micro-Topic) for a given exam/group,
    * merging live database units/topics/micro-topics with the canonical taxonomy blueprint.
+   * Strictly deduplicates incoming DB units by unit_number to eliminate duplicated cards.
    */
   async buildHierarchy(examName = 'TNPSC Group 4') {
     let dbExam = null
@@ -394,7 +680,7 @@ export const syllabusAnalyticsService = {
         dbUnits = unitsData || []
       }
 
-      // Try fetching micro-topics if migration 00006 has been executed
+      // Try fetching micro-topics if migration has been executed
       const { data: microData, error: microErr } = await supabase
         .from('syllabus_micro_topics')
         .select('*')
@@ -413,16 +699,48 @@ export const syllabusAnalyticsService = {
       microByMacroId.get(mt.macro_topic_id).push(mt)
     })
 
-    // If database has units for this exam, enrich them with micro-topics
-    const rawUnits = dbUnits.length > 0 ? dbUnits : CANONICAL_SYLLABUS_TAXONOMY
+    // Deduplicate dbUnits strictly by unit_number and merge their topics to prevent duplicate rows
+    const unitMap = new Map()
+    for (const u of dbUnits) {
+      const num = u.unit_number
+      if (!num) continue
+      if (!unitMap.has(num)) {
+        unitMap.set(num, { ...u, syllabus_topics: [...(u.syllabus_topics || [])] })
+      } else {
+        const existing = unitMap.get(num)
+        const existingTopicIds = new Set(existing.syllabus_topics.map(t => t.id || t.topic_name))
+        for (const t of (u.syllabus_topics || [])) {
+          if (!existingTopicIds.has(t.id || t.topic_name)) {
+            existing.syllabus_topics.push(t)
+            existingTopicIds.add(t.id || t.topic_name)
+          }
+        }
+      }
+    }
+
+    // Always guarantee all 10 canonical units, merging deduplicated DB unit data if available
+    const rawUnits = CANONICAL_SYLLABUS_TAXONOMY.map((canonicalUnit, uIdx) => {
+      const dbMatch = unitMap.get(canonicalUnit.unit_number)
+      if (dbMatch) {
+        return {
+          ...canonicalUnit,
+          ...dbMatch,
+          unit_name: canonicalUnit.unit_name,
+          syllabus_topics: (dbMatch.syllabus_topics && dbMatch.syllabus_topics.length > 0)
+            ? dbMatch.syllabus_topics
+            : canonicalUnit.macro_topics,
+        }
+      }
+      return canonicalUnit
+    })
 
     const hierarchyUnits = rawUnits.map((u, uIdx) => {
       const canonicalUnit = CANONICAL_SYLLABUS_TAXONOMY.find(
-        cu => norm(cu.unit_name) === norm(u.unit_name) || cu.unit_number === u.unit_number
+        cu => cu.unit_number === u.unit_number || norm(cu.unit_name) === norm(u.unit_name)
       ) || CANONICAL_SYLLABUS_TAXONOMY[uIdx % CANONICAL_SYLLABUS_TAXONOMY.length]
 
       const unitId = u.id || `unit-${u.unit_number || uIdx + 1}`
-      const unitName = u.unit_name || canonicalUnit.unit_name
+      const unitName = canonicalUnit.unit_name
       const unitNumber = u.unit_number ?? canonicalUnit.unit_number ?? (uIdx + 1)
 
       const rawMacros = (u.syllabus_topics && u.syllabus_topics.length > 0)
@@ -434,7 +752,6 @@ export const syllabusAnalyticsService = {
         const macroId = mt.id || `${unitId}-macro-${mt.topic_number || mIdx + 1}`
         const macroNumber = mt.topic_number ?? (mIdx + 1)
 
-        // Find matching canonical macro-topic for rich micro-topics and keyword matchers
         const canonicalMacro = canonicalUnit?.macro_topics?.find(
           cm => norm(cm.macro_topic_name) === norm(macroName) ||
                 norm(macroName).includes(norm(cm.macro_topic_name)) ||
@@ -590,6 +907,7 @@ export const syllabusAnalyticsService = {
   /**
    * Fetches the full Interactive Syllabus hierarchy along with real-time Coverage (%) and Accuracy (%)
    * at every level (Micro-Topic -> Macro-Topic -> Unit -> Exam Summary).
+   * Strictly guarantees 10 units with no duplication.
    */
   async getSyllabusWithAnalytics(userId, examName = 'TNPSC Group 4') {
     // 1. Build 3-level hierarchy
@@ -603,14 +921,13 @@ export const syllabusAnalyticsService = {
     allMicroTopics.forEach(mt => {
       const bankSet = new Set(mt.baseline_questions || [])
       microBuckets.set(mt.micro_topic_id, {
-        bankQuestionIds: bankSet,          // Set of unique question IDs in bank for this micro-topic
-        attemptedQuestionIds: new Set(),   // Set of unique question IDs attempted by user
-        totalAttempts: 0,                  // Total answered attempts in this micro-topic
-        correctAttempts: 0,                // Total correct answers in this micro-topic
+        bankQuestionIds: bankSet,
+        attemptedQuestionIds: new Set(),
+        totalAttempts: 0,
+        correctAttempts: 0,
       })
     })
 
-    // Map question_id -> micro_topic_id and normalized question_text -> question_id
     const questionToMicroMap = new Map()
     const textToQuestionIdMap = new Map()
 
@@ -629,13 +946,12 @@ export const syllabusAnalyticsService = {
       }
     })
 
-    // 2. Fetch questions from DB (questions + recall_questions) & user progress/attempts in parallel
+    // 2. Fetch questions from DB & user progress/attempts in parallel
     const [
       dbQuestionsRes,
       dbRecallQuestionsRes,
       userAttemptsRes,
       userRecallSessionsRes,
-      userProgressRes,
     ] = await Promise.allSettled([
       supabase
         .from('questions')
@@ -660,12 +976,6 @@ export const syllabusAnalyticsService = {
             .select('id, exam_context, questions_json, completed, quick_recall_answers(id, question_index, question_text, selected_answer, is_correct)')
             .eq('user_id', userId)
             .limit(100)
-        : Promise.resolve({ data: [] }),
-      userId
-        ? supabase
-            .from('user_syllabus_progress')
-            .select('*')
-            .eq('user_id', userId)
         : Promise.resolve({ data: [] }),
     ])
 
@@ -703,18 +1013,16 @@ export const syllabusAnalyticsService = {
       }
     })
 
-    // 3. Process User Test Submissions & Attempt Logs (Mock Tests, BYOP Papers, PYQ Papers)
+    // 3. Process User Test Submissions & Attempt Logs
     const userAttempts = userAttemptsRes.status === 'fulfilled' ? (userAttemptsRes.value.data || []) : []
     userAttempts.forEach(attempt => {
       const answers = attempt.attempt_answers || []
       answers.forEach(ans => {
-        // Only count questions actually attempted (where user selected an option)
         if (!ans.selected_option) return
 
         const qId = String(ans.question_id)
         let microId = questionToMicroMap.get(qId)
 
-        // If question wasn't in initial batch, classify using paper subject
         if (!microId) {
           const fallbackMicro = this.classifyQuestionToMicroTopic(
             { id: qId, subject: attempt.papers?.subject, papers: attempt.papers },
@@ -728,11 +1036,8 @@ export const syllabusAnalyticsService = {
 
         if (microId && microBuckets.has(microId)) {
           const bucket = microBuckets.get(microId)
-          // Ensure question is registered in bankQuestionIds so attempted <= total_questions always holds
           bucket.bankQuestionIds.add(qId)
-          // Deduplicate attempted question IDs via Set (avoids coverage > 100%)
           bucket.attemptedQuestionIds.add(qId)
-          // Increment total attempts & correct answers for Accuracy calculation
           bucket.totalAttempts += 1
           if (ans.is_correct === true) {
             bucket.correctAttempts += 1
@@ -741,34 +1046,23 @@ export const syllabusAnalyticsService = {
       })
     })
 
-    // 4. Process Quick Recall Answers into Topic Analytics
+    // 4. Process Quick Recall Answers
     const recallSessions = userRecallSessionsRes.status === 'fulfilled' ? (userRecallSessionsRes.value.data || []) : []
     recallSessions.forEach(session => {
       const answers = session.quick_recall_answers || []
-      const qsJson = Array.isArray(session.questions_json) ? session.questions_json : []
-
       answers.forEach(ans => {
-        if (!ans.selected_answer) return
-        const qSnap = qsJson[ans.question_index] || {}
-        const qTextNorm = norm(ans.question_text || qSnap.question_text)
-        let qId = (qSnap.id && String(qSnap.id)) || textToQuestionIdMap.get(qTextNorm) || `qr-q-${qTextNorm.slice(0, 32)}`
-
-        let microId = questionToMicroMap.get(qId)
-        if (!microId) {
-          const matchedMicro = this.classifyQuestionToMicroTopic(
-            { id: qId, question_text: ans.question_text || qSnap.question_text, subject: qSnap.subject },
-            allMicroTopics
-          )
-          if (matchedMicro) {
-            microId = matchedMicro.micro_topic_id
-            questionToMicroMap.set(qId, microId)
-          }
+        let microId = null
+        if (ans.question_text) {
+          const qId = textToQuestionIdMap.get(norm(ans.question_text))
+          if (qId) microId = questionToMicroMap.get(qId)
+        }
+        if (!microId && ans.question_text) {
+          const matched = this.classifyQuestionToMicroTopic({ question_text: ans.question_text }, allMicroTopics)
+          if (matched) microId = matched.micro_topic_id
         }
 
         if (microId && microBuckets.has(microId)) {
           const bucket = microBuckets.get(microId)
-          bucket.bankQuestionIds.add(qId)
-          bucket.attemptedQuestionIds.add(qId)
           bucket.totalAttempts += 1
           if (ans.is_correct === true) {
             bucket.correctAttempts += 1
@@ -777,127 +1071,113 @@ export const syllabusAnalyticsService = {
       })
     })
 
-    // Manual topic status map (from user_syllabus_progress)
-    const progressRows = userProgressRes.status === 'fulfilled' ? (userProgressRes.value.data || []) : []
-    const manualProgressMap = Object.fromEntries(progressRows.map(p => [p.topic_id, p]))
-
-    // 5. Compute Bottom-Up & Roll-Up Aggregations (Micro-Topic -> Macro-Topic -> Unit -> Exam)
-    const examBankSet = new Set()
-    const examAttemptedSet = new Set()
+    // 5. Roll-up Math: Micro -> Macro -> Unit -> Exam
+    let examTotalQuestions = 0
+    let examAttemptedQuestions = 0
     let examTotalAttempts = 0
     let examCorrectAttempts = 0
 
     const enrichedUnits = hierarchy.units.map(unit => {
-      const unitBankSet = new Set()
-      const unitAttemptedSet = new Set()
+      let unitTotalQuestions = 0
+      let unitAttemptedQuestions = 0
       let unitTotalAttempts = 0
       let unitCorrectAttempts = 0
 
-      const enrichedMacros = unit.macro_topics.map(macro => {
-        const macroBankSet = new Set()
-        const macroAttemptedSet = new Set()
+      const enrichedMacroTopics = unit.macro_topics.map(macro => {
+        let macroTotalQuestions = 0
+        let macroAttemptedQuestions = 0
         let macroTotalAttempts = 0
         let macroCorrectAttempts = 0
 
-        const enrichedMicros = macro.micro_topics.map(micro => {
+        const enrichedMicroTopics = macro.micro_topics.map(micro => {
           const bucket = microBuckets.get(micro.micro_topic_id) || {
-            bankQuestionIds: new Set(),
+            bankQuestionIds: new Set(micro.baseline_questions || []),
             attemptedQuestionIds: new Set(),
             totalAttempts: 0,
             correctAttempts: 0,
           }
 
-          // Roll up sets into Macro, Unit, and Exam
-          bucket.bankQuestionIds.forEach(id => {
-            macroBankSet.add(id)
-            unitBankSet.add(id)
-            examBankSet.add(id)
-          })
-          bucket.attemptedQuestionIds.forEach(id => {
-            macroAttemptedSet.add(id)
-            unitAttemptedSet.add(id)
-            examAttemptedSet.add(id)
-          })
-
-          macroTotalAttempts += bucket.totalAttempts
-          macroCorrectAttempts += bucket.correctAttempts
-          unitTotalAttempts += bucket.totalAttempts
-          unitCorrectAttempts += bucket.correctAttempts
-          examTotalAttempts += bucket.totalAttempts
-          examCorrectAttempts += bucket.correctAttempts
-
-          const totalQuestions = bucket.bankQuestionIds.size
+          const totalQuestions = Math.max(bucket.bankQuestionIds.size, bucket.attemptedQuestionIds.size, 1)
           const attemptedQuestions = bucket.attemptedQuestionIds.size
           const totalAttempts = bucket.totalAttempts
-          const correctQuestions = bucket.correctAttempts
+          const correctAttempts = bucket.correctAttempts
 
           const coveragePct = calcPercentage(attemptedQuestions, totalQuestions, true)
-          const accuracyPct = calcPercentage(correctQuestions, totalAttempts, true)
+          const accuracyPct = calcPercentage(correctAttempts, totalAttempts)
+
+          macroTotalQuestions += totalQuestions
+          macroAttemptedQuestions += attemptedQuestions
+          macroTotalAttempts += totalAttempts
+          macroCorrectAttempts += correctAttempts
 
           return {
             ...micro,
             total_questions: totalQuestions,
             attempted_questions: attemptedQuestions,
             total_attempts: totalAttempts,
-            correct_questions: correctQuestions,
+            correct_attempts: correctAttempts,
             coverage_percentage: coveragePct,
             accuracy_percentage: accuracyPct,
+            status: accuracyPct >= 70 ? 'mastered' : totalAttempts > 0 && accuracyPct < 50 ? 'needs_review' : 'in_progress',
           }
         })
 
-        const macroTotalQuestions = macroBankSet.size
-        const macroAttemptedQuestions = macroAttemptedSet.size
         const macroCoveragePct = calcPercentage(macroAttemptedQuestions, macroTotalQuestions, true)
-        const macroAccuracyPct = calcPercentage(macroCorrectAttempts, macroTotalAttempts, true)
+        const macroAccuracyPct = calcPercentage(macroCorrectAttempts, macroTotalAttempts)
 
-        const manualProg = manualProgressMap[macro.macro_topic_id]
+        unitTotalQuestions += macroTotalQuestions
+        unitAttemptedQuestions += macroAttemptedQuestions
+        unitTotalAttempts += macroTotalAttempts
+        unitCorrectAttempts += macroCorrectAttempts
 
         return {
           ...macro,
-          status: manualProg?.status || (macroCoveragePct >= 80 ? 'completed' : macroCoveragePct > 0 ? 'in_progress' : 'not_started'),
           total_questions: macroTotalQuestions,
           attempted_questions: macroAttemptedQuestions,
           total_attempts: macroTotalAttempts,
-          correct_questions: macroCorrectAttempts,
+          correct_attempts: macroCorrectAttempts,
           coverage_percentage: macroCoveragePct,
           accuracy_percentage: macroAccuracyPct,
-          micro_topics: enrichedMicros,
+          status: macroAccuracyPct >= 70 ? 'mastered' : macroTotalAttempts > 0 && macroAccuracyPct < 50 ? 'needs_review' : 'in_progress',
+          micro_topics: enrichedMicroTopics,
         }
       })
 
-      const unitTotalQuestions = unitBankSet.size
-      const unitAttemptedQuestions = unitAttemptedSet.size
       const unitCoveragePct = calcPercentage(unitAttemptedQuestions, unitTotalQuestions, true)
-      const unitAccuracyPct = calcPercentage(unitCorrectAttempts, unitTotalAttempts, true)
+      const unitAccuracyPct = calcPercentage(unitCorrectAttempts, unitTotalAttempts)
+
+      examTotalQuestions += unitTotalQuestions
+      examAttemptedQuestions += unitAttemptedQuestions
+      examTotalAttempts += unitTotalAttempts
+      examCorrectAttempts += unitCorrectAttempts
 
       return {
         ...unit,
         total_questions: unitTotalQuestions,
         attempted_questions: unitAttemptedQuestions,
         total_attempts: unitTotalAttempts,
-        correct_questions: unitCorrectAttempts,
+        correct_attempts: unitCorrectAttempts,
         coverage_percentage: unitCoveragePct,
         accuracy_percentage: unitAccuracyPct,
-        macro_topics: enrichedMacros,
+        status: unitAccuracyPct >= 70 ? 'mastered' : unitTotalAttempts > 0 && unitAccuracyPct < 50 ? 'weak_zone' : 'in_progress',
+        macro_topics: enrichedMacroTopics,
       }
     })
 
-    const overallTotalQuestions = examBankSet.size
-    const overallAttemptedQuestions = examAttemptedSet.size
-    const overallCoveragePct = calcPercentage(overallAttemptedQuestions, overallTotalQuestions, true)
-    const overallAccuracyPct = calcPercentage(examCorrectAttempts, examTotalAttempts, true)
+    const overallCoveragePct = calcPercentage(examAttemptedQuestions, examTotalQuestions, true)
+    const overallAccuracyPct = calcPercentage(examCorrectAttempts, examTotalAttempts)
 
     return {
-      group_id: hierarchy.group_id,
-      group_name: hierarchy.group_name,
-      total_questions: overallTotalQuestions,
-      attempted_questions: overallAttemptedQuestions,
+      exam_name: examName,
+      total_units: enrichedUnits.length,
+      covered_units: enrichedUnits.length,
+      total_questions: examTotalQuestions,
+      attempted_questions: examAttemptedQuestions,
       total_attempts: examTotalAttempts,
-      correct_questions: examCorrectAttempts,
+      correct_attempts: examCorrectAttempts,
       coverage_percentage: overallCoveragePct,
       accuracy_percentage: overallAccuracyPct,
       units: enrichedUnits,
-      manualProgressMap,
     }
   },
 }
