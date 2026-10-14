@@ -77,29 +77,49 @@ function parseJsonQuestions(rawText) {
   return null
 }
 
-const SYSTEM_INSTRUCTION = `You are an expert educational assessment parser and quiz generator.
-Your role is to analyze examination papers (in Tamil or English, printed or handwritten) and convert the questions into structured interactive practice quiz items for students.
-Important guidelines:
-1. Create an entry for each multiple-choice question found in the document.
-2. Formulate clear, self-contained question stems. Do not reproduce document borders, page numbers, instructions to candidates, or official headers.
-3. Keep the original language (Tamil questions in Tamil, English questions in English).
+const SYSTEM_INSTRUCTION = `You are an expert educational assessment parser and quiz generator specialized in TNPSC and UPSC exams.
+Your role is to analyze examination papers (in Tamil, English, or bilingual printed papers) and convert the questions into structured interactive practice quiz items for students.
+CRITICAL GUIDELINES FOR BILINGUAL PAPERS (Tamil + English):
+1. Many TNPSC papers are bilingual: questions and options appear in BOTH English and Tamil.
+2. For every question:
+   - Extract the English text in "question_text_english".
+   - Extract the Tamil text in "question_text_tamil".
+   - In "question_text", format them cleanly as:
+     "<English Question>\\nதமிழ்: <Tamil Question>"
+   - For options A, B, C, D:
+     If the question has Tamil translations for options, format option_a through option_d as "<English Option> / <Tamil Option>".
+     Also provide pure Tamil text in "option_a_tamil", "option_b_tamil", "option_c_tamil", "option_d_tamil".
+   - If the paper is strictly in a single language (only Tamil or only English), extract that language accurately.
+3. Formulate clear, self-contained question stems. Do not reproduce document borders, page numbers, instructions to candidates, or official headers.
 4. Accurately capture all 4 options (A, B, C, D) and identify the correct option if indicated by tick marks, keys, or standard knowledge.
 5. Provide the output strictly as a JSON array of question objects.`
 
 const PRIMARY_PROMPT = `Analyze the attached PDF exam document and generate a structured student practice quiz dataset.
 Extract each question with its options (A, B, C, D).
-Ensure each question is clear and student-ready:
+IMPORTANT: If the paper is bilingual (English and Tamil), you MUST extract BOTH languages!
+Format the question stem as:
+"<English Question>\\nதமிழ்: <Tamil Question>"
+And options as:
+"<English Option> / <Tamil Option>"
+
 Return a JSON array of objects with the following schema:
 [
   {
     "question_number": 1,
-    "question_text": "<clear question text in original language>",
-    "option_a": "<option A text>",
-    "option_b": "<option B text>",
-    "option_c": "<option C text>",
-    "option_d": "<option D text>",
+    "question_text": "<English question stem>\\nதமிழ்: <Tamil question stem>",
+    "question_text_english": "<English question stem>",
+    "question_text_tamil": "<Tamil question stem>",
+    "option_a": "<English option A> / <Tamil option A>",
+    "option_b": "<English option B> / <Tamil option B>",
+    "option_c": "<English option C> / <Tamil option C>",
+    "option_d": "<English option D> / <Tamil option D>",
+    "option_a_tamil": "<Tamil option A>",
+    "option_b_tamil": "<Tamil option B>",
+    "option_c_tamil": "<Tamil option C>",
+    "option_d_tamil": "<Tamil option D>",
     "correct_option": "<'A', 'B', 'C', 'D' if indicated or known, else null>",
-    "explanation": "<short explanation or empty string>"
+    "explanation": "<short explanation or empty string>",
+    "explanation_tamil": "<Tamil explanation or empty string>"
   }
 ]
 Output valid JSON only.`
@@ -107,15 +127,15 @@ Output valid JSON only.`
 const ANTI_RECITATION_PROMPT = `The previous extraction was flagged by automated recitation filters.
 Please re-generate the practice quiz items from this document with educational paraphrasing:
 1. Rephrase the question stems using your own clear, concise wording so it does not match copyrighted published texts verbatim, while strictly preserving the technical concepts, factual meaning, and correct answer.
-2. Capture options A, B, C, D clearly.
-3. Keep the original language (Tamil in Tamil, English in English).
-4. Output strictly as a valid JSON array of objects.`
+2. If bilingual, provide both English and Tamil: "<English Question>\\nதமிழ்: <Tamil Question>".
+3. Capture options A, B, C, D clearly (e.g. "<English> / <Tamil>").
+4. Output strictly as a valid JSON array of objects matching the schema.`
 
 /**
  * Extracts structured questions from PDF using Gemini Vision with multi-pass anti-recitation defense.
  * Overcomes RECITATION blocks via educational paraphrasing, higher sampling temperature, and model cascade.
  */
-export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-2.5-flash', onStatusUpdate, customApiKey = null) {
+export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-flash-latest', onStatusUpdate, customApiKey = null) {
   const apiKey = (customApiKey && customApiKey.trim().length > 0)
     ? customApiKey.trim()
     : apiKeyService.getUserApiKey()
@@ -131,10 +151,12 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
 
   const candidateList = [
     preferredModel,
-    'gemini-2.5-flash',
     'gemini-flash-latest',
-    'gemini-2.5-flash-lite',
     'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-3-flash-preview',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
     ...availableModels.map((m) => m.id),
   ]
 
@@ -213,22 +235,52 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
 
         const parsed = parseJsonQuestions(rawText)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((q, idx) => ({
-            question_number: q.question_number || idx + 1,
-            question_text: q.question_text || '',
-            tamil_question: q.question_text || '',
-            english_question: '',
-            option_a: q.option_a || '',
-            option_b: q.option_b || '',
-            option_c: q.option_c || '',
-            option_d: q.option_d || '',
-            correct_option: q.correct_option ? String(q.correct_option).toUpperCase().trim() : null,
-            explanation: q.explanation || '',
-            parser_status: 'ready',
-            isValid: true,
-            extraction_status: 'complete',
-            source_page: 1,
-          }))
+          return parsed.map((q, idx) => {
+            const eng = (q.question_text_english || q.english_question || '').trim()
+            const tam = (q.question_text_tamil || q.tamil_question || '').trim()
+            let combined = (q.question_text || '').trim()
+
+            if (eng && tam) {
+              if (!combined.includes('தமிழ்:')) {
+                combined = `${eng}\nதமிழ்: ${tam}`
+              }
+            } else if (!combined) {
+              combined = eng && tam ? `${eng}\nதமிழ்: ${tam}` : (eng || tam || `Question ${idx + 1}`)
+            }
+
+            const formatOpt = (engOpt, tamOpt) => {
+              const e = (engOpt || '').trim()
+              const t = (tamOpt || '').trim()
+              if (!t || t === e) return e || t
+              if (!e) return t
+              if (e.includes(' / ')) return e
+              return `${e} / ${t}`
+            }
+
+            return {
+              question_number: q.question_number || idx + 1,
+              question_text: combined,
+              question_text_english: eng || q.question_text || '',
+              question_text_tamil: tam || '',
+              english_question: eng || q.question_text || '',
+              tamil_question: tam || '',
+              option_a: formatOpt(q.option_a, q.option_a_tamil),
+              option_b: formatOpt(q.option_b, q.option_b_tamil),
+              option_c: formatOpt(q.option_c, q.option_c_tamil),
+              option_d: formatOpt(q.option_d, q.option_d_tamil),
+              option_a_tamil: q.option_a_tamil || '',
+              option_b_tamil: q.option_b_tamil || '',
+              option_c_tamil: q.option_c_tamil || '',
+              option_d_tamil: q.option_d_tamil || '',
+              correct_option: q.correct_option ? String(q.correct_option).toUpperCase().trim() : null,
+              explanation: q.explanation || '',
+              explanation_tamil: q.explanation_tamil || '',
+              parser_status: 'ready',
+              isValid: true,
+              extraction_status: 'complete',
+              source_page: q.source_page || 1,
+            }
+          })
         }
 
         if (candidate?.finishReason === 'RECITATION') {

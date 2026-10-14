@@ -161,7 +161,13 @@ export const questionService = {
         option_c: sanitizeDatabaseText(optC),
         option_d: sanitizeDatabaseText(optD),
         correct_option: validOpt,
-        explanation: sanitizeDatabaseText(q.explanation || q.extraction_notes || null)
+        explanation: sanitizeDatabaseText(q.explanation || q.extraction_notes || null),
+        question_text_tamil: sanitizeDatabaseText(q.question_text_tamil || q.tamil_question || null),
+        option_a_tamil: sanitizeDatabaseText(q.option_a_tamil || null),
+        option_b_tamil: sanitizeDatabaseText(q.option_b_tamil || null),
+        option_c_tamil: sanitizeDatabaseText(q.option_c_tamil || null),
+        option_d_tamil: sanitizeDatabaseText(q.option_d_tamil || null),
+        explanation_tamil: sanitizeDatabaseText(q.explanation_tamil || null)
       }
 
       // Log null byte removal for first few questions

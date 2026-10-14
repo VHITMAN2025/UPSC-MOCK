@@ -407,20 +407,48 @@ function AttemptButton({ paperId, userId }) {
         })
 
         const toSave = rawQuestions
-          .filter(q => q.question_text?.trim() || q.tamil_question?.trim())
-          .map((q, i) => ({
-            question_number: parseInt(String(q.question_number), 10) || i + 1,
-            question_text: [q.tamil_question, q.english_question].filter(Boolean).join('\n').trim()
-                           || q.question_text || `Question ${i + 1}`,
-            option_a: q.option_a || q.options?.A || 'Option A',
-            option_b: q.option_b || q.options?.B || 'Option B',
-            option_c: q.option_c || q.options?.C || 'Option C',
-            option_d: q.option_d || q.options?.D || 'Option D',
-            correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
-              ? (q.correct_option || q.correct_answer)
-              : null,
-            explanation: q.explanation || null,
-          }))
+          .filter(q => q.question_text?.trim() || q.tamil_question?.trim() || q.english_question?.trim())
+          .map((q, i) => {
+            const eng = (q.question_text_english || q.english_question || '').trim()
+            const tam = (q.question_text_tamil || q.tamil_question || '').trim()
+            let combined = (q.question_text || '').trim()
+
+            if (eng && tam) {
+              if (!combined.includes('தமிழ்:')) {
+                combined = `${eng}\nதமிழ்: ${tam}`
+              }
+            } else if (!combined) {
+              combined = eng && tam ? `${eng}\nதமிழ்: ${tam}` : (eng || tam || `Question ${i + 1}`)
+            }
+
+            const formatOpt = (engOpt, tamOpt) => {
+              const e = (engOpt || '').trim()
+              const t = (tamOpt || '').trim()
+              if (!t || t === e) return e || t
+              if (!e) return t
+              if (e.includes(' / ')) return e
+              return `${e} / ${t}`
+            }
+
+            return {
+              question_number: parseInt(String(q.question_number), 10) || i + 1,
+              question_text: combined,
+              question_text_tamil: tam || null,
+              option_a: formatOpt(q.option_a || q.options?.A || 'Option A', q.option_a_tamil),
+              option_b: formatOpt(q.option_b || q.options?.B || 'Option B', q.option_b_tamil),
+              option_c: formatOpt(q.option_c || q.options?.C || 'Option C', q.option_c_tamil),
+              option_d: formatOpt(q.option_d || q.options?.D || 'Option D', q.option_d_tamil),
+              option_a_tamil: q.option_a_tamil || null,
+              option_b_tamil: q.option_b_tamil || null,
+              option_c_tamil: q.option_c_tamil || null,
+              option_d_tamil: q.option_d_tamil || null,
+              correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
+                ? (q.correct_option || q.correct_answer)
+                : null,
+              explanation: q.explanation || null,
+              explanation_tamil: q.explanation_tamil || null,
+            }
+          })
 
         if (toSave.length > 0) {
           await questionService.saveQuestionsToSupabase(newPaper.id, toSave, false)
@@ -661,19 +689,47 @@ export function BYOPPage() {
             })
             newPaperId = newPaper.id
 
-            const toSave = questions.map((q, i) => ({
-              question_number: parseInt(String(q.question_number), 10) || i + 1,
-              question_text:   [q.tamil_question, q.english_question].filter(Boolean).join('\n').trim()
-                               || q.question_text || `Question ${i + 1}`,
-              option_a:        q.option_a || q.options?.A || 'Option A',
-              option_b:        q.option_b || q.options?.B || 'Option B',
-              option_c:        q.option_c || q.options?.C || 'Option C',
-              option_d:        q.option_d || q.options?.D || 'Option D',
-              correct_option:  ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
-                ? (q.correct_option || q.correct_answer)
-                : null,
-              explanation:     q.explanation || null,
-            }))
+            const toSave = questions.map((q, i) => {
+              const eng = (q.question_text_english || q.english_question || '').trim()
+              const tam = (q.question_text_tamil || q.tamil_question || '').trim()
+              let combined = (q.question_text || '').trim()
+
+              if (eng && tam) {
+                if (!combined.includes('தமிழ்:')) {
+                  combined = `${eng}\nதமிழ்: ${tam}`
+                }
+              } else if (!combined) {
+                combined = eng && tam ? `${eng}\nதமிழ்: ${tam}` : (eng || tam || `Question ${i + 1}`)
+              }
+
+              const formatOpt = (engOpt, tamOpt) => {
+                const e = (engOpt || '').trim()
+                const t = (tamOpt || '').trim()
+                if (!t || t === e) return e || t
+                if (!e) return t
+                if (e.includes(' / ')) return e
+                return `${e} / ${t}`
+              }
+
+              return {
+                question_number: parseInt(String(q.question_number), 10) || i + 1,
+                question_text: combined,
+                question_text_tamil: tam || null,
+                option_a: formatOpt(q.option_a || q.options?.A || 'Option A', q.option_a_tamil),
+                option_b: formatOpt(q.option_b || q.options?.B || 'Option B', q.option_b_tamil),
+                option_c: formatOpt(q.option_c || q.options?.C || 'Option C', q.option_c_tamil),
+                option_d: formatOpt(q.option_d || q.options?.D || 'Option D', q.option_d_tamil),
+                option_a_tamil: q.option_a_tamil || null,
+                option_b_tamil: q.option_b_tamil || null,
+                option_c_tamil: q.option_c_tamil || null,
+                option_d_tamil: q.option_d_tamil || null,
+                correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
+                  ? (q.correct_option || q.correct_answer)
+                  : null,
+                explanation: q.explanation || null,
+                explanation_tamil: q.explanation_tamil || null,
+              }
+            })
 
             await questionService.saveQuestionsToSupabase(newPaper.id, toSave, false)
           } catch (autoCreateErr) {
@@ -1157,20 +1213,48 @@ export function BYOPPage() {
 
       // Save to questions table (flat schema)
       const toSave = editedQuestions
-        .filter(q => q.question_text?.trim() || q.tamil_question?.trim())
-        .map((q, i) => ({
-          question_number: parseInt(String(q.question_number), 10) || i + 1,
-          question_text:   [q.tamil_question, q.english_question].filter(Boolean).join('\n').trim()
-                           || q.question_text || `Question ${i + 1}`,
-          option_a:        q.option_a || q.options?.A || 'Option A',
-          option_b:        q.option_b || q.options?.B || 'Option B',
-          option_c:        q.option_c || q.options?.C || 'Option C',
-          option_d:        q.option_d || q.options?.D || 'Option D',
-          correct_option:  ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
-            ? (q.correct_option || q.correct_answer)
-            : null,
-          explanation:     q.explanation || null,
-        }))
+        .filter(q => q.question_text?.trim() || q.tamil_question?.trim() || q.english_question?.trim())
+        .map((q, i) => {
+          const eng = (q.question_text_english || q.english_question || '').trim()
+          const tam = (q.question_text_tamil || q.tamil_question || '').trim()
+          let combined = (q.question_text || '').trim()
+
+          if (eng && tam) {
+            if (!combined.includes('தமிழ்:')) {
+              combined = `${eng}\nதமிழ்: ${tam}`
+            }
+          } else if (!combined) {
+            combined = eng && tam ? `${eng}\nதமிழ்: ${tam}` : (eng || tam || `Question ${i + 1}`)
+          }
+
+          const formatOpt = (engOpt, tamOpt) => {
+            const e = (engOpt || '').trim()
+            const t = (tamOpt || '').trim()
+            if (!t || t === e) return e || t
+            if (!e) return t
+            if (e.includes(' / ')) return e
+            return `${e} / ${t}`
+          }
+
+          return {
+            question_number: parseInt(String(q.question_number), 10) || i + 1,
+            question_text: combined,
+            question_text_tamil: tam || null,
+            option_a: formatOpt(q.option_a || q.options?.A || 'Option A', q.option_a_tamil),
+            option_b: formatOpt(q.option_b || q.options?.B || 'Option B', q.option_b_tamil),
+            option_c: formatOpt(q.option_c || q.options?.C || 'Option C', q.option_c_tamil),
+            option_d: formatOpt(q.option_d || q.options?.D || 'Option D', q.option_d_tamil),
+            option_a_tamil: q.option_a_tamil || null,
+            option_b_tamil: q.option_b_tamil || null,
+            option_c_tamil: q.option_c_tamil || null,
+            option_d_tamil: q.option_d_tamil || null,
+            correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
+              ? (q.correct_option || q.correct_answer)
+              : null,
+            explanation: q.explanation || null,
+            explanation_tamil: q.explanation_tamil || null,
+          }
+        })
 
       await questionService.saveQuestionsToSupabase(targetPaperId, toSave, false)
 
