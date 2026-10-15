@@ -87,6 +87,13 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
                 ⚠️ {question.warnings[0]}
               </p>
             )}
+            {(question.unit_name || question.micro_topic_name) && (
+              <div className="flex items-center gap-1 text-[9px] text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 mt-1 w-fit max-w-full truncate">
+                <span className="font-bold text-purple-900">L1:</span> {question.unit_name?.split('—')?.[0]?.trim() || question.unit_name || 'Unit'} ›
+                <span className="font-bold text-purple-900">L2:</span> {question.macro_topic_name || 'Macro'} ›
+                <span className="font-bold text-purple-900">L3:</span> {question.micro_topic_name || 'Micro'}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">

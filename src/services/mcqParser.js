@@ -30,6 +30,17 @@
  */
 
 import { groupItemsByLine, reconstructLineText, findNearbyItems } from './pdfTextExtractor'
+import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabusAnalyticsService.js'
+
+const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
+  u.macro_topics.flatMap(mt =>
+    mt.micro_topics.map(m => ({
+      ...m,
+      unit_name: u.unit_name,
+      macro_topic_name: mt.macro_topic_name,
+    }))
+  )
+)
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const TICK_MARKS = ['✓', '✔', '☑', '√', '✅', '☒']
@@ -474,6 +485,17 @@ function finalizeQuestion(question, pageItems, globalWarnings, processingJobId) 
     console.log(`  Correct: ${question.correct_answer || 'none'}`)
     console.log(`  Status: ${question.parser_status}`)
     console.log(`  Warnings: ${question.warnings.join(', ') || 'none'}`)
+  }
+
+  // Automatic 3-Level Syllabus Categorization
+  const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(
+    { question_text: question.question_text, ...question },
+    CANONICAL_MICROS
+  )
+  if (matched) {
+    question.unit_name = matched.unit_name
+    question.macro_topic_name = matched.macro_topic_name
+    question.micro_topic_name = matched.micro_topic_name
   }
 
   // Cleanup internal fields

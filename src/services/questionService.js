@@ -1,4 +1,15 @@
 import { supabase } from '../lib/supabase.js'
+import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabusAnalyticsService.js'
+
+const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
+  u.macro_topics.flatMap(mt =>
+    mt.micro_topics.map(m => ({
+      ...m,
+      unit_name: u.unit_name,
+      macro_topic_name: mt.macro_topic_name,
+    }))
+  )
+)
 
 export const questionService = {
   async getQuestionsByPaperId(paperId, isExamMode = false) {
@@ -131,7 +142,7 @@ export const questionService = {
       if (delErr) throw delErr
     }
 
-    // 2. Map frontend fields to actual Supabase database schema
+    // 2. Map frontend fields to actual Supabase database schema with automatic 3-level taxonomy classification
     const formattedList = questionsList.map((q, idx) => {
       const opt = q.correct_option || q.marked_answer ? String(q.correct_option || q.marked_answer).toUpperCase().trim() : null
       const validOpt = ['A', 'B', 'C', 'D'].includes(opt) ? opt : null
@@ -151,6 +162,40 @@ export const questionService = {
         })
       }
 
+      // Automatic 3-Level Syllabus Categorization
+      // Level 1: Unit, Level 2: Macro-Topic, Level 3: Micro-Topic
+      let unitName = q.unit_name || null
+      let macroName = q.macro_topic_name || null
+      let microName = q.micro_topic_name || null
+
+      if (!unitName || !macroName || !microName) {
+        const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(q, CANONICAL_MICROS)
+        if (matched) {
+          unitName = unitName || matched.unit_name
+          macroName = macroName || matched.macro_topic_name
+          microName = microName || matched.micro_topic_name
+        }
+      }
+
+      // Default fallbacks if still unmapped
+      unitName = unitName || 'Unit 1 — General Science'
+      macroName = macroName || 'General Studies'
+      microName = microName || 'General Concepts'
+
+      // Embed taxonomy tag in explanation as resilient guarantee
+      let baseExplanation = sanitizeDatabaseText(q.explanation || q.extraction_notes || '') || ''
+      if (!baseExplanation.includes('[Taxonomy:')) {
+        const taxPrefix = `[Taxonomy: ${unitName} > ${macroName} > ${microName}]`
+        baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
+      }
+
+      const qTags = Array.from(new Set([
+        ...(Array.isArray(q.tags) ? q.tags : []),
+        microName,
+        macroName,
+        unitName,
+      ].filter(Boolean)))
+
       // CRITICAL: Sanitize all text fields to remove null bytes before database insert
       const sanitized = {
         paper_id: paperId,
@@ -161,13 +206,18 @@ export const questionService = {
         option_c: sanitizeDatabaseText(optC),
         option_d: sanitizeDatabaseText(optD),
         correct_option: validOpt,
-        explanation: sanitizeDatabaseText(q.explanation || q.extraction_notes || null),
+        explanation: baseExplanation,
         question_text_tamil: sanitizeDatabaseText(q.question_text_tamil || q.tamil_question || null),
         option_a_tamil: sanitizeDatabaseText(q.option_a_tamil || null),
         option_b_tamil: sanitizeDatabaseText(q.option_b_tamil || null),
         option_c_tamil: sanitizeDatabaseText(q.option_c_tamil || null),
         option_d_tamil: sanitizeDatabaseText(q.option_d_tamil || null),
-        explanation_tamil: sanitizeDatabaseText(q.explanation_tamil || null)
+        explanation_tamil: sanitizeDatabaseText(q.explanation_tamil || null),
+        unit_name: unitName,
+        macro_topic_name: macroName,
+        micro_topic_name: microName,
+        difficulty_level: q.difficulty_level || 'Medium',
+        tags: qTags,
       }
 
       // Log null byte removal for first few questions
@@ -201,10 +251,23 @@ export const questionService = {
     for (let i = 0; i < uniqueList.length; i += BATCH_SIZE) {
       const batch = uniqueList.slice(i, i + BATCH_SIZE)
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('questions')
         .upsert(batch, { onConflict: 'paper_id,question_number' })
         .select()
+
+      // Resilient fallback: if Supabase returns code 42703 (undefined column) or message indicates column does not exist,
+      // strip taxonomy columns and upsert base fields without crashing
+      if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
+        console.warn(`[questionService] Taxonomy columns missing in DB schema, falling back to base question schema:`, error.message)
+        const strippedBatch = batch.map(({ unit_name, macro_topic_name, micro_topic_name, difficulty_level, tags, ...rest }) => rest)
+        const retryRes = await supabase
+          .from('questions')
+          .upsert(strippedBatch, { onConflict: 'paper_id,question_number' })
+          .select()
+        data = retryRes.data
+        error = retryRes.error
+      }
 
       if (error) {
         console.error(`[questionService] Batch insert error at index ${i}:`, {

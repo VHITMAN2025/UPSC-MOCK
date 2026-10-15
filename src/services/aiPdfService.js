@@ -1,5 +1,16 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { apiKeyService } from './apiKeyService.js'
+import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabusAnalyticsService.js'
+
+const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
+  u.macro_topics.flatMap(mt =>
+    mt.micro_topics.map(m => ({
+      ...m,
+      unit_name: u.unit_name,
+      macro_topic_name: mt.macro_topic_name,
+    }))
+  )
+)
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -85,20 +96,24 @@ CRITICAL GUIDELINES FOR BILINGUAL PAPERS (Tamil + English):
    - Extract the English text in "question_text_english".
    - Extract the Tamil text in "question_text_tamil".
    - In "question_text", format them cleanly as:
-     "<English Question>\\nதமிழ்: <Tamil Question>"
+     "<English Question>\nதமிழ்: <Tamil Question>"
    - For options A, B, C, D:
      If the question has Tamil translations for options, format option_a through option_d as "<English Option> / <Tamil Option>".
      Also provide pure Tamil text in "option_a_tamil", "option_b_tamil", "option_c_tamil", "option_d_tamil".
    - If the paper is strictly in a single language (only Tamil or only English), extract that language accurately.
 3. Formulate clear, self-contained question stems. Do not reproduce document borders, page numbers, instructions to candidates, or official headers.
 4. Accurately capture all 4 options (A, B, C, D) and identify the correct option if indicated by tick marks, keys, or standard knowledge.
-5. Provide the output strictly as a JSON array of question objects.`
+5. Provide the output strictly as a JSON array of question objects.
+6. Categorize each question into the 3-level TNPSC General Studies syllabus taxonomy:
+   - unit_name: Level 1 Unit (e.g. 'Unit 1 — General Science', 'Unit 2 — Geography of India & Tamil Nadu', 'Unit 3 — Indian National Movement', 'Unit 4 — Indian Culture & Heritage', 'Unit 5 — Indian Polity', 'Unit 6 — Geography & Environment', 'Unit 7 — Indian Economy', 'Unit 8 — History & Culture of Tamil Nadu', 'Unit 9 — Tamil Nadu Administration & Schemes', 'Unit 10 — Aptitude & Mental Ability')
+   - macro_topic_name: Level 2 Macro-Topic (e.g. 'Physics', 'Chemistry', 'Biology', 'Indian Physical Geography', 'Constitution & Governance', etc.)
+   - micro_topic_name: Level 3 Micro-Topic (Exact chapter/topic, e.g. 'Mechanics, Force, Motion & Properties of Matter', 'Fundamental Rights & Duties', 'Percentage & Ratio')`
 
 const PRIMARY_PROMPT = `Analyze the attached PDF exam document and generate a structured student practice quiz dataset.
 Extract each question with its options (A, B, C, D).
 IMPORTANT: If the paper is bilingual (English and Tamil), you MUST extract BOTH languages!
 Format the question stem as:
-"<English Question>\\nதமிழ்: <Tamil Question>"
+"<English Question>\nதமிழ்: <Tamil Question>"
 And options as:
 "<English Option> / <Tamil Option>"
 
@@ -106,7 +121,7 @@ Return a JSON array of objects with the following schema:
 [
   {
     "question_number": 1,
-    "question_text": "<English question stem>\\nதமிழ்: <Tamil question stem>",
+    "question_text": "<English question stem>\nதமிழ்: <Tamil question stem>",
     "question_text_english": "<English question stem>",
     "question_text_tamil": "<Tamil question stem>",
     "option_a": "<English option A> / <Tamil option A>",
@@ -119,7 +134,10 @@ Return a JSON array of objects with the following schema:
     "option_d_tamil": "<Tamil option D>",
     "correct_option": "<'A', 'B', 'C', 'D' if indicated or known, else null>",
     "explanation": "<short explanation or empty string>",
-    "explanation_tamil": "<Tamil explanation or empty string>"
+    "explanation_tamil": "<Tamil explanation or empty string>",
+    "unit_name": "<Level 1: Unit, e.g. Unit 1 — General Science>",
+    "macro_topic_name": "<Level 2: Macro-Topic, e.g. Physics>",
+    "micro_topic_name": "<Level 3: Micro-Topic, e.g. Mechanics, Force, Motion & Properties of Matter>"
   }
 ]
 Output valid JSON only.`
@@ -252,10 +270,18 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
               const e = (engOpt || '').trim()
               const t = (tamOpt || '').trim()
               if (!t || t === e) return e || t
-              if (!e) return t
               if (e.includes(' / ')) return e
               return `${e} / ${t}`
             }
+
+            const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(
+              { question_text: combined, ...q },
+              CANONICAL_MICROS
+            )
+
+            const unitName = q.unit_name || matched?.unit_name || 'Unit 1 — General Science'
+            const macroName = q.macro_topic_name || matched?.macro_topic_name || 'General Studies'
+            const microName = q.micro_topic_name || matched?.micro_topic_name || 'General Concepts'
 
             return {
               question_number: q.question_number || idx + 1,
@@ -275,6 +301,10 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
               correct_option: q.correct_option ? String(q.correct_option).toUpperCase().trim() : null,
               explanation: q.explanation || '',
               explanation_tamil: q.explanation_tamil || '',
+              unit_name: unitName,
+              macro_topic_name: macroName,
+              micro_topic_name: microName,
+              tags: Array.from(new Set([...(q.tags || []), microName, macroName, unitName])),
               parser_status: 'ready',
               isValid: true,
               extraction_status: 'complete',

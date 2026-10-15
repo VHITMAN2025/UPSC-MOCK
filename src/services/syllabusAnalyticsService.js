@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase.js'
 const FALLBACK_RECALL_POOL = []
 
 /**

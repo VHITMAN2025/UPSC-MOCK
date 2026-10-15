@@ -291,6 +291,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                 <tr className="border-b border-surface-border text-left text-body-secondary">
                   <th className="py-2 px-3 font-bold">#</th>
                   <th className="py-2 px-3 font-bold">Question</th>
+                  <th className="py-2 px-3 font-bold">Taxonomy (L1 › L2 › L3)</th>
                   <th className="py-2 px-3 font-bold">A</th>
                   <th className="py-2 px-3 font-bold">B</th>
                   <th className="py-2 px-3 font-bold">C</th>
@@ -304,6 +305,11 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                   <tr key={idx} className="border-b border-surface-border">
                     <td className="py-2 px-3">{idx + 1}</td>
                     <td className="py-2 px-3">{row.question_text.slice(0, 40)}...</td>
+                    <td className="py-2 px-3">
+                      <span className="text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-100/80 rounded px-1.5 py-0.5 whitespace-nowrap">
+                        {row.unit_name?.split('—')?.[0]?.trim() || 'Unit'} › {row.macro_topic_name || 'Macro'} › {row.micro_topic_name || 'Micro'}
+                      </span>
+                    </td>
                     <td className="py-2 px-3">{row.option_a?.slice(0, 20)}</td>
                     <td className="py-2 px-3">{row.option_b?.slice(0, 20)}</td>
                     <td className="py-2 px-3">{row.option_c?.slice(0, 20)}</td>

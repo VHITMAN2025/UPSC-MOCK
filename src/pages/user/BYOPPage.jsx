@@ -199,6 +199,13 @@ function QuestionsPanel({ questions, onSave, saving }) {
                         {q.english_question.slice(0, 80)}{q.english_question.length > 80 ? '…' : ''}
                       </p>
                     )}
+                    {(q.unit_name || q.micro_topic_name) && (
+                      <div className="flex items-center gap-1 text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-100/80 rounded px-1.5 py-0.5 mt-1 w-fit max-w-full truncate">
+                        <span className="font-bold text-indigo-900">L1:</span> {q.unit_name?.split('—')?.[0]?.trim() || q.unit_name || 'Unit'} ›
+                        <span className="font-bold text-indigo-900">L2:</span> {q.macro_topic_name || 'Macro'} ›
+                        <span className="font-bold text-indigo-900">L3:</span> {q.micro_topic_name || 'Micro'}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -272,6 +279,46 @@ function QuestionsPanel({ questions, onSave, saving }) {
                         />
                       </div>
                     ))}
+                  </div>
+
+                  {/* 3-Level Syllabus Taxonomy */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100/70">
+                    <div>
+                      <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
+                        Level 1: Unit
+                      </label>
+                      <input
+                        type="text"
+                        value={q.unit_name ?? ''}
+                        onChange={e => editQuestion(idx, 'unit_name', e.target.value)}
+                        className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="e.g. Unit 1 — General Science"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
+                        Level 2: Macro-Topic
+                      </label>
+                      <input
+                        type="text"
+                        value={q.macro_topic_name ?? ''}
+                        onChange={e => editQuestion(idx, 'macro_topic_name', e.target.value)}
+                        className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="e.g. Physics"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
+                        Level 3: Micro-Topic
+                      </label>
+                      <input
+                        type="text"
+                        value={q.micro_topic_name ?? ''}
+                        onChange={e => editQuestion(idx, 'micro_topic_name', e.target.value)}
+                        className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="e.g. Mechanics & Properties of Matter"
+                      />
+                    </div>
                   </div>
 
                   {/* Correct option selector */}
