@@ -7,6 +7,8 @@ import {
   ShieldCheck, ClipboardList, Menu, X,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { useApp } from '../../contexts/AppContext'
+import { apiKeyService } from '../../services/apiKeyService'
 import { cn } from '../../lib/utils'
 
 const SECTIONS = [
@@ -38,37 +40,55 @@ const SECTIONS = [
       { label: 'Users',          path: '/admin/users',      icon: Users },
       { label: 'Analytics',      path: '/admin/analytics',  icon: BarChart3 },
       { label: 'Attempts',       path: '/admin/attempts',   icon: ClipboardList },
+      { label: 'Settings',       path: '/admin/settings',   icon: Settings, isSettings: true },
     ],
   },
 ]
 
-function NavItem({ item, collapsed }) {
+function NavItem({ item, collapsed, missingApiKey }) {
   const location = useLocation()
   const active = item.exact
     ? location.pathname === item.path
     : location.pathname.startsWith(item.path)
   const Icon = item.icon
+  const showWarning = item.isSettings && missingApiKey
 
   return (
     <Link
       to={item.path}
-      title={collapsed ? item.label : undefined}
+      title={collapsed ? (showWarning ? `${item.label} (Action Required: Key Missing)` : item.label) : undefined}
       className={cn(
-        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
+        'relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
         collapsed && 'justify-center px-2',
         active
           ? 'bg-tnpsc-brand text-white shadow-brand'
           : 'text-tnpsc-sidebar-text hover:bg-tnpsc-sidebar-item hover:text-white'
       )}
     >
-      <Icon className="w-4 h-4 shrink-0" />
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      <div className="relative">
+        <Icon className="w-4 h-4 shrink-0" />
+        {showWarning && (
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-tnpsc-sidebar animate-pulse" />
+        )}
+      </div>
+      {!collapsed && (
+        <div className="flex items-center justify-between flex-1 min-w-0">
+          <span className="truncate">{item.label}</span>
+          {showWarning && (
+            <span className="ml-1.5 px-1.5 py-0.2 text-[9px] font-extrabold uppercase bg-amber-500 text-amber-950 rounded">
+              Setup
+            </span>
+          )}
+        </div>
+      )}
     </Link>
   )
 }
 
 export function AdminSidebar({ mobileOpen, onMobileClose }) {
   const { profile, logout } = useAuth()
+  const { hasGeminiApiKey } = useApp()
+  const missingApiKey = !hasGeminiApiKey && !apiKeyService.hasUserApiKey()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
 
@@ -106,7 +126,7 @@ export function AdminSidebar({ mobileOpen, onMobileClose }) {
             )}
             <div className="space-y-0.5">
               {section.items.map(item => (
-                <NavItem key={item.path} item={item} collapsed={collapsed} />
+                <NavItem key={item.path} item={item} collapsed={collapsed} missingApiKey={missingApiKey} />
               ))}
             </div>
           </div>

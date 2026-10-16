@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { syllabusAnalyticsService, CANONICAL_SYLLABUS_TAXONOMY } from './syllabusAnalyticsService.js'
+import { apiKeyService } from './apiKeyService.js'
 
 // ─── Dashboard stats ──────────────────────────────────────────────────────────
 export const adminStatsService = {
@@ -50,6 +51,12 @@ export const adminStatsService = {
 
     // Alerts
     const alerts = []
+    if (!apiKeyService.hasUserApiKey()) {
+      alerts.push({
+        type: 'warning',
+        msg: 'Google Gemini API Key is not configured — AI Question Extraction, Syllabus Classification, and AI Tutor require a key in Admin Settings.'
+      })
+    }
     const expiring = notifs.filter(n => {
       if (!n.application_end) return false
       const d = new Date(n.application_end)

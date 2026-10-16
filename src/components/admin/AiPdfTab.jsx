@@ -70,7 +70,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
 
     const activeKey = geminiApiKey || apiKeyService.getUserApiKey()
     if (!activeKey) {
-      toast.error('Google Gemini API Key is required. Please configure your key in Profile & Settings.')
+      toast.error('Google Gemini API Key is required. Please configure your key in Admin Settings.')
       return
     }
 
@@ -101,7 +101,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     } catch (err) {
       console.error(err)
       if (err.message === 'NO_API_KEY_CONFIGURED' || err.code === 'NO_API_KEY_CONFIGURED') {
-        toast.error('Gemini API key is missing. Please configure your key in Profile & Settings.')
+        toast.error('Gemini API key is missing. Please configure your key in Admin Settings.')
       } else {
         toast.error(err.message || 'Failed to process PDF.')
       }
@@ -222,7 +222,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
             </div>
           </div>
           <Link
-            to="/profile#api-key"
+            to="/admin/settings"
             className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors shadow-subtle"
           >
             Configure Key →

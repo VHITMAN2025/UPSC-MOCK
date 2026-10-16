@@ -8,6 +8,7 @@ import {
 import { adminStatsService } from '../../services/adminService'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
+import { apiKeyService } from '../../services/apiKeyService'
 
 const STAT_CARDS = (s) => [
   { label: 'Total Papers',    value: s.totalPapers,    sub: `${s.publishedPapers} published · ${s.draftPapers} drafts`, icon: FileText,  color: 'text-blue-700 bg-blue-50' },
@@ -34,9 +35,11 @@ const ALERT_BG  = { error: 'bg-red-50 border-red-200', warning: 'bg-amber-50 bor
 
 export function AdminDashboard() {
   const { profile } = useAuth()
-  const { toast }   = useApp()
+  const { toast, hasGeminiApiKey } = useApp()
   const [stats, setStats]   = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const isKeyConfigured = Boolean(hasGeminiApiKey || apiKeyService.hasUserApiKey())
 
   useEffect(() => { load() }, [])
 
@@ -65,6 +68,29 @@ export function AdminDashboard() {
         </div>
         <button onClick={load} className="text-xs text-tnpsc-brand hover:underline font-semibold">Refresh</button>
       </div>
+
+      {/* Missing Gemini API Key Warning Card */}
+      {!isKeyConfigured && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-subtle">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-amber-950">Google Gemini API Key Required</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                AI question extraction, syllabus unit categorization, and AI mentor features require a Gemini API key. Configure it once in Settings to activate AI across the entire platform.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/settings"
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shrink-0 transition-colors shadow-subtle text-center whitespace-nowrap"
+          >
+            Configure in Settings →
+          </Link>
+        </div>
+      )}
 
       {/* Alerts */}
       {stats?.alerts?.length > 0 && (

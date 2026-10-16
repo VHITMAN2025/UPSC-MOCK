@@ -278,7 +278,7 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
     if (mode === 'ai') {
       const activeKey = geminiApiKey || apiKeyService.getUserApiKey()
       if (!activeKey) {
-        toast.error('Google Gemini API Key is required for AI extraction. Please configure your key in Profile & Settings.')
+        toast.error('Google Gemini API Key is required for AI extraction. Please configure your key in Admin Settings.')
         return
       }
     }
@@ -354,7 +354,7 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
           toast.error('PDF contains no selectable text. Switching to Gemini AI extraction...')
           return handleExtract('ai')
         } else {
-          toast.error('PDF contains no selectable text. Configure your Gemini API key in Profile & Settings to extract with AI.')
+          toast.error('PDF contains no selectable text. Configure your Gemini API key in Admin Settings to extract with AI.')
           return
         }
       }
@@ -553,7 +553,7 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
             </div>
           </div>
           <Link
-            to="/profile#api-key"
+            to="/admin/settings"
             className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors shadow-subtle"
           >
             Configure Key →

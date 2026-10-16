@@ -93,15 +93,26 @@ export function AppProvider({ children }) {
     if (profile?.selected_exam)        setSelectedExamState(profile.selected_exam)
     if (profile?.preferred_language)   setLanguageState(profile.preferred_language)
     if (profile?.group2_language_pref) setGroup2LanguagePrefState(profile.group2_language_pref)
+    
     if (profile?.gemini_api_key) {
       apiKeyService.setCachedProfileKey(profile.gemini_api_key)
+      if (profile.role === 'admin') {
+        apiKeyService.setCachedAdminKey(profile.gemini_api_key)
+      }
       setGeminiApiKeyState(profile.gemini_api_key)
     } else {
-      // Check local storage
+      // Check local storage or query platform admin key fallback
       const local = apiKeyService.getUserApiKey()
-      if (local) setGeminiApiKeyState(local)
+      if (local) {
+        setGeminiApiKeyState(local)
+      } else {
+        // Fall back to platform admin key so entire platform can work seamlessly
+        apiKeyService.syncPlatformAdminKey().then(adminKey => {
+          if (adminKey) setGeminiApiKeyState(adminKey)
+        })
+      }
     }
-  }, [profile?.selected_exam, profile?.preferred_language, profile?.group2_language_pref, profile?.gemini_api_key])
+  }, [profile?.selected_exam, profile?.preferred_language, profile?.group2_language_pref, profile?.gemini_api_key, profile?.role])
 
   // Persist exam selection to Supabase profile
   const setSelectedExam = useCallback(async (exam) => {
@@ -127,17 +138,19 @@ export function AppProvider({ children }) {
     }
   }, [user?.id])
 
-  // Save personal Gemini API key
-  const saveGeminiApiKey = useCallback(async (key) => {
-    await apiKeyService.saveUserApiKey(key, user?.id)
+  // Save personal or platform Gemini API key
+  const saveGeminiApiKey = useCallback(async (key, forceAdmin = false) => {
+    const isAdmin = forceAdmin || profile?.role === 'admin'
+    await apiKeyService.saveUserApiKey(key, user?.id, isAdmin)
     setGeminiApiKeyState(key ? key.trim() : null)
-  }, [user?.id])
+  }, [user?.id, profile?.role])
 
-  // Remove personal Gemini API key
-  const removeGeminiApiKey = useCallback(async () => {
-    await apiKeyService.removeUserApiKey(user?.id)
+  // Remove Gemini API key
+  const removeGeminiApiKey = useCallback(async (forceAdmin = false) => {
+    const isAdmin = forceAdmin || profile?.role === 'admin'
+    await apiKeyService.removeUserApiKey(user?.id, isAdmin)
     setGeminiApiKeyState(null)
-  }, [user?.id])
+  }, [user?.id, profile?.role])
 
   const hasGeminiApiKey = Boolean(geminiApiKey && geminiApiKey.length > 5)
 

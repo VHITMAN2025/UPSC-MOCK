@@ -2,7 +2,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { supabase } from '../lib/supabase.js'
 
 const LOCAL_STORAGE_KEY = 'vina_gemini_api_key'
+const ADMIN_STORAGE_KEY = 'vina_admin_gemini_api_key'
 let _cachedProfileKey = null
+let _cachedAdminKey = null
 
 export const apiKeyService = {
   /**
@@ -13,9 +15,27 @@ export const apiKeyService = {
   },
 
   /**
-   * Retrieves user's Gemini API key from local storage or cached profile.
-   * Does NOT fall back to shared server key if user has not configured their own,
-   * enforcing the requirement: "if user is not provided API key, tell him to provide it first".
+   * Updates in-memory admin/platform key cache
+   */
+  setCachedAdminKey(key) {
+    _cachedAdminKey = key ? key.trim() : null
+    if (key && key.trim()) {
+      try {
+        localStorage.setItem(ADMIN_STORAGE_KEY, key.trim())
+      } catch {}
+    }
+  },
+
+  /**
+   * Retrieves active Gemini API key:
+   * 1. User's local storage key
+   * 2. User's cached profile key
+   * 3. Admin / platform local storage key
+   * 4. Admin / platform cached profile key
+   *
+   * This ensures that when an admin configures an API key in Admin Settings,
+   * the entire project works on that key while still allowing individual users
+   * to override with their own personal key if provided.
    */
   getUserApiKey() {
     try {
@@ -29,11 +49,22 @@ export const apiKeyService = {
       return _cachedProfileKey.trim()
     }
 
+    try {
+      const adminLocal = localStorage.getItem(ADMIN_STORAGE_KEY)
+      if (adminLocal && adminLocal.trim().length > 0) {
+        return adminLocal.trim()
+      }
+    } catch {}
+
+    if (_cachedAdminKey && _cachedAdminKey.trim().length > 0) {
+      return _cachedAdminKey.trim()
+    }
+
     return null
   },
 
   /**
-   * Checks whether the user has configured their Gemini API key.
+   * Checks whether an API key is configured.
    */
   hasUserApiKey() {
     const key = this.getUserApiKey()
@@ -41,18 +72,26 @@ export const apiKeyService = {
   },
 
   /**
-   * Saves user's API key to local storage and optionally to Supabase profile.
+   * Saves API key to local storage and optionally to Supabase profile.
+   * If isAdmin is true or userId belongs to an admin, also persists as platform admin key.
    */
-  async saveUserApiKey(key, userId = null) {
+  async saveUserApiKey(key, userId = null, isAdmin = false) {
     const trimmed = (key || '').trim()
     if (!trimmed) {
-      return this.removeUserApiKey(userId)
+      return this.removeUserApiKey(userId, isAdmin)
     }
 
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, trimmed)
+      if (isAdmin) {
+        localStorage.setItem(ADMIN_STORAGE_KEY, trimmed)
+      }
     } catch {}
+
     _cachedProfileKey = trimmed
+    if (isAdmin) {
+      _cachedAdminKey = trimmed
+    }
 
     if (userId) {
       try {
@@ -72,11 +111,18 @@ export const apiKeyService = {
   /**
    * Removes user's API key.
    */
-  async removeUserApiKey(userId = null) {
+  async removeUserApiKey(userId = null, isAdmin = false) {
     try {
       localStorage.removeItem(LOCAL_STORAGE_KEY)
+      if (isAdmin) {
+        localStorage.removeItem(ADMIN_STORAGE_KEY)
+      }
     } catch {}
+
     _cachedProfileKey = null
+    if (isAdmin) {
+      _cachedAdminKey = null
+    }
 
     if (userId) {
       try {
@@ -91,6 +137,29 @@ export const apiKeyService = {
         console.warn('[apiKeyService] Could not remove API key from Supabase profile:', err.message)
       }
     }
+  },
+
+  /**
+   * Syncs platform admin key from Supabase if active user does not have a personal key.
+   */
+  async syncPlatformAdminKey() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('gemini_api_key')
+        .eq('role', 'admin')
+        .not('gemini_api_key', 'is', null)
+        .limit(1)
+
+      if (!error && data && data.length > 0 && data[0].gemini_api_key) {
+        const adminKey = data[0].gemini_api_key.trim()
+        this.setCachedAdminKey(adminKey)
+        return adminKey
+      }
+    } catch (err) {
+      console.warn('[apiKeyService] Could not sync platform admin key:', err?.message)
+    }
+    return null
   },
 
   /**
@@ -138,6 +207,41 @@ export const apiKeyService = {
         return { valid: false, error: 'This API key has exceeded its quota or rate limit in Google AI Studio.' }
       }
       return { valid: false, error: `Validation failed: ${msg}` }
+    }
+  },
+
+  /**
+   * Runs an active test ping measuring latency and returning verified model info
+   */
+  async testConnection(key) {
+    const cleanKey = (key || this.getUserApiKey() || '').trim()
+    if (!cleanKey) {
+      return { success: false, error: 'No API key configured.' }
+    }
+
+    const startTime = Date.now()
+    try {
+      const genAI = new GoogleGenerativeAI(cleanKey)
+      const modelName = 'gemini-2.5-flash'
+      const model = genAI.getGenerativeModel({ model: modelName })
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: 'Ping test. Reply with one word: OK' }] }],
+        generationConfig: { maxOutputTokens: 5, temperature: 0.1 },
+      })
+      const text = result?.response?.text() || 'OK'
+      const latencyMs = Date.now() - startTime
+      return {
+        success: true,
+        latencyMs,
+        modelName,
+        response: text.trim(),
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err.message,
+        latencyMs: Date.now() - startTime,
+      }
     }
   },
 
