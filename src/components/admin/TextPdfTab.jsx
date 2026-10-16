@@ -14,7 +14,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Upload, Loader2, FileCheck, AlertCircle, CheckCircle2, Eye, Save,
@@ -26,6 +26,11 @@ import { extractPdfText } from '../../services/pdfTextExtractor'
 import { parseMcqQuestions } from '../../services/mcqParser'
 import { extractQuestionsWithAi, blobToBase64 } from '../../services/aiPdfService'
 import { apiKeyService } from '../../services/apiKeyService'
+import {
+  TopicSeparationSummary,
+  OFFICIAL_SYLLABUS_UNITS,
+  normalizeUnitName
+} from './TopicSeparationSummary'
 
 // ─── Progress Display ──────────────────────────────────────────────────────────
 function ExtractionProgress({ stage, currentPage, totalPages, statusText }) {
@@ -60,6 +65,7 @@ function ExtractionProgress({ stage, currentPage, totalPages, statusText }) {
 function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle }) {
   const isOpen = expanded
   const needsReview = question.status === 'needs_review'
+  const currentUnit = normalizeUnitName(question.unit_name)
 
   return (
     <div
@@ -89,9 +95,8 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
             )}
             {(question.unit_name || question.micro_topic_name) && (
               <div className="flex items-center gap-1 text-[9px] text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 mt-1 w-fit max-w-full truncate">
-                <span className="font-bold text-purple-900">L1:</span> {question.unit_name?.split('—')?.[0]?.trim() || question.unit_name || 'Unit'} ›
-                <span className="font-bold text-purple-900">L2:</span> {question.macro_topic_name || 'Macro'} ›
-                <span className="font-bold text-purple-900">L3:</span> {question.micro_topic_name || 'Micro'}
+                <span className="font-bold text-purple-900">Unit:</span> {currentUnit.split(':')[0] || 'Unit'} ›
+                <span className="font-bold text-purple-900">Topic:</span> {question.macro_topic_name || question.micro_topic_name || 'General'}
               </div>
             )}
           </div>
@@ -172,25 +177,44 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
             ))}
           </div>
 
-          {/* Correct answer selector */}
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] font-bold text-body-secondary uppercase">
-              Correct Answer:
-            </span>
-            <div className="flex gap-1.5">
-              {['A', 'B', 'C', 'D', null].map((opt) => (
-                <button
-                  key={String(opt)}
-                  onClick={() => onEdit(index, 'correct_answer', opt)}
-                  className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
-                    question.correct_answer === opt
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
-                  }`}
-                >
-                  {opt ?? '–'}
-                </button>
-              ))}
+          {/* Correct answer & Syllabus Unit selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-body-secondary uppercase">
+                Correct Answer:
+              </span>
+              <div className="flex gap-1.5">
+                {['A', 'B', 'C', 'D', null].map((opt) => (
+                  <button
+                    key={String(opt)}
+                    onClick={() => onEdit(index, 'correct_answer', opt)}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
+                      question.correct_answer === opt
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
+                    }`}
+                  >
+                    {opt ?? '–'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-body-secondary uppercase">
+                Unit:
+              </span>
+              <select
+                value={currentUnit}
+                onChange={(e) => onEdit(index, 'unit_name', e.target.value)}
+                className="text-xs font-semibold text-purple-900 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+              >
+                {OFFICIAL_SYLLABUS_UNITS.map(u => (
+                  <option key={u.id} value={u.unit_name}>
+                    {u.shortName}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -221,6 +245,9 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const [expanded, setExpanded] = useState(new Set())
   const [saving, setSaving] = useState(false)
   const [importMsg, setImportMsg] = useState(null)
+  const [selectedTopic, setSelectedTopic] = useState(null)
+  const [viewMode, setViewMode] = useState('table') // 'table' | 'separated'
+  const [collapsedTopics, setCollapsedTopics] = useState(new Set())
 
   function handleFileChange(e) {
     const f = e.target.files?.[0]
@@ -237,6 +264,7 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
     setFile(f)
     setResult(null)
     setQuestions([])
+    setSelectedTopic(null)
     setImportMsg(null)
     setProgress(null)
   }
@@ -293,6 +321,10 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
           option_c: q.option_c || q.options?.C || '',
           option_d: q.option_d || q.options?.D || '',
           correct_answer: q.correct_option || null,
+          unit_name: q.unit_name || null,
+          macro_topic_name: q.macro_topic_name || null,
+          micro_topic_name: q.micro_topic_name || null,
+          explanation: q.explanation || null,
           status: 'valid',
           warnings: [],
           page_number: q.source_page || 1,
@@ -423,16 +455,29 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
     setSaving(true)
 
     try {
-      const toSave = questionsToSave.map((q, idx) => ({
-        question_number: q.question_number || idx + 1,
-        question_text: q.question_text,
-        option_a: q.options?.A || q.option_a || '',
-        option_b: q.options?.B || q.option_b || '',
-        option_c: q.options?.C || q.option_c || '',
-        option_d: q.options?.D || q.option_d || '',
-        correct_option: q.correct_answer || q.correct_option || null,
-        explanation: null,
-      }))
+      const toSave = questionsToSave.map((q, idx) => {
+        const uName = q.unit_name ? normalizeUnitName(q.unit_name) : null
+        const mName = q.macro_topic_name || null
+        const miName = q.micro_topic_name || null
+        let expl = q.explanation || ''
+        if (uName && !expl.includes('[Taxonomy:')) {
+          const taxPrefix = `[Taxonomy: ${uName} > ${mName || 'General Studies'} > ${miName || 'General Concepts'}]`
+          expl = expl ? `${taxPrefix}\n\n${expl}` : taxPrefix
+        }
+        return {
+          question_number: q.question_number || idx + 1,
+          question_text: q.question_text,
+          option_a: q.options?.A || q.option_a || '',
+          option_b: q.options?.B || q.option_b || '',
+          option_c: q.options?.C || q.option_c || '',
+          option_d: q.options?.D || q.option_d || '',
+          correct_option: q.correct_answer || q.correct_option || null,
+          unit_name: uName,
+          macro_topic_name: mName,
+          micro_topic_name: miName,
+          explanation: expl || null,
+        }
+      })
 
       const existing = await questionService.getExistingQuestionCount(paperId)
       if (existing > 0) {
@@ -465,6 +510,34 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const validCount = questions.filter((q) => q.status === 'valid').length
   const reviewCount = questions.length - validCount
 
+  const toggleTopicCollapse = (topicName) => {
+    setCollapsedTopics(prev => {
+      const next = new Set(prev)
+      if (next.has(topicName)) next.delete(topicName)
+      else next.add(topicName)
+      return next
+    })
+  }
+
+  // Questions grouped by topic for the "Separated by Topic" view
+  const questionsByTopic = useMemo(() => {
+    const groups = {}
+    questions.forEach((q, originalIdx) => {
+      const unit = normalizeUnitName(q.unit_name)
+      if (!groups[unit]) groups[unit] = []
+      groups[unit].push({ ...q, originalIdx })
+    })
+    return groups
+  }, [questions])
+
+  // Filtered list for table view
+  const displayQuestions = useMemo(() => {
+    return questions.map((q, originalIdx) => ({ ...q, originalIdx })).filter(q => {
+      if (!selectedTopic) return true
+      return normalizeUnitName(q.unit_name) === selectedTopic
+    })
+  }, [questions, selectedTopic])
+
   return (
     <div className="space-y-5">
       {/* Missing API key warning */}
@@ -492,9 +565,9 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
       <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
         <Sparkles className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-bold text-purple-800">AI-Powered PDF Question Import</p>
+          <p className="text-sm font-bold text-purple-800">AI-Powered PDF Question Import &amp; Topic Separation</p>
           <p className="text-xs text-body-secondary mt-0.5">
-            Extracts questions and options A/B/C/D accurately using Google Gemini AI with your personal API key. Also includes a local offline fallback option.
+            Extracts questions and options A/B/C/D accurately using Google Gemini AI with your personal API key. Categorizes questions into official TNPSC syllabus units. Also includes a local offline fallback option.
           </p>
         </div>
       </div>
@@ -615,18 +688,23 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
         </div>
       )}
 
-      {/* Step 2: Review & Save */}
+      {/* Step 2: Review & Save with Visual Topic Separation */}
       {questions.length > 0 && !processing && (
         <div className="bg-white rounded-xl border border-surface-border p-5 shadow-card space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-body-text flex items-center gap-2">
-              <Eye className="w-4 h-4 text-purple-600" />
-              Step 2 — Review &amp; Save ({validCount} valid / {questions.length} total)
-            </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-border">
+            <div>
+              <h3 className="text-sm font-bold text-body-text flex items-center gap-2">
+                <Eye className="w-4 h-4 text-purple-600" />
+                Step 2 — Review &amp; Save ({validCount} valid / {questions.length} total)
+              </h3>
+              <p className="text-xs text-body-secondary mt-0.5">
+                Review questions and topic breakdown. Adjust units or edit question fields as needed before saving.
+              </p>
+            </div>
             <button
               onClick={handleSave}
               disabled={saving || validCount === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-subtle transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-subtle transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               {saving ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -637,23 +715,104 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
             </button>
           </div>
 
-          <p className="text-xs text-body-secondary">
-            Expand questions to review and edit. Questions with warnings need to be fixed before saving.
-          </p>
+          {/* ── Visual Topic Separation Breakdown & Filter Bar ─────────────── */}
+          <TopicSeparationSummary
+            questions={questions}
+            selectedTopic={selectedTopic}
+            onSelectTopic={setSelectedTopic}
+            viewMode={viewMode}
+            onToggleViewMode={setViewMode}
+            showSeparationToggle={true}
+          />
 
-          <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
-            {questions.map((q, idx) => (
-              <QuestionCard
-                key={idx}
-                question={q}
-                index={idx}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                expanded={expanded.has(idx)}
-                onToggle={() => handleToggleExpand(idx)}
-              />
-            ))}
-          </div>
+          {/* ── Mode 1: Table / List View ──────────────────────────────────── */}
+          {viewMode === 'table' && (
+            <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+              {displayQuestions.map((q) => (
+                <QuestionCard
+                  key={q.originalIdx}
+                  question={q}
+                  index={q.originalIdx}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  expanded={expanded.has(q.originalIdx)}
+                  onToggle={() => handleToggleExpand(q.originalIdx)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Mode 2: Separated by Topic View ────────────────────────────── */}
+          {viewMode === 'separated' && (
+            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+              {Object.entries(questionsByTopic).map(([topicName, topicQuestions]) => {
+                if (selectedTopic && topicName !== selectedTopic) return null
+
+                const isCollapsed = collapsedTopics.has(topicName)
+                const unitConfig = OFFICIAL_SYLLABUS_UNITS.find(u => u.unit_name === topicName) || {
+                  color: 'from-purple-600 to-indigo-700',
+                  badgeColor: 'bg-purple-100 text-purple-800 border-purple-200',
+                  shortName: topicName,
+                }
+                const pct = Math.round((topicQuestions.length / questions.length) * 100)
+
+                return (
+                  <div
+                    key={topicName}
+                    className="border border-surface-border rounded-2xl overflow-hidden bg-white shadow-2xs"
+                  >
+                    {/* Topic Section Header */}
+                    <div
+                      onClick={() => toggleTopicCollapse(topicName)}
+                      className="px-4 py-3 bg-purple-50/60 hover:bg-purple-50 border-b border-surface-border flex items-center justify-between cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-8 rounded-full bg-gradient-to-b ${unitConfig.color}`} />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-body-text">
+                              {topicName}
+                            </span>
+                            <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${unitConfig.badgeColor}`}>
+                              {topicQuestions.length} Questions ({pct}%)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-body-secondary mt-0.5">
+                            Questions belonging to this unit
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {isCollapsed ? (
+                          <ChevronRight className="w-4 h-4 text-body-secondary" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-body-secondary" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Questions inside this Topic */}
+                    {!isCollapsed && (
+                      <div className="p-3 space-y-2">
+                        {topicQuestions.map((q) => (
+                          <QuestionCard
+                            key={q.originalIdx}
+                            question={q}
+                            index={q.originalIdx}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            expanded={expanded.has(q.originalIdx)}
+                            onToggle={() => handleToggleExpand(q.originalIdx)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

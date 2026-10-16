@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai'
 import { apiKeyService } from './apiKeyService.js'
 import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabusAnalyticsService.js'
+import { normalizeUnitName } from '../components/admin/TopicSeparationSummary.jsx'
 
 const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
   u.macro_topics.flatMap(mt =>
@@ -104,10 +105,19 @@ CRITICAL GUIDELINES FOR BILINGUAL PAPERS (Tamil + English):
 3. Formulate clear, self-contained question stems. Do not reproduce document borders, page numbers, instructions to candidates, or official headers.
 4. Accurately capture all 4 options (A, B, C, D) and identify the correct option if indicated by tick marks, keys, or standard knowledge.
 5. Provide the output strictly as a JSON array of question objects.
-6. Categorize each question into the 3-level TNPSC General Studies syllabus taxonomy:
-   - unit_name: Level 1 Unit (e.g. 'Unit 1 — General Science', 'Unit 2 — Geography of India & Tamil Nadu', 'Unit 3 — Indian National Movement', 'Unit 4 — Indian Culture & Heritage', 'Unit 5 — Indian Polity', 'Unit 6 — Geography & Environment', 'Unit 7 — Indian Economy', 'Unit 8 — History & Culture of Tamil Nadu', 'Unit 9 — Tamil Nadu Administration & Schemes', 'Unit 10 — Aptitude & Mental Ability')
-   - macro_topic_name: Level 2 Macro-Topic (e.g. 'Physics', 'Chemistry', 'Biology', 'Indian Physical Geography', 'Constitution & Governance', etc.)
-   - micro_topic_name: Level 3 Micro-Topic (Exact chapter/topic, e.g. 'Mechanics, Force, Motion & Properties of Matter', 'Fundamental Rights & Duties', 'Percentage & Ratio')`
+6. Categorize each question into the official TNPSC revised syllabus taxonomy:
+   - unit_name: MUST identify one of the official syllabus units:
+     * 'Unit I: General Science' (Physics, Chemistry, Botany, Zoology, Scientific Knowledge)
+     * 'Unit II: Geography of India' (Location, Physical Features, Monsoon, Climate, Rivers, Soil, Minerals, Natural resources)
+     * 'Unit III: History, Culture of India, and Indian National Movement' (Indus Valley, Guptas, Delhi Sultans, Mughals, Marathas, National Renaissance, Early Uprising, Freedom Struggle)
+     * 'Unit IV: Indian Polity' (Constitution, Preamble, Citizenship, Fundamental Rights, Union Executive, Legislature, Judiciary, Federalism, Anti-Corruption, Lokpal)
+     * 'Unit V: Indian Economy and Development Administration in Tamil Nadu' (Indian Economy, Planning, Finance Commission, GST, Social Welfare, Human Development in TN, E-Governance)
+     * 'Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu' (Tamil Society, Keezhadi, Thirukkural, Freedom Fighters in TN, Self-Respect Movement, Dravidian Movement, Social Justice)
+     * 'Part B: Aptitude (Mental Ability)' (Simplification, Percentage, HCF & LCM, Ratio, Simple & Compound Interest, Area, Volume, Time & Work)
+     * 'Part B: Reasoning (Mental Ability)' (Logical reasoning, Puzzles, Dice, Visual reasoning, Alpha-numeric reasoning, Number series)
+     * 'Part C: General Tamil (Language)' / 'Part C: General English (Language)'
+   - macro_topic_name: Level 2 Macro-Topic (e.g. 'Physics', 'Constitution of India', 'Thirukkural', 'Simplification & Percentage', etc.)
+   - micro_topic_name: Level 3 Micro-Topic (Exact chapter/concept, e.g. 'Newton Laws & Motion', 'Fundamental Rights', 'Keezhadi Archaeological Excavations')`
 
 const PRIMARY_PROMPT = `Analyze the attached PDF exam document and generate a structured student practice quiz dataset.
 Extract each question with its options (A, B, C, D).
@@ -135,9 +145,9 @@ Return a JSON array of objects with the following schema:
     "correct_option": "<'A', 'B', 'C', 'D' if indicated or known, else null>",
     "explanation": "<short explanation or empty string>",
     "explanation_tamil": "<Tamil explanation or empty string>",
-    "unit_name": "<Level 1: Unit, e.g. Unit 1 — General Science>",
-    "macro_topic_name": "<Level 2: Macro-Topic, e.g. Physics>",
-    "micro_topic_name": "<Level 3: Micro-Topic, e.g. Mechanics, Force, Motion & Properties of Matter>"
+    "unit_name": "<Level 1: Official Unit, e.g. Unit I: General Science, Unit IV: Indian Polity, Part B: Aptitude (Mental Ability)>",
+    "macro_topic_name": "<Level 2: Macro-Topic, e.g. Physics, Constitution of India>",
+    "micro_topic_name": "<Level 3: Micro-Topic, e.g. Mechanics & Properties of Matter, Fundamental Rights>"
   }
 ]
 Output valid JSON only.`
@@ -274,14 +284,33 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
               return `${e} / ${t}`
             }
 
-            const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(
-              { question_text: combined, ...q },
-              CANONICAL_MICROS
-            )
+            const rawUnit = q.unit_name || null
+            let unitName = rawUnit ? normalizeUnitName(rawUnit) : null
+            let macroName = q.macro_topic_name || null
+            let microName = q.micro_topic_name || null
 
-            const unitName = q.unit_name || matched?.unit_name || 'Unit 1 — General Science'
-            const macroName = q.macro_topic_name || matched?.macro_topic_name || 'General Studies'
-            const microName = q.micro_topic_name || matched?.micro_topic_name || 'General Concepts'
+            if (!unitName || !macroName || !microName) {
+              const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(
+                { question_text: combined, ...q, unit_name: unitName },
+                CANONICAL_MICROS
+              )
+              if (matched) {
+                unitName = unitName || normalizeUnitName(matched.unit_name)
+                macroName = macroName || matched.macro_topic_name
+                microName = microName || matched.micro_topic_name
+              }
+            }
+
+            unitName = unitName || 'Unit I: General Science'
+            macroName = macroName || 'General Studies'
+            microName = microName || 'General Concepts'
+
+            // Embed taxonomy tag in explanation as resilient guarantee
+            let baseExplanation = (q.explanation || '').trim()
+            if (!baseExplanation.includes('[Taxonomy:')) {
+              const taxPrefix = `[Taxonomy: ${unitName} > ${macroName} > ${microName}]`
+              baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
+            }
 
             return {
               question_number: q.question_number || idx + 1,
@@ -299,7 +328,7 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
               option_c_tamil: q.option_c_tamil || '',
               option_d_tamil: q.option_d_tamil || '',
               correct_option: q.correct_option ? String(q.correct_option).toUpperCase().trim() : null,
-              explanation: q.explanation || '',
+              explanation: baseExplanation,
               explanation_tamil: q.explanation_tamil || '',
               unit_name: unitName,
               macro_topic_name: macroName,

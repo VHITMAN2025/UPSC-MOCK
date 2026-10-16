@@ -835,23 +835,71 @@ export const syllabusAnalyticsService = {
   classifyQuestionToMicroTopic(question, allMicroTopics) {
     if (!allMicroTopics || allMicroTopics.length === 0) return null
 
+    // Extract taxonomy tag from explanation if present
+    let explUnit = null
+    let explMacro = null
+    let explMicro = null
+    if (question.explanation && typeof question.explanation === 'string') {
+      const match = question.explanation.match(/\[Taxonomy:\s*([^>\]]+)(?:>\s*([^>\]]+))?(?:>\s*([^\]]+))?\]/i)
+      if (match) {
+        explUnit = match[1]?.trim() || null
+        explMacro = match[2]?.trim() || null
+        explMicro = match[3]?.trim() || null
+      }
+    }
+
+    const targetMicro = question.micro_topic_name || explMicro
+    const targetMacro = question.macro_topic_name || explMacro
+    const targetUnit = question.unit_name || explUnit
+
     // 1. Direct match by micro_topic_id or micro_topic_name
     if (question.micro_topic_id) {
       const exactId = allMicroTopics.find(m => m.micro_topic_id === question.micro_topic_id)
       if (exactId) return exactId
     }
-    if (question.micro_topic_name) {
-      const exactName = allMicroTopics.find(m => norm(m.micro_topic_name) === norm(question.micro_topic_name))
+    if (targetMicro) {
+      const exactName = allMicroTopics.find(m => norm(m.micro_topic_name) === norm(targetMicro))
       if (exactName) return exactName
+      const partialName = allMicroTopics.find(m =>
+        norm(m.micro_topic_name).includes(norm(targetMicro)) || norm(targetMicro).includes(norm(m.micro_topic_name))
+      )
+      if (partialName) return partialName
     }
 
-    // 2. Match by macro_topic_id or macro_topic_name + keyword scoring
+    // 2. Match by macro_topic_id or unit/macro-topic constraint + keyword scoring
     const candidatePool = (() => {
       if (question.macro_topic_id) {
         const byMacroId = allMicroTopics.filter(m => m.macro_topic_id === question.macro_topic_id)
         if (byMacroId.length > 0) return byMacroId
       }
-      const topicHint = norm(question.macro_topic_name || question.topic || question.subject || question.papers?.subject)
+
+      // If targetUnit is known, constrain search pool to this unit
+      if (targetUnit) {
+        const uHint = norm(targetUnit)
+        const byUnit = allMicroTopics.filter(m => {
+          const mUnitNorm = norm(m.unit_name)
+          if (mUnitNorm === uHint || mUnitNorm.includes(uHint) || uHint.includes(mUnitNorm)) return true
+          if ((uHint.includes('science') || uHint.includes('unit 1') || uHint.includes('unit i')) && mUnitNorm.includes('science')) return true
+          if ((uHint.includes('geography') || uHint.includes('unit 2') || uHint.includes('unit ii')) && mUnitNorm.includes('geography')) return true
+          if ((uHint.includes('history') || uHint.includes('movement') || uHint.includes('unit 3') || uHint.includes('unit iii')) && (mUnitNorm.includes('national movement') || mUnitNorm.includes('history'))) return true
+          if ((uHint.includes('polity') || uHint.includes('constitution') || uHint.includes('unit 4') || uHint.includes('unit iv')) && mUnitNorm.includes('polity')) return true
+          if ((uHint.includes('economy') || uHint.includes('administration') || uHint.includes('unit 5') || uHint.includes('unit v')) && (mUnitNorm.includes('economy') || mUnitNorm.includes('administration'))) return true
+          if ((uHint.includes('heritage') || uHint.includes('culture') || uHint.includes('thirukkural') || uHint.includes('unit 6') || uHint.includes('unit vi')) && (mUnitNorm.includes('culture') || mUnitNorm.includes('tamil nadu'))) return true
+          if ((uHint.includes('aptitude') || uHint.includes('reasoning') || uHint.includes('mental ability')) && (mUnitNorm.includes('aptitude') || mUnitNorm.includes('reasoning'))) return true
+          return false
+        })
+
+        if (byUnit.length > 0) {
+          if (targetMacro) {
+            const mHint = norm(targetMacro)
+            const byMacro = byUnit.filter(m => norm(m.macro_topic_name).includes(mHint) || mHint.includes(norm(m.macro_topic_name)))
+            if (byMacro.length > 0) return byMacro
+          }
+          return byUnit
+        }
+      }
+
+      const topicHint = norm(targetMacro || question.topic || question.subject || question.papers?.subject)
       if (topicHint) {
         const byTopicHint = allMicroTopics.filter(
           m => norm(m.macro_topic_name).includes(topicHint) ||
@@ -955,8 +1003,17 @@ export const syllabusAnalyticsService = {
     ] = await Promise.allSettled([
       supabase
         .from('questions')
-        .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, papers(id, title, subject, exam_name, status)')
-        .limit(1000),
+        .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, unit_name, macro_topic_name, micro_topic_name, papers(id, title, subject, exam_name, status)')
+        .limit(1000)
+        .then(res => {
+          if (res.error) {
+            return supabase
+              .from('questions')
+              .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, papers(id, title, subject, exam_name, status)')
+              .limit(1000)
+          }
+          return res
+        }),
       supabase
         .from('recall_questions')
         .select('id, question_text, subject, topic, exam_context, is_active')
