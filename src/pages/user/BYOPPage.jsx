@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Upload, FileText, Loader2, CheckCircle2, XCircle, AlertCircle,
   RefreshCw, Eye, Trash2, Plus, Clock, ChevronDown, ChevronRight,
-  Layers, Zap, BookOpen, AlertTriangle, RotateCcw, X, Save, Play, Sparkles,
+  Layers, Zap, BookOpen, AlertTriangle, RotateCcw, X, Save, Play, Sparkles, Filter,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -16,6 +16,11 @@ import { apiKeyService } from '../../services/apiKeyService'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
 import { formatDate } from '../../lib/utils'
+import {
+  TopicSeparationSummary,
+  OFFICIAL_SYLLABUS_UNITS,
+  normalizeUnitName
+} from '../../components/admin/TopicSeparationSummary.jsx'
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -113,6 +118,9 @@ function BatchProgress({ info }) {
 function QuestionsPanel({ questions, onSave, saving }) {
   const [expanded, setExpanded] = useState(new Set())
   const [editedQs, setEditedQs] = useState(questions)
+  const [selectedTopic, setSelectedTopic] = useState(null)
+  const [viewMode, setViewMode] = useState('table') // 'table' | 'separated'
+  const [collapsedTopics, setCollapsedTopics] = useState(new Set())
 
   // sync when questions prop changes
   useEffect(() => { setEditedQs(questions) }, [questions])
@@ -129,8 +137,63 @@ function QuestionsPanel({ questions, onSave, saving }) {
     setEditedQs(prev => prev.map((q, i) => i === idx ? { ...q, [field]: value } : q))
   }
 
+  function handleUnitChange(idx, newUnit) {
+    const canonical = normalizeUnitName(newUnit)
+    setEditedQs(prev => prev.map((q, i) => {
+      if (i !== idx) return q
+      const oldExpl = q.explanation || ''
+      const cleanedExpl = oldExpl.replace(/\[Taxonomy:[^\]]+\]\n*/gi, '').trim()
+      const newTaxPrefix = `[Taxonomy: ${canonical} > ${q.macro_topic_name || 'General Studies'} > ${q.micro_topic_name || 'General Concepts'}]`
+      return {
+        ...q,
+        unit_name: canonical,
+        explanation: `${newTaxPrefix}\n\n${cleanedExpl}`.trim(),
+        tags: Array.from(new Set([...(q.tags || []), canonical])),
+      }
+    }))
+  }
+
+  function handleDeleteQuestion(idx) {
+    if (confirm('Are you sure you want to remove this question?')) {
+      setEditedQs(prev => prev.filter((_, i) => i !== idx))
+      setExpanded(prev => {
+        const next = new Set(prev)
+        next.delete(idx)
+        return next
+      })
+    }
+  }
+
+  function toggleTopicCollapse(topicName) {
+    setCollapsedTopics(prev => {
+      const next = new Set(prev)
+      if (next.has(topicName)) next.delete(topicName)
+      else next.add(topicName)
+      return next
+    })
+  }
+
   const valid   = editedQs.filter(q => q.isValid !== false)
   const invalid = editedQs.filter(q => q.isValid === false)
+
+  // Questions grouped by topic for the "Separated by Topic" view
+  const questionsByTopic = useMemo(() => {
+    const groups = {}
+    editedQs.forEach((q, originalIdx) => {
+      const unit = normalizeUnitName(q.unit_name)
+      if (!groups[unit]) groups[unit] = []
+      groups[unit].push({ ...q, originalIdx })
+    })
+    return groups
+  }, [editedQs])
+
+  // Filtered list for table view
+  const displayQuestions = useMemo(() => {
+    return editedQs.map((q, originalIdx) => ({ ...q, originalIdx })).filter(q => {
+      if (!selectedTopic) return true
+      return normalizeUnitName(q.unit_name) === selectedTopic
+    })
+  }, [editedQs, selectedTopic])
 
   const STATUS_BADGE = {
     complete:    'bg-emerald-100 text-emerald-700',
@@ -138,10 +201,253 @@ function QuestionsPanel({ questions, onSave, saving }) {
     unreadable:  'bg-red-100    text-red-700',
   }
 
+  const renderCard = (q, idx) => {
+    const isOpen   = expanded.has(idx)
+    const badgeCls = STATUS_BADGE[q.extraction_status] ?? STATUS_BADGE.complete
+    const qNum     = q.question_number ?? idx + 1
+    const currentUnit = normalizeUnitName(q.unit_name)
+
+    return (
+      <div
+        key={idx}
+        className={`rounded-xl border transition-colors ${
+          q.isValid === false ? 'border-amber-300 bg-amber-50/30' : 'border-surface-border bg-white'
+        }`}
+      >
+        {/* Card header — always visible */}
+        <div className="w-full flex items-center justify-between px-4 py-3 text-left">
+          <button
+            type="button"
+            onClick={() => toggleExpand(idx)}
+            className="flex items-center gap-3 min-w-0 flex-1 text-left"
+          >
+            <span className="w-7 h-7 rounded-lg bg-tnpsc-brand text-white text-xs font-bold flex items-center justify-center shrink-0">
+              {qNum}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-body-text truncate leading-snug">
+                {q.tamil_question
+                  ? q.tamil_question.slice(0, 80) + (q.tamil_question.length > 80 ? '…' : '')
+                  : q.question_text?.slice(0, 80) ?? '—'}
+              </p>
+              {q.english_question && (
+                <p className="text-[10px] text-body-secondary truncate mt-0.5">
+                  {q.english_question.slice(0, 80)}{q.english_question.length > 80 ? '…' : ''}
+                </p>
+              )}
+              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100/80 rounded px-1.5 py-0.5">
+                  {currentUnit.split(':')[0] || 'Unit'}
+                </span>
+                {(q.macro_topic_name || q.micro_topic_name) && (
+                  <span className="text-[9px] text-body-secondary bg-slate-100 rounded px-1.5 py-0.5 truncate max-w-[180px]">
+                    {q.macro_topic_name || q.micro_topic_name}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            {/* Inline unit selector */}
+            <select
+              value={currentUnit}
+              onChange={(e) => handleUnitChange(idx, e.target.value)}
+              className="text-[10px] font-semibold text-indigo-900 bg-indigo-50 border border-indigo-200 rounded px-2 py-1 outline-none cursor-pointer max-w-[130px] truncate hidden sm:block"
+              title="Change question unit"
+            >
+              {OFFICIAL_SYLLABUS_UNITS.map(u => (
+                <option key={u.id} value={u.unit_name}>
+                  {u.shortName}
+                </option>
+              ))}
+            </select>
+
+            <span className={`text-[10px] font-bold uppercase rounded-full px-2 py-0.5 ${badgeCls}`}>
+              {q.extraction_status ?? 'complete'}
+            </span>
+            {q.has_diagram && (
+              <span className="text-[10px] bg-purple-100 text-purple-700 rounded-full px-1.5 py-0.5 font-bold">
+                diagram
+              </span>
+            )}
+            <span className="text-[10px] text-body-secondary">p.{q.source_page ?? q.page_number}</span>
+            <button
+              type="button"
+              onClick={() => toggleExpand(idx)}
+              className="p-1 text-body-secondary hover:text-body-text"
+            >
+              {isOpen
+                ? <ChevronDown className="w-4 h-4" />
+                : <ChevronRight className="w-4 h-4" />
+              }
+            </button>
+          </div>
+        </div>
+
+        {/* Expanded edit view */}
+        {isOpen && (
+          <div className="px-4 pb-4 space-y-3 border-t border-surface-border pt-3">
+            {/* Tamil question */}
+            <div>
+              <label className="block text-[10px] font-bold text-body-secondary uppercase mb-1">
+                Tamil Question
+              </label>
+              <textarea
+                rows={2}
+                value={q.question_text || q.tamil_question || ''}
+                onChange={e => { editQuestion(idx, 'question_text', e.target.value); editQuestion(idx, 'tamil_question', e.target.value) }}
+                className="w-full border border-surface-border rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand resize-none"
+                placeholder="Tamil text…"
+              />
+            </div>
+
+            {/* English question */}
+            <div>
+              <label className="block text-[10px] font-bold text-body-secondary uppercase mb-1">
+                English Question
+              </label>
+              <textarea
+                rows={2}
+                value={q.english_question ?? ''}
+                onChange={e => editQuestion(idx, 'english_question', e.target.value)}
+                className="w-full border border-surface-border rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand resize-none"
+                placeholder="English text…"
+              />
+            </div>
+
+            {/* Options */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {['A','B','C','D'].map(opt => (
+                <div key={opt}>
+                  <label className="block text-[10px] font-bold text-body-secondary uppercase mb-1">
+                    Option {opt}
+                    {q.correct_option === opt && (
+                      <span className="ml-1 text-emerald-600">✓ Correct</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    value={q[`option_${opt.toLowerCase()}`] || q.options?.[opt] || ''}
+                    onChange={e => { editQuestion(idx, `option_${opt.toLowerCase()}`, e.target.value); if (q.options) q.options[opt] = e.target.value }}
+                    className={`w-full border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand ${
+                      q.correct_option === opt
+                        ? 'border-emerald-400 bg-emerald-50'
+                        : 'border-surface-border'
+                    }`}
+                    placeholder={`Option ${opt}…`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* 3-Level Syllabus Taxonomy */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100/70">
+              <div>
+                <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
+                  Level 1: Syllabus Unit
+                </label>
+                <select
+                  value={currentUnit}
+                  onChange={e => handleUnitChange(idx, e.target.value)}
+                  className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-semibold"
+                >
+                  {OFFICIAL_SYLLABUS_UNITS.map(u => (
+                    <option key={u.id} value={u.unit_name}>
+                      {u.unit_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
+                  Level 2: Macro-Topic
+                </label>
+                <input
+                  type="text"
+                  value={q.macro_topic_name ?? ''}
+                  onChange={e => editQuestion(idx, 'macro_topic_name', e.target.value)}
+                  className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="e.g. Physics"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
+                  Level 3: Micro-Topic
+                </label>
+                <input
+                  type="text"
+                  value={q.micro_topic_name ?? ''}
+                  onChange={e => editQuestion(idx, 'micro_topic_name', e.target.value)}
+                  className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="e.g. Mechanics & Properties of Matter"
+                />
+              </div>
+            </div>
+
+            {/* Correct option selector & delete */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-3">
+                <label className="text-[10px] font-bold text-body-secondary uppercase">
+                  Correct Answer:
+                </label>
+                <div className="flex gap-1.5">
+                  {['A','B','C','D',null].map(opt => (
+                    <button
+                      key={String(opt)}
+                      type="button"
+                      onClick={() => editQuestion(idx, 'correct_option', opt)}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
+                        q.correct_option === opt
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
+                      }`}
+                    >
+                      {opt ?? '–'}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] text-body-secondary">
+                  (– = no answer key)
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleDeleteQuestion(idx)}
+                className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 font-semibold self-start sm:self-auto"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Remove
+              </button>
+            </div>
+
+            {/* Type badge */}
+            <div className="flex items-center gap-2 text-[10px] text-body-secondary pt-1 border-t border-surface-border">
+              <span>Type: <strong>{q.question_type ?? 'mcq'}</strong></span>
+              <span>Page: <strong>{q.source_page ?? q.page_number}</strong></span>
+              {q.has_diagram && <span className="text-purple-600 font-semibold">⚠ Contains diagram</span>}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
+      {/* ── Topic Separation Summary & Filter Pills ─────────────────────────── */}
+      <TopicSeparationSummary
+        questions={editedQs}
+        selectedTopic={selectedTopic}
+        onSelectTopic={setSelectedTopic}
+        viewMode={viewMode}
+        onToggleViewMode={setViewMode}
+        showSeparationToggle={true}
+      />
+
       {/* Summary bar */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-surface-border">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs font-bold text-body-text">{editedQs.length} questions extracted</span>
           {invalid.length > 0 && (
@@ -158,211 +464,78 @@ function QuestionsPanel({ questions, onSave, saving }) {
         <button
           onClick={() => onSave(editedQs)}
           disabled={saving || editedQs.length === 0}
-          className="flex items-center gap-2 px-4 py-2 bg-tnpsc-brand text-white rounded-xl text-xs font-bold hover:bg-tnpsc-brand-hover transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-tnpsc-brand text-white rounded-xl text-xs font-bold hover:bg-tnpsc-brand-hover transition-colors shadow-brand disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          {saving ? 'Saving…' : `Save ${valid.length} Questions`}
+          {saving ? 'Saving…' : `Save ${valid.length} Questions to My Papers`}
         </button>
       </div>
 
-      {/* Question cards */}
-      <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
-        {editedQs.map((q, idx) => {
-          const isOpen  = expanded.has(idx)
-          const badgeCls = STATUS_BADGE[q.extraction_status] ?? STATUS_BADGE.complete
-          const qNum    = q.question_number ?? idx + 1
+      {/* ── Mode 1: Table / Card View ────────────────────────────────────────── */}
+      {viewMode === 'table' && (
+        <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+          {displayQuestions.map(q => renderCard(q, q.originalIdx))}
+        </div>
+      )}
 
-          return (
-            <div
-              key={idx}
-              className={`rounded-xl border transition-colors ${
-                q.isValid === false ? 'border-amber-300 bg-amber-50/30' : 'border-surface-border bg-white'
-              }`}
-            >
-              {/* Card header — always visible */}
-              <button
-                onClick={() => toggleExpand(idx)}
-                className="w-full flex items-center justify-between px-4 py-3 text-left"
+      {/* ── Mode 2: Separated by Topic View ──────────────────────────────────── */}
+      {viewMode === 'separated' && (
+        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+          {Object.entries(questionsByTopic).map(([topicName, topicQuestions]) => {
+            if (selectedTopic && topicName !== selectedTopic) return null
+
+            const isCollapsed = collapsedTopics.has(topicName)
+            const unitConfig = OFFICIAL_SYLLABUS_UNITS.find(u => u.unit_name === topicName) || {
+              color: 'from-indigo-600 to-purple-700',
+              badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+              shortName: topicName,
+            }
+            const pct = Math.round((topicQuestions.length / editedQs.length) * 100)
+
+            return (
+              <div
+                key={topicName}
+                className="border border-surface-border rounded-2xl overflow-hidden bg-white shadow-2xs"
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <span className="w-7 h-7 rounded-lg bg-tnpsc-brand text-white text-xs font-bold flex items-center justify-center shrink-0">
-                    {qNum}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-body-text truncate leading-snug">
-                      {q.tamil_question
-                        ? q.tamil_question.slice(0, 80) + (q.tamil_question.length > 80 ? '…' : '')
-                        : q.question_text?.slice(0, 80) ?? '—'}
-                    </p>
-                    {q.english_question && (
-                      <p className="text-[10px] text-body-secondary truncate mt-0.5">
-                        {q.english_question.slice(0, 80)}{q.english_question.length > 80 ? '…' : ''}
-                      </p>
-                    )}
-                    {(q.unit_name || q.micro_topic_name) && (
-                      <div className="flex items-center gap-1 text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-100/80 rounded px-1.5 py-0.5 mt-1 w-fit max-w-full truncate">
-                        <span className="font-bold text-indigo-900">L1:</span> {q.unit_name?.split('—')?.[0]?.trim() || q.unit_name || 'Unit'} ›
-                        <span className="font-bold text-indigo-900">L2:</span> {q.macro_topic_name || 'Macro'} ›
-                        <span className="font-bold text-indigo-900">L3:</span> {q.micro_topic_name || 'Micro'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <span className={`text-[10px] font-bold uppercase rounded-full px-2 py-0.5 ${badgeCls}`}>
-                    {q.extraction_status ?? 'complete'}
-                  </span>
-                  {q.has_diagram && (
-                    <span className="text-[10px] bg-purple-100 text-purple-700 rounded-full px-1.5 py-0.5 font-bold">
-                      diagram
-                    </span>
-                  )}
-                  <span className="text-[10px] text-body-secondary">p.{q.source_page ?? q.page_number}</span>
-                  {isOpen
-                    ? <ChevronDown className="w-4 h-4 text-body-secondary" />
-                    : <ChevronRight className="w-4 h-4 text-body-secondary" />
-                  }
-                </div>
-              </button>
-
-              {/* Expanded edit view */}
-              {isOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-surface-border pt-3">
-                  {/* Tamil question */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-body-secondary uppercase mb-1">
-                      Tamil Question
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={q.question_text || q.tamil_question || ''}
-                      onChange={e => { editQuestion(idx, 'question_text', e.target.value); editQuestion(idx, 'tamil_question', e.target.value) }}
-                      className="w-full border border-surface-border rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand resize-none"
-                      placeholder="Tamil text…"
-                    />
-                  </div>
-
-                  {/* English question */}
-                  <div>
-                    <label className="block text-[10px] font-bold text-body-secondary uppercase mb-1">
-                      English Question
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={q.english_question ?? ''}
-                      onChange={e => editQuestion(idx, 'english_question', e.target.value)}
-                      className="w-full border border-surface-border rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand resize-none"
-                      placeholder="English text…"
-                    />
-                  </div>
-
-                  {/* Options */}
-                  <div className="grid grid-cols-2 gap-2">
-                    {['A','B','C','D'].map(opt => (
-                      <div key={opt}>
-                        <label className="block text-[10px] font-bold text-body-secondary uppercase mb-1">
-                          Option {opt}
-                          {q.correct_option === opt && (
-                            <span className="ml-1 text-emerald-600">✓ Correct</span>
-                          )}
-                        </label>
-                        <input
-                          type="text"
-                          value={q[`option_${opt.toLowerCase()}`] || q.options?.[opt] || ''}
-                          onChange={e => { editQuestion(idx, `option_${opt.toLowerCase()}`, e.target.value); if (q.options) q.options[opt] = e.target.value }}
-                          className={`w-full border rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand ${
-                            q.correct_option === opt
-                              ? 'border-emerald-400 bg-emerald-50'
-                              : 'border-surface-border'
-                          }`}
-                          placeholder={`Option ${opt}…`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 3-Level Syllabus Taxonomy */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100/70">
-                    <div>
-                      <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
-                        Level 1: Unit
-                      </label>
-                      <input
-                        type="text"
-                        value={q.unit_name ?? ''}
-                        onChange={e => editQuestion(idx, 'unit_name', e.target.value)}
-                        className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="e.g. Unit 1 — General Science"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
-                        Level 2: Macro-Topic
-                      </label>
-                      <input
-                        type="text"
-                        value={q.macro_topic_name ?? ''}
-                        onChange={e => editQuestion(idx, 'macro_topic_name', e.target.value)}
-                        className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="e.g. Physics"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-indigo-900 uppercase mb-1">
-                        Level 3: Micro-Topic
-                      </label>
-                      <input
-                        type="text"
-                        value={q.micro_topic_name ?? ''}
-                        onChange={e => editQuestion(idx, 'micro_topic_name', e.target.value)}
-                        className="w-full border border-indigo-200 rounded-lg px-2.5 py-1.5 text-xs bg-white outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="e.g. Mechanics & Properties of Matter"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Correct option selector */}
+                {/* Topic Section Header */}
+                <div
+                  onClick={() => toggleTopicCollapse(topicName)}
+                  className="px-4 py-3 bg-indigo-50/60 hover:bg-indigo-50 border-b border-surface-border flex items-center justify-between cursor-pointer transition-colors"
+                >
                   <div className="flex items-center gap-3">
-                    <label className="text-[10px] font-bold text-body-secondary uppercase">
-                      Correct Answer:
-                    </label>
-                    <div className="flex gap-1.5">
-                      {['A','B','C','D',null].map(opt => (
-                        <button
-                          key={String(opt)}
-                          onClick={() => editQuestion(idx, 'correct_option', opt)}
-                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
-                            q.correct_option === opt
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
-                          }`}
-                        >
-                          {opt ?? '–'}
-                        </button>
-                      ))}
+                    <div className={`w-3 h-8 rounded-full bg-gradient-to-b ${unitConfig.color}`} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-body-text">{topicName}</span>
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${unitConfig.badgeColor}`}>
+                          {topicQuestions.length} Questions ({pct}%)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-body-secondary mt-0.5">
+                        Questions assigned to this syllabus unit
+                      </p>
                     </div>
-                    <span className="text-[10px] text-body-secondary">
-                      (– = no answer key visible)
-                    </span>
                   </div>
-
-                  {/* Type badge */}
-                  <div className="flex items-center gap-2 text-[10px] text-body-secondary">
-                    <span>Type: <strong>{q.question_type ?? 'mcq'}</strong></span>
-                    <span>Page: <strong>{q.source_page ?? q.page_number}</strong></span>
-                    {q.has_diagram && <span className="text-purple-600 font-semibold">⚠ Contains diagram</span>}
+                  <div className="flex items-center gap-2">
+                    {isCollapsed ? <ChevronRight className="w-4 h-4 text-body-secondary" /> : <ChevronDown className="w-4 h-4 text-body-secondary" />}
                   </div>
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+
+                {/* Questions inside this Topic */}
+                {!isCollapsed && (
+                  <div className="p-3 space-y-2">
+                    {topicQuestions.map(q => renderCard(q, q.originalIdx))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Attempt button: looks up the paper created from this upload ──────────────
 // ─── Attempt button: looks up or auto-creates the paper created from this upload ──────────────
 function AttemptButton({ paperId, userId }) {
   const [loading, setLoading] = useState(false)
@@ -477,6 +650,16 @@ function AttemptButton({ paperId, userId }) {
               return `${e} / ${t}`
             }
 
+            const uName = q.unit_name ? normalizeUnitName(q.unit_name) : 'Unit I: General Science'
+            const mName = q.macro_topic_name || 'General Studies'
+            const miName = q.micro_topic_name || 'General Concepts'
+
+            let baseExplanation = (q.explanation || '').trim()
+            if (!baseExplanation.includes('[Taxonomy:')) {
+              const taxPrefix = `[Taxonomy: ${uName} > ${mName} > ${miName}]`
+              baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
+            }
+
             return {
               question_number: parseInt(String(q.question_number), 10) || i + 1,
               question_text: combined,
@@ -492,8 +675,12 @@ function AttemptButton({ paperId, userId }) {
               correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
                 ? (q.correct_option || q.correct_answer)
                 : null,
-              explanation: q.explanation || null,
+              explanation: baseExplanation,
               explanation_tamil: q.explanation_tamil || null,
+              unit_name: uName,
+              macro_topic_name: mName,
+              micro_topic_name: miName,
+              tags: Array.from(new Set([...(q.tags || []), miName, mName, uName])),
             }
           })
 
@@ -758,6 +945,16 @@ export function BYOPPage() {
                 return `${e} / ${t}`
               }
 
+              const uName = q.unit_name ? normalizeUnitName(q.unit_name) : 'Unit I: General Science'
+              const mName = q.macro_topic_name || 'General Studies'
+              const miName = q.micro_topic_name || 'General Concepts'
+
+              let baseExplanation = (q.explanation || '').trim()
+              if (!baseExplanation.includes('[Taxonomy:')) {
+                const taxPrefix = `[Taxonomy: ${uName} > ${mName} > ${miName}]`
+                baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
+              }
+
               return {
                 question_number: parseInt(String(q.question_number), 10) || i + 1,
                 question_text: combined,
@@ -773,8 +970,12 @@ export function BYOPPage() {
                 correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
                   ? (q.correct_option || q.correct_answer)
                   : null,
-                explanation: q.explanation || null,
+                explanation: baseExplanation,
                 explanation_tamil: q.explanation_tamil || null,
+                unit_name: uName,
+                macro_topic_name: mName,
+                micro_topic_name: miName,
+                tags: Array.from(new Set([...(q.tags || []), miName, mName, uName])),
               }
             })
 
@@ -938,19 +1139,28 @@ export function BYOPPage() {
       }
       
       const rawQuestions = parseResult.questions || []
-      const questions = rawQuestions.map((q, idx) => ({
-        ...q,
-        question_number: q.question_number || idx + 1,
-        question_text: q.question_text || q.tamil_question || `Question ${idx + 1}`,
-        tamil_question: q.tamil_question || q.question_text || '',
-        option_a: q.option_a || q.options?.A || '',
-        option_b: q.option_b || q.options?.B || '',
-        option_c: q.option_c || q.options?.C || '',
-        option_d: q.option_d || q.options?.D || '',
-        correct_option: q.correct_option || q.correct_answer || null,
-        parser_status: q.parser_status || 'ready',
-        isValid: q.isValid !== false,
-      }))
+      const questions = rawQuestions.map((q, idx) => {
+        const uName = q.unit_name ? normalizeUnitName(q.unit_name) : 'Unit I: General Science'
+        const mName = q.macro_topic_name || 'General Studies'
+        const miName = q.micro_topic_name || 'General Concepts'
+        return {
+          ...q,
+          question_number: q.question_number || idx + 1,
+          question_text: q.question_text || q.tamil_question || `Question ${idx + 1}`,
+          tamil_question: q.tamil_question || q.question_text || '',
+          option_a: q.option_a || q.options?.A || '',
+          option_b: q.option_b || q.options?.B || '',
+          option_c: q.option_c || q.options?.C || '',
+          option_d: q.option_d || q.options?.D || '',
+          correct_option: q.correct_option || q.correct_answer || null,
+          unit_name: uName,
+          macro_topic_name: mName,
+          micro_topic_name: miName,
+          tags: Array.from(new Set([...(q.tags || []), miName, mName, uName])),
+          parser_status: q.parser_status || 'ready',
+          isValid: q.isValid !== false,
+        }
+      })
 
       console.log('[BYOP] MCQ parsing complete:', {
         processingJobId,
@@ -1008,14 +1218,10 @@ export function BYOPPage() {
 
       console.log('[BYOP] Storing extraction result...')
       
-      // NOTE: questionsCount = 20 is intentional preview limit for uploaded_papers.questions_json
-      // Full questions will be saved to papers.questions table later when user confirms/edits
-      // This prevents huge JSONB payload in uploaded_papers tracking table
-      const questionsPreview = questions.slice(0, 20)
-      console.log('[BYOP] Questions preview limit:', {
+      // Save all extracted questions for topic breakdown and review
+      const questionsPreview = questions
+      console.log('[BYOP] Questions prepared for review:', {
         totalExtracted: questions.length,
-        previewCount: questionsPreview.length,
-        reason: 'Intentional limit - full questions saved when user confirms extraction'
       })
       
       const sanitizedQuestions = sanitizeUnicode(questionsPreview)
@@ -1283,6 +1489,16 @@ export function BYOPPage() {
             return `${e} / ${t}`
           }
 
+          const uName = q.unit_name ? normalizeUnitName(q.unit_name) : 'Unit I: General Science'
+          const mName = q.macro_topic_name || 'General Studies'
+          const miName = q.micro_topic_name || 'General Concepts'
+
+          let baseExplanation = (q.explanation || '').trim()
+          if (!baseExplanation.includes('[Taxonomy:')) {
+            const taxPrefix = `[Taxonomy: ${uName} > ${mName} > ${miName}]`
+            baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
+          }
+
           return {
             question_number: parseInt(String(q.question_number), 10) || i + 1,
             question_text: combined,
@@ -1298,8 +1514,12 @@ export function BYOPPage() {
             correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
               ? (q.correct_option || q.correct_answer)
               : null,
-            explanation: q.explanation || null,
+            explanation: baseExplanation,
             explanation_tamil: q.explanation_tamil || null,
+            unit_name: uName,
+            macro_topic_name: mName,
+            micro_topic_name: miName,
+            tags: Array.from(new Set([...(q.tags || []), miName, mName, uName])),
           }
         })
 
