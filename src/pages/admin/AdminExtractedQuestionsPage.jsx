@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
+import { supabase } from '../../lib/supabase'
 import { useApp } from '../../contexts/AppContext'
 import { OFFICIAL_SYLLABUS_UNITS, normalizeUnitName } from '../../components/admin/TopicSeparationSummary'
 import { CANONICAL_SYLLABUS_TAXONOMY } from '../../services/syllabusAnalyticsService'
@@ -39,6 +40,9 @@ export function AdminExtractedQuestionsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadTab, setUploadTab] = useState('ai') // 'ai' | 'text'
   const [selectedTargetPaperId, setSelectedTargetPaperId] = useState('')
+  const [isCreatingNewPaper, setIsCreatingNewPaper] = useState(false)
+  const [newPaperTitle, setNewPaperTitle] = useState('')
+  const [creatingPaper, setCreatingPaper] = useState(false)
 
   // Batch auto-categorize state
   const [batchSaving, setBatchSaving] = useState(false)
@@ -47,6 +51,28 @@ export function AdminExtractedQuestionsPage() {
   // Load all questions from database
   useEffect(() => {
     loadData()
+
+    // ── Supabase Realtime Listener ──────────────────────────────────────
+    let channel = null
+    try {
+      channel = supabase
+        .channel('admin-questions-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'questions' },
+          (payload) => {
+            console.log('[Realtime] Questions table updated:', payload.eventType)
+            loadData()
+          }
+        )
+        .subscribe()
+    } catch (e) {
+      console.warn('Realtime subscription note:', e)
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [])
 
   async function loadData() {
@@ -1068,21 +1094,75 @@ export function AdminExtractedQuestionsPage() {
             </div>
 
             {/* Target Paper Selection */}
-            <div className="space-y-1.5 bg-slate-50 p-4 rounded-xl border border-surface-border">
-              <label className="block text-xs font-bold text-body-secondary">
-                Select Destination Question Paper:
-              </label>
-              <select
-                value={selectedTargetPaperId}
-                onChange={e => setSelectedTargetPaperId(e.target.value)}
-                className="w-full text-xs bg-white border border-surface-border rounded-xl px-3 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand cursor-pointer"
-              >
-                {papers.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.title} ({p.total_questions || 0} questions currently)
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-surface-border">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-body-secondary">
+                  Destination Question Paper:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingNewPaper(!isCreatingNewPaper)}
+                  className="text-[11px] font-bold text-tnpsc-brand hover:underline"
+                >
+                  {isCreatingNewPaper ? 'Choose Existing Paper' : '+ Create New Paper for this PDF'}
+                </button>
+              </div>
+
+              {isCreatingNewPaper ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newPaperTitle}
+                    onChange={e => setNewPaperTitle(e.target.value)}
+                    placeholder="Enter new paper title (e.g. TNPSC Group 4 2026 Sample Test)…"
+                    className="flex-1 text-xs bg-white border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand"
+                  />
+                  <button
+                    type="button"
+                    disabled={creatingPaper || !newPaperTitle.trim()}
+                    onClick={async () => {
+                      if (!newPaperTitle.trim()) return
+                      setCreatingPaper(true)
+                      try {
+                        const created = await paperService.createPaper({
+                          title: newPaperTitle.trim(),
+                          exam_type: 'prelims',
+                          exam_name: 'TNPSC Group 4',
+                          year: new Date().getFullYear(),
+                          duration_minutes: 180,
+                          maximum_marks: 200,
+                          status: 'draft',
+                        })
+                        setPapers(prev => [created, ...prev])
+                        setSelectedTargetPaperId(created.id)
+                        setIsCreatingNewPaper(false)
+                        setNewPaperTitle('')
+                        toast.success(`Created paper "${created.title}". Ready to extract!`)
+                      } catch (err) {
+                        toast.error('Failed to create paper: ' + err.message)
+                      } finally {
+                        setCreatingPaper(false)
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                  >
+                    {creatingPaper ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Create Paper
+                  </button>
+                </div>
+              ) : (
+                <select
+                  value={selectedTargetPaperId}
+                  onChange={e => setSelectedTargetPaperId(e.target.value)}
+                  className="w-full text-xs bg-white border border-surface-border rounded-xl px-3 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand cursor-pointer"
+                >
+                  {papers.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.title} ({p.total_questions || 0} questions currently)
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Tab switch between AI and Local PDF */}
