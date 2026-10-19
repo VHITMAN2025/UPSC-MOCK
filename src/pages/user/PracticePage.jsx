@@ -21,25 +21,52 @@ function PracticeBuilder({ onStart }) {
   const { toast } = useApp()
   const { user }  = useAuth()
   const [searchParams] = useSearchParams()
-  const urlSubject = searchParams.get('subject')
-  const urlTopic   = searchParams.get('topic')
+  const urlSubject  = searchParams.get('subject')
+  const urlTopic    = searchParams.get('topic')
+  const urlUnit     = searchParams.get('unit')
+  const urlMode     = searchParams.get('mode')
+  const urlMistakes = searchParams.get('mistakes')
+
+  const mistakeIds = React.useMemo(() => {
+    return urlMistakes ? urlMistakes.split(',').map(s => s.trim()).filter(Boolean) : []
+  }, [urlMistakes])
+
+  const isFixTest = urlMode === 'fix_test' && mistakeIds.length > 0
 
   const [subjects, setSubjects]   = useState(['All Subjects'])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
 
   const [config, setConfig] = useState({
-    subject: urlSubject || 'All Subjects', question_count: 25,
-    timer_mode: 'strict', difficulty: 'adaptive', exam_context: selectedExam,
+    subject: urlSubject || 'All Subjects',
+    topic: urlTopic || null,
+    unit: urlUnit || null,
+    question_count: isFixTest ? mistakeIds.length : 25,
+    timer_mode: 'strict',
+    difficulty: 'adaptive',
+    exam_context: selectedExam,
+    mode: urlMode || 'standard',
+    mistakes: mistakeIds,
+    mistake_ids: mistakeIds,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
   // Fetch subjects from syllabus_units for the selected exam
   useEffect(() => {
-    setConfig(c => ({ ...c, subject: urlSubject || 'All Subjects', exam_context: selectedExam }))
+    setConfig(c => ({
+      ...c,
+      subject: urlSubject || 'All Subjects',
+      topic: urlTopic || null,
+      unit: urlUnit || null,
+      exam_context: selectedExam,
+      mode: urlMode || 'standard',
+      mistakes: mistakeIds,
+      mistake_ids: mistakeIds,
+      question_count: isFixTest ? mistakeIds.length : (c.question_count || 25),
+    }))
     setError(null)
     loadSubjects(urlSubject)
-  }, [selectedExam, urlSubject])
+  }, [selectedExam, urlSubject, urlTopic, urlUnit, urlMode, mistakeIds, isFixTest])
 
   async function loadSubjects(preferredSubject) {
     setSubjectsLoading(true)
@@ -114,7 +141,27 @@ function PracticeBuilder({ onStart }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-6 space-y-6">
-        {urlTopic && (
+        {isFixTest && (
+          <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200 rounded-2xl p-4 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 font-black text-base shadow-sm">
+              🎯
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-purple-950">Adaptive Fix Test Mode Active</h3>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-purple-200 text-purple-800">
+                  Targeted Error Drill
+                </span>
+              </div>
+              <p className="text-xs text-purple-800 mt-1 leading-relaxed">
+                Targeting <strong>{mistakeIds.length} checked questions</strong> from your recent exam attempt.
+                This custom set re-drills the exact questions you marked for revision.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {urlTopic && !isFixTest && (
           <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-200 rounded-xl px-4 py-2.5 text-xs">
             <span className="text-indigo-800 font-semibold">
               Targeted Micro-Topic Focus: <strong className="font-bold">{urlTopic}</strong>
@@ -124,6 +171,7 @@ function PracticeBuilder({ onStart }) {
             </span>
           </div>
         )}
+
         {/* Subject */}
         <div>
           <label className="block text-sm font-bold text-body-text mb-2">Target Subject</label>
@@ -145,13 +193,29 @@ function PracticeBuilder({ onStart }) {
 
         {/* Question count */}
         <div>
-          <label className="block text-sm font-bold text-body-text mb-2">Number of Questions</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-sm font-bold text-body-text">Number of Questions</label>
+            {isFixTest && (
+              <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-lg">
+                Fix Test Size: {mistakeIds.length} Qs
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
-            {Q_COUNTS.map(n => (
-              <button key={n} onClick={() => setConfig(c => ({ ...c, question_count: n }))}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${config.question_count === n ? 'bg-tnpsc-brand text-white' : 'bg-slate-100 text-body-secondary hover:text-body-text'}`}
-              >{n}</button>
-            ))}
+            {isFixTest ? (
+              <button
+                type="button"
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-purple-600 text-white shadow-sm"
+              >
+                {mistakeIds.length} Questions (from Checked Mistakes)
+              </button>
+            ) : (
+              Q_COUNTS.map(n => (
+                <button key={n} onClick={() => setConfig(c => ({ ...c, question_count: n }))}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${config.question_count === n ? 'bg-tnpsc-brand text-white' : 'bg-slate-100 text-body-secondary hover:text-body-text'}`}
+                >{n}</button>
+              ))
+            )}
           </div>
         </div>
 
@@ -191,9 +255,17 @@ function PracticeBuilder({ onStart }) {
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="w-full py-3.5 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 shadow-brand disabled:opacity-60"
+          className={`w-full py-3.5 text-white font-bold text-sm rounded-xl transition-colors flex items-center justify-center gap-2 shadow-brand disabled:opacity-60 ${
+            isFixTest ? 'bg-purple-600 hover:bg-purple-700' : 'bg-tnpsc-brand hover:bg-tnpsc-brand-hover'
+          }`}
         >
-          {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Play className="w-4 h-4" /> Generate Practice Set</>}
+          {loading ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Preparing Practice Set…</>
+          ) : isFixTest ? (
+            <><Play className="w-4 h-4" /> Start Fix Test ({mistakeIds.length} Questions)</>
+          ) : (
+            <><Play className="w-4 h-4" /> Generate Practice Set</>
+          )}
         </button>
       </div>
     </div>

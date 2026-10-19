@@ -476,6 +476,8 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
           macro_topic_name: mName,
           micro_topic_name: miName,
           explanation: expl || null,
+          source_pdf: file?.name || paperTitle || null,
+          page_number: q.page_number || 1,
         }
       })
 

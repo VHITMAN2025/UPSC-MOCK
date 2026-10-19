@@ -47,6 +47,7 @@ import { AdminRecallPage }         from '../pages/admin/AdminRecallPage'
 import { AdminUsersPage }          from '../pages/admin/AdminUsersPage'
 import { AdminAnalyticsPage }      from '../pages/admin/AdminAnalyticsPage'
 import { AdminSettingsPage }       from '../pages/admin/AdminSettingsPage'
+import { AdminExtractedQuestionsPage } from '../pages/admin/AdminExtractedQuestionsPage'
 
 export function AppRoutes() {
   return (
@@ -104,8 +105,8 @@ export function AppRoutes() {
         <Route path="/admin/users"                        element={<AdminUsersPage />} />
         <Route path="/admin/analytics"                    element={<AdminAnalyticsPage />} />
         <Route path="/admin/settings"                     element={<AdminSettingsPage />} />
-        {/* Alias /admin/questions → papers list for now */}
-        <Route path="/admin/questions"                    element={<AdminPapersPage />} />
+        {/* Question Bank & Extracted Questions by Subject/Topic */}
+        <Route path="/admin/questions"                    element={<AdminExtractedQuestionsPage />} />
       </Route>
 
       {/* Catch-all */}

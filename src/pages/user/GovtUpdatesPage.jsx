@@ -159,17 +159,29 @@ export function GovtUpdatesPage() {
                   {item.vacancies && <p className="text-[10px] text-body-secondary">vacancies</p>}
                 </div>
               </div>
-              <div className="flex items-center gap-4 mt-3 text-[10px] text-body-secondary flex-wrap">
-                {item.application_end && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> Apply by: {formatShortDate(item.application_end)}
-                  </span>
-                )}
-                {item.exam_date && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> Exam: {formatShortDate(item.exam_date)}
-                  </span>
-                )}
+              <div className="flex items-center justify-between gap-4 mt-3 pt-2 border-t border-slate-100 text-[10px] text-body-secondary flex-wrap">
+                <div className="flex items-center gap-4 flex-wrap">
+                  {item.application_end && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> Apply by: {formatShortDate(item.application_end)}
+                    </span>
+                  )}
+                  {item.exam_date && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> Exam: {formatShortDate(item.exam_date)}
+                    </span>
+                  )}
+                </div>
+                <a
+                  href={item.official_url || 'https://www.tnpsc.gov.in'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-tnpsc-brand hover:underline"
+                >
+                  <span>Official Source ({item.department === 'TNPSC' ? 'tnpsc.gov.in' : item.department})</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
             </button>
           ))}
@@ -246,16 +258,15 @@ export function GovtUpdatesPage() {
                   <Download className="w-4 h-4" /> Download PDF
                 </a>
               )}
-              {selected.official_url && (
-                <a
-                  href={selected.official_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-surface-border text-sm font-semibold rounded-xl hover:bg-slate-50 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" /> Official Portal
-                </a>
-              )}
+              <a
+                href={selected.official_url || 'https://www.tnpsc.gov.in'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-surface-border text-sm font-semibold rounded-xl hover:bg-slate-50 transition-colors text-body-text shadow-subtle"
+              >
+                <ExternalLink className="w-4 h-4 text-tnpsc-brand" />
+                <span>Official Source ({selected.department === 'TNPSC' ? 'tnpsc.gov.in' : selected.department + ' Portal'})</span>
+              </a>
               {selected.apply_url && (
                 <a
                   href={selected.apply_url}

@@ -151,7 +151,12 @@ export function AnalyticsPage() {
 
   // ── History & Trend Computations ───────────────────────────────────────────
   const mockTestHistory = data?.mockTestHistory ?? []
-  const displayHistory = timeFilter === 'last5' ? mockTestHistory.slice(-5) : mockTestHistory
+  const allCompletedHistory = (data?.allMockTestHistory && data.allMockTestHistory.length > 0)
+    ? data.allMockTestHistory
+    : mockTestHistory
+  const displayHistory = timeFilter === 'last5'
+    ? (mockTestHistory.length > 0 ? mockTestHistory.slice(-5) : allCompletedHistory.slice(-5))
+    : allCompletedHistory
   const trendSummary = data?.trendSummary ?? {}
 
   // Readiness Index: strictly computed from user test accuracy and syllabus coverage
@@ -252,11 +257,14 @@ export function AnalyticsPage() {
 
             <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
               <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Accuracy
+                Attempted Accuracy
               </small>
               <b className="block text-xl font-black text-emerald-400 mt-1">
                 {hasAttempts ? `${data.avgAccuracy}%` : '—'}
               </b>
+              <span className="block text-[10px] text-slate-400 mt-0.5">
+                {hasAttempts ? 'Based on answered questions' : 'No attempts recorded'}
+              </span>
             </div>
 
             <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
@@ -270,11 +278,14 @@ export function AnalyticsPage() {
 
             <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
               <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Consistency
+                Total Attempts
               </small>
               <b className="block text-xl font-black text-white mt-1">
-                {Math.min(5, data?.totalAttempts || 0)} / 5
+                {allCompletedHistory.length || data?.totalAttempts || 0}
               </b>
+              <span className="block text-[10px] text-slate-400 mt-0.5">
+                Completed tests
+              </span>
             </div>
 
             <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
@@ -391,7 +402,15 @@ export function AnalyticsPage() {
               </div>
 
               <button
-                onClick={() => navigate('/practice')}
+                onClick={() => {
+                  const sorted = units.slice().sort((a, b) => Number(a.accuracy_percentage || 0) - Number(b.accuracy_percentage || 0))
+                  const target = sorted[0]
+                  if (target) {
+                    navigate(`/practice?subject=${encodeURIComponent(target.unit_name)}&unit=${encodeURIComponent(target.unit_number)}`)
+                  } else {
+                    navigate('/practice')
+                  }
+                }}
                 className="w-full py-2.5 rounded-xl bg-tnpsc-brand hover:bg-tnpsc-brand-dark text-white font-bold text-xs transition-colors shadow-brand"
               >
                 Generate Fix Test →

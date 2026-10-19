@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, FileText, History,
   Newspaper, BellRing, BookMarked, BarChart3,
   StickyNote, Upload, Brain, ChevronLeft, ChevronRight,
-  LogOut, Settings, Zap,
+  LogOut, Settings, Zap, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -27,7 +27,7 @@ const NAV = [
 export function TnpscSidebar({ mobileOpen, onMobileClose }) {
   const location = useLocation()
   const navigate  = useNavigate()
-  const { profile, logout } = useAuth()
+  const { profile, logout, isAdmin } = useAuth()
   const { t, selectedExam, setSelectedExam, language, setLanguage } = useApp()
   const [collapsed, setCollapsed] = useState(false)
 
@@ -99,6 +99,26 @@ export function TnpscSidebar({ mobileOpen, onMobileClose }) {
             </Link>
           )
         })}
+        {/* Admin Link if admin */}
+        {(isAdmin || profile?.role === 'admin') && (
+          <div className="pt-2 mt-2 border-t border-tnpsc-card-border/80">
+            <Link
+              to="/admin/questions"
+              onClick={onMobileClose}
+              title={collapsed ? "Extracted Questions (Admin)" : undefined}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150',
+                collapsed && 'justify-center px-2',
+                location.pathname.startsWith('/admin')
+                  ? 'bg-amber-600 text-white shadow-brand'
+                  : 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-200 border border-amber-500/30'
+              )}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400" />
+              {!collapsed && <span className="truncate">Admin Questions</span>}
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* Bottom: profile + language + collapse */}

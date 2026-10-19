@@ -18,7 +18,7 @@ const OPTION_LABELS = ['A', 'B', 'C', 'D']
  */
 export function QuickRecall({ onClose }) {
   const { user } = useAuth()
-  const { selectedExam, toast } = useApp()
+  const { selectedExam, language, toast } = useApp()
 
   const [phase, setPhase]             = useState('loading') // loading | question | reveal | result | error
   const [questions, setQs]            = useState([])
@@ -32,6 +32,9 @@ export function QuickRecall({ onClose }) {
   const [loading, setLoading]         = useState(false)
   const [isResume, setIsResume]       = useState(false)
   const [isCompletedToday, setIsCompletedToday] = useState(false)
+  const [recallLang, setRecallLang]   = useState(language || 'en')
+
+  const isTa = recallLang === 'ta'
 
   useEffect(() => {
     if (user?.id) initDailyRecall()
@@ -90,12 +93,18 @@ export function QuickRecall({ onClose }) {
         qs.map(q => ({
           id: q.id,
           question_text: q.question_text,
+          question_text_tamil: q.question_text_tamil,
           option_a: q.option_a,
+          option_a_tamil: q.option_a_tamil,
           option_b: q.option_b,
+          option_b_tamil: q.option_b_tamil,
           option_c: q.option_c,
+          option_c_tamil: q.option_c_tamil,
           option_d: q.option_d,
+          option_d_tamil: q.option_d_tamil,
           correct_option: q.correct_option,
           explanation: q.explanation,
+          explanation_tamil: q.explanation_tamil,
           question_type: q.question_type || (q.is_pyq ? 'PYQ' : 'SYNTHETIC'),
           is_pyq: !!q.is_pyq,
           is_previous_wrong: !!q.is_previous_wrong,
@@ -133,7 +142,7 @@ export function QuickRecall({ onClose }) {
       selected: option,
       correct: currentQ.correct_option,
       isCorrect,
-      explanation: currentQ.explanation,
+      explanation: isTa && currentQ.explanation_tamil ? currentQ.explanation_tamil : currentQ.explanation,
     }
     setAnswers(prev => [...prev, answerObj])
 
@@ -149,7 +158,7 @@ export function QuickRecall({ onClose }) {
         user.id
       )
     }
-  }, [selected, phase, currentQ, correct, sessionId, index, user?.id])
+  }, [selected, phase, currentQ, correct, sessionId, index, user?.id, isTa])
 
   const handleNext = useCallback(async () => {
     if (index < TOTAL - 1) {
@@ -222,16 +231,32 @@ export function QuickRecall({ onClose }) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm">Quick Recall</span>
+                <span className="font-bold text-sm">
+                  {isTa ? 'விரைவு நினைவுபடுத்தல்' : 'Quick Recall'}
+                </span>
                 <span className="text-[10px] font-semibold bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  Daily 5
+                  {isTa ? 'தினசரி 5' : 'Daily 5'}
                 </span>
               </div>
-              <p className="text-[11px] text-white/80">50% PYQ + 50% Synthetic Revision</p>
+              <p className="text-[11px] text-white/80">
+                {isTa ? '50% முந்தைய வினாக்கள் + 50% மாதிரி வினாக்கள்' : '50% PYQ + 50% Synthetic Revision'}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs bg-white/10 px-2.5 py-1 rounded-full font-bold">
+          <div className="flex items-center gap-2">
+            {/* Language Switcher Button */}
+            <button
+              onClick={() => setRecallLang(prev => (prev === 'ta' ? 'en' : 'ta'))}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold transition-all bg-white/15 hover:bg-white/25 text-white border border-white/30"
+              title={isTa ? 'ஆங்கிலத்திற்கு மாற்றவும்' : 'தமிழில் மாற்றவும்'}
+              aria-label="Switch Recall Language"
+            >
+              <span className={recallLang === 'en' ? 'text-amber-200 font-black' : 'opacity-70'}>EN</span>
+              <span className="opacity-40">|</span>
+              <span className={recallLang === 'ta' ? 'text-amber-200 font-black' : 'opacity-70'}>தமிழ்</span>
+            </button>
+
+            <div className="hidden sm:flex items-center gap-1.5 text-xs bg-white/10 px-2 py-1 rounded-full font-bold">
               <Calendar className="w-3.5 h-3.5 text-orange-200" />
               <span>{quickRecallService.getTodayDateStr()}</span>
             </div>
@@ -251,8 +276,12 @@ export function QuickRecall({ onClose }) {
           {phase === 'loading' && (
             <div className="flex flex-col items-center gap-3 py-14">
               <Loader2 className="w-9 h-9 animate-spin text-tnpsc-brand" />
-              <p className="text-sm font-semibold text-body-text">Checking today's revision set…</p>
-              <p className="text-xs text-body-secondary">Personalizing 5 questions from PYQ & Model pools</p>
+              <p className="text-sm font-semibold text-body-text">
+                {isTa ? 'இன்றைய திருப்புதல் வினாக்கள் தயாராகின்றன…' : "Checking today's revision set…"}
+              </p>
+              <p className="text-xs text-body-secondary">
+                {isTa ? 'முந்தைய ஆண்டு மற்றும் மாதிரி வினாக்களிலிருந்து தேர்ந்தெடுக்கப்படுகிறது' : 'Personalizing 5 questions from PYQ & Model pools'}
+              </p>
             </div>
           )}
 
@@ -262,13 +291,17 @@ export function QuickRecall({ onClose }) {
               <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
                 <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
-              <p className="text-sm text-status-error font-semibold mb-2">Could not load Quick Recall.</p>
-              <p className="text-xs text-body-secondary mb-5">Please try again in a moment.</p>
+              <p className="text-sm text-status-error font-semibold mb-2">
+                {isTa ? 'நினைவுபடுத்தல் தொகுப்பை ஏற்ற முடியவில்லை.' : 'Could not load Quick Recall.'}
+              </p>
+              <p className="text-xs text-body-secondary mb-5">
+                {isTa ? 'சிறிது நேரம் கழித்து மீண்டும் முயற்சிக்கவும்.' : 'Please try again in a moment.'}
+              </p>
               <button
                 onClick={initDailyRecall}
                 className="px-4 py-2 bg-tnpsc-brand text-white rounded-xl text-xs font-bold hover:bg-tnpsc-brand-hover transition-colors"
               >
-                Retry
+                {isTa ? 'மீண்டும் முயற்சி' : 'Retry'}
               </button>
             </div>
           )}
@@ -279,7 +312,11 @@ export function QuickRecall({ onClose }) {
               {isResume && (
                 <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 flex items-center gap-2 text-xs text-blue-800">
                   <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                  <span>Resumed today's in-progress session. Answering question {index + 1} of {TOTAL}.</span>
+                  <span>
+                    {isTa
+                      ? `இன்றைய அமர்வு தொடரப்படுகிறது. கேள்வி ${index + 1} / ${TOTAL}.`
+                      : `Resumed today's in-progress session. Answering question ${index + 1} of ${TOTAL}.`}
+                  </span>
                 </div>
               )}
 
@@ -289,43 +326,44 @@ export function QuickRecall({ onClose }) {
               <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-body-secondary uppercase tracking-wider">
-                    Question {index + 1} of {TOTAL}
+                    {isTa ? `கேள்வி ${index + 1} / ${TOTAL}` : `Question ${index + 1} of ${TOTAL}`}
                   </span>
 
                   {/* 50% PYQ + 50% Synthetic Badge */}
                   {currentQ.question_type === 'PYQ' || currentQ.is_pyq ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                      PYQ Archive {currentQ.exam_source ? `· ${currentQ.exam_source}` : ''}
+                      {isTa ? 'முந்தைய ஆண்டு வினா' : 'PYQ Archive'} {currentQ.exam_source ? `· ${currentQ.exam_source}` : ''}
                     </span>
                   ) : (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                      Model Revision {currentQ.subject ? `· ${currentQ.subject}` : ''}
+                      {isTa ? 'மாதிரி திருப்புதல்' : 'Model Revision'} {currentQ.subject ? `· ${currentQ.subject}` : ''}
                     </span>
                   )}
 
                   {/* Spaced repetition tag if user previously answered wrong */}
                   {currentQ.is_previous_wrong && (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 flex items-center gap-1">
-                      ⚠️ Spaced Repetition (Past Mistake)
+                      {isTa ? '⚠️ முந்தைய தவறு (திருப்புதல்)' : '⚠️ Spaced Repetition (Past Mistake)'}
                     </span>
                   )}
                 </div>
 
                 <span className="text-xs font-bold text-body-secondary">
-                  Score: {correct}/{answers.length}
+                  {isTa ? 'மதிப்பெண்:' : 'Score:'} {correct}/{answers.length}
                 </span>
               </div>
 
               {/* Question Body */}
-              <p className="text-sm font-semibold text-body-text leading-relaxed mb-5">
-                {currentQ.question_text}
+              <p className="text-sm font-semibold text-body-text leading-relaxed mb-5 whitespace-pre-line">
+                {isTa && currentQ.question_text_tamil ? currentQ.question_text_tamil : currentQ.question_text}
               </p>
 
               {/* Multiple Choice Options */}
               <div className="space-y-2.5">
                 {OPTION_LABELS.map((label) => {
                   const optField = `option_${label.toLowerCase()}`
-                  const text = currentQ[optField]
+                  const optFieldTa = `option_${label.toLowerCase()}_tamil`
+                  const text = isTa && currentQ[optFieldTa] ? currentQ[optFieldTa] : currentQ[optField]
                   if (!text) return null
 
                   let btnCls = 'w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left '
@@ -379,13 +417,15 @@ export function QuickRecall({ onClose }) {
                     <div className="flex-1">
                       <p className="text-sm font-bold">
                         {selected === currentQ.correct_option
-                          ? 'Correct answer!'
-                          : `Incorrect. Correct Option is ${currentQ.correct_option}.`
+                          ? (isTa ? 'சரியான விடை!' : 'Correct answer!')
+                          : (isTa
+                              ? `தவறான விடை. சரியான தெரிவு: ${currentQ.correct_option}.`
+                              : `Incorrect. Correct Option is ${currentQ.correct_option}.`)
                         }
                       </p>
-                      {currentQ.explanation && (
+                      {(isTa && currentQ.explanation_tamil ? currentQ.explanation_tamil : currentQ.explanation) && (
                         <p className="text-xs text-body-secondary mt-1 leading-relaxed">
-                          {currentQ.explanation}
+                          {isTa && currentQ.explanation_tamil ? currentQ.explanation_tamil : currentQ.explanation}
                         </p>
                       )}
                     </div>
@@ -400,9 +440,9 @@ export function QuickRecall({ onClose }) {
                       {loading ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : index < TOTAL - 1 ? (
-                        <><span>Next Question</span><ArrowRight className="w-3.5 h-3.5" /></>
+                        <><span>{isTa ? 'அடுத்த கேள்வி' : 'Next Question'}</span><ArrowRight className="w-3.5 h-3.5" /></>
                       ) : (
-                        <span>Complete Session →</span>
+                        <span>{isTa ? 'நிறைவு செய் →' : 'Complete Session →'}</span>
                       )}
                     </button>
                   </div>
@@ -435,10 +475,12 @@ export function QuickRecall({ onClose }) {
                       <Trophy className="w-7 h-7" />
                     </div>
                     <h3 className="text-lg font-black text-emerald-800">
-                      🔥 Streak Qualified! (5/5 Perfect Score)
+                      {isTa ? '🔥 தொடர்ச்சி தகுதி பெற்றது! (5/5 முழு மதிப்பெண்)' : '🔥 Streak Qualified! (5/5 Perfect Score)'}
                     </h3>
                     <p className="text-xs text-emerald-700 mt-1">
-                      Outstanding! You answered all 5 correctly. Your daily streak has advanced to <strong>{result?.new_streak ?? 1} days</strong>!
+                      {isTa
+                        ? `அருமை! 5 வினாக்களுக்கும் சரியான விடையளித்துள்ளீர்கள். உங்கள் தினசரி தொடர்ச்சி ${result?.new_streak ?? 1} நாட்களாக அதிகரித்துள்ளது!`
+                        : `Outstanding! You answered all 5 correctly. Your daily streak has advanced to ${result?.new_streak ?? 1} days!`}
                     </p>
                   </div>
                 ) : (
@@ -447,11 +489,12 @@ export function QuickRecall({ onClose }) {
                       <Flame className="w-7 h-7" />
                     </div>
                     <h3 className="text-lg font-black text-amber-900">
-                      💔 Streak Chain Broken ({correct}/{TOTAL})
+                      {isTa ? `💔 தொடர்ச்சி சங்கிலி உடைந்தது (${correct}/${TOTAL})` : `💔 Streak Chain Broken (${correct}/${TOTAL})`}
                     </h3>
                     <p className="text-xs text-amber-800 mt-1">
-                      Quick Recall requires a <strong>perfect 5/5 score</strong> to maintain your daily streak.
-                      {correct === 4 ? ' Even 4/5 resets the active streak chain to 0.' : ' Streak reset to 0.'}
+                      {isTa
+                        ? 'தொடர்ச்சியைத் தக்கவைக்க 5/5 முழு மதிப்பெண் தேவை. அடுத்த நாளில் மீண்டும் தொடங்குங்கள்!'
+                        : 'Quick Recall requires a perfect 5/5 score to maintain your daily streak chain.'}
                     </p>
                   </div>
                 )}
@@ -460,17 +503,23 @@ export function QuickRecall({ onClose }) {
               {/* Stats Grid */}
               <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="bg-slate-50 border border-surface-border rounded-xl p-3">
-                  <p className="text-xs text-body-secondary font-semibold">Today's Score</p>
+                  <p className="text-xs text-body-secondary font-semibold">
+                    {isTa ? 'இன்றைய மதிப்பெண்' : "Today's Score"}
+                  </p>
                   <p className="text-xl font-black text-body-text mt-0.5">{correct}/{TOTAL}</p>
                 </div>
                 <div className="bg-slate-50 border border-surface-border rounded-xl p-3">
-                  <p className="text-xs text-body-secondary font-semibold">Daily Streak</p>
+                  <p className="text-xs text-body-secondary font-semibold">
+                    {isTa ? 'தினசரி தொடர்ச்சி' : 'Daily Streak'}
+                  </p>
                   <p className="text-xl font-black text-tnpsc-brand mt-0.5">
-                    {result?.new_streak ?? (correct === TOTAL ? 1 : 0)} d
+                    {result?.new_streak ?? (correct === TOTAL ? 1 : 0)} {isTa ? 'நாட்கள்' : 'd'}
                   </p>
                 </div>
                 <div className="bg-slate-50 border border-surface-border rounded-xl p-3">
-                  <p className="text-xs text-body-secondary font-semibold">Points Earned</p>
+                  <p className="text-xs text-body-secondary font-semibold">
+                    {isTa ? 'ஈட்டிய புள்ளிகள்' : 'Points Earned'}
+                  </p>
                   <p className="text-xl font-black text-emerald-600 mt-0.5">
                     +{result?.recall_points ?? correct * 10}
                   </p>
@@ -480,11 +529,12 @@ export function QuickRecall({ onClose }) {
               {/* Question-by-Question Review */}
               <div className="text-left space-y-2.5 mb-6">
                 <h4 className="text-xs font-bold text-body-secondary uppercase tracking-wider px-1">
-                  Revision Review (50% PYQ + 50% Synthetic)
+                  {isTa ? 'வினா வாரியான மறுபார்வை (50% PYQ + 50% மாதிரி வினாக்கள்)' : 'Revision Review (50% PYQ + 50% Synthetic)'}
                 </h4>
                 {questions.map((q, idx) => {
                   const ans = answers[idx]
                   const isRight = ans?.isCorrect
+                  const qDisplay = isTa && q.question_text_tamil ? q.question_text_tamil : q.question_text
                   return (
                     <div
                       key={idx}
@@ -500,24 +550,25 @@ export function QuickRecall({ onClose }) {
                             <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                           )}
                           <div>
-                            <span className="font-bold text-body-text">Q{idx + 1}: </span>
-                            <span className="text-body-text">{q.question_text}</span>
+                            <span className="font-bold text-body-text">{isTa ? `கேள்வி ${idx + 1}: ` : `Q${idx + 1}: `}</span>
+                            <span className="text-body-text">{qDisplay}</span>
                           </div>
                         </div>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                           q.question_type === 'PYQ' || q.is_pyq ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
                         }`}>
-                          {q.question_type === 'PYQ' || q.is_pyq ? 'PYQ' : 'Model'}
+                          {q.question_type === 'PYQ' || q.is_pyq ? (isTa ? 'முந்தைய வினா' : 'PYQ') : (isTa ? 'மாதிரி வினா' : 'Model')}
                         </span>
                       </div>
 
                       <div className="mt-2 pl-6 flex items-center gap-3 text-[11px]">
                         <span className="text-body-secondary">
-                          Your answer: <strong className={isRight ? 'text-emerald-700' : 'text-red-700'}>{ans?.selected || '—'}</strong>
+                          {isTa ? 'உங்கள் தெரிவு: ' : 'Your answer: '}
+                          <strong className={isRight ? 'text-emerald-700' : 'text-red-700'}>{ans?.selected || '—'}</strong>
                         </span>
                         {!isRight && (
                           <span className="text-emerald-700 font-semibold">
-                            Correct: {q.correct_option}
+                            {isTa ? 'சரியான விடை: ' : 'Correct: '}{q.correct_option}
                           </span>
                         )}
                       </div>
@@ -531,7 +582,7 @@ export function QuickRecall({ onClose }) {
                 onClick={onClose}
                 className="w-full py-3 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white text-sm font-bold rounded-xl transition-colors shadow-brand"
               >
-                Close & Return to Dashboard
+                {isTa ? 'மூடிவிட்டு டாஷ்போர்டு செல்க' : 'Close & Return to Dashboard'}
               </button>
             </div>
           )}

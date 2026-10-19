@@ -83,7 +83,9 @@ export function AppProvider({ children }) {
 
   const [selectedExam, setSelectedExamState] = useState('TNPSC Group 4')
   const [language, setLanguageState]         = useState('en')
-  const [group2LanguagePref, setGroup2LanguagePrefState] = useState('General Tamil')
+  const [group2LanguagePref, setGroup2LanguagePrefState] = useState(() => {
+    return localStorage.getItem('tnpsc_group2_language_pref') || 'General Tamil'
+  })
   const [geminiApiKey, setGeminiApiKeyState] = useState(() => apiKeyService.getUserApiKey())
   const [toasts, setToasts]                  = useState([])
   const toastTimeouts = useRef({})
@@ -92,7 +94,13 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (profile?.selected_exam)        setSelectedExamState(profile.selected_exam)
     if (profile?.preferred_language)   setLanguageState(profile.preferred_language)
-    if (profile?.group2_language_pref) setGroup2LanguagePrefState(profile.group2_language_pref)
+    const storedG2 = localStorage.getItem('tnpsc_group2_language_pref')
+    if (profile?.group2_language_pref) {
+      setGroup2LanguagePrefState(profile.group2_language_pref)
+      localStorage.setItem('tnpsc_group2_language_pref', profile.group2_language_pref)
+    } else if (storedG2) {
+      setGroup2LanguagePrefState(storedG2)
+    }
     
     if (profile?.gemini_api_key) {
       apiKeyService.setCachedProfileKey(profile.gemini_api_key)
@@ -130,11 +138,21 @@ export function AppProvider({ children }) {
     }
   }, [user?.id])
 
-  // Persist Group 2 language preference to Supabase profile
+  // Persist Group 2 language preference to Supabase profile & localStorage
   const setGroup2LanguagePref = useCallback(async (pref) => {
     setGroup2LanguagePrefState(pref)
+    try {
+      localStorage.setItem('tnpsc_group2_language_pref', pref)
+      if (user?.id) {
+        localStorage.setItem(`tnpsc_group2_language_pref_${user.id}`, pref)
+      }
+    } catch (e) {}
     if (user?.id) {
-      await supabase.from('profiles').update({ group2_language_pref: pref }).eq('id', user.id)
+      try {
+        await supabase.from('profiles').update({ group2_language_pref: pref }).eq('id', user.id)
+      } catch (err) {
+        console.warn('Group2 language pref cached locally:', err)
+      }
     }
   }, [user?.id])
 

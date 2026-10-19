@@ -22,14 +22,20 @@ export function AuthProvider({ children }) {
       }
 
       if (data) {
-        setProfile(data)
+        const cachedG2 = localStorage.getItem(`tnpsc_group2_language_pref_${userId}`) || localStorage.getItem('tnpsc_group2_language_pref')
+        setProfile({
+          ...data,
+          group2_language_pref: data.group2_language_pref || cachedG2 || 'General Tamil'
+        })
       } else {
+        const cachedG2 = localStorage.getItem(`tnpsc_group2_language_pref_${userId}`) || localStorage.getItem('tnpsc_group2_language_pref')
         // Fallback profile object if trigger hasn't fired yet or mock session
         setProfile({
           id: userId,
           full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User',
           email: user?.email || '',
-          role: user?.user_metadata?.role || 'user'
+          role: user?.user_metadata?.role || 'user',
+          group2_language_pref: cachedG2 || 'General Tamil'
         })
       }
     } catch (err) {

@@ -28,13 +28,28 @@ function NoteCard({ note, onEdit, onDelete, onTogglePin }) {
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-bold text-body-text flex-1 leading-snug">{note.title || 'Untitled'}</h3>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onTogglePin(note)} className="p-1 rounded hover:bg-black/5 transition-colors" title={note.is_pinned ? 'Unpin' : 'Pin'}>
+          <button
+            onClick={() => onTogglePin(note)}
+            className="p-1 rounded hover:bg-black/5 transition-colors"
+            title={note.is_pinned ? 'Unpin note' : 'Pin note'}
+            aria-label={note.is_pinned ? 'Unpin note' : 'Pin note'}
+          >
             <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'text-tnpsc-brand fill-tnpsc-brand' : 'text-body-secondary'}`} />
           </button>
-          <button onClick={() => onEdit(note)} className="p-1 rounded hover:bg-black/5 transition-colors">
+          <button
+            onClick={() => onEdit(note)}
+            className="p-1 rounded hover:bg-black/5 transition-colors"
+            title="Edit note"
+            aria-label="Edit note"
+          >
             <Edit2 className="w-3.5 h-3.5 text-body-secondary" />
           </button>
-          <button onClick={() => onDelete(note)} className="p-1 rounded hover:bg-black/5 transition-colors">
+          <button
+            onClick={() => onDelete(note)}
+            className="p-1 rounded hover:bg-black/5 transition-colors"
+            title="Delete note"
+            aria-label="Delete note"
+          >
             <Trash2 className="w-3.5 h-3.5 text-red-400" />
           </button>
         </div>

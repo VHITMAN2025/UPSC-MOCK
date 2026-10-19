@@ -11,14 +11,14 @@ import { useApp } from '../../contexts/AppContext'
 import { apiKeyService } from '../../services/apiKeyService'
 
 const STAT_CARDS = (s) => [
-  { label: 'Total Papers',    value: s.totalPapers,    sub: `${s.publishedPapers} published · ${s.draftPapers} drafts`, icon: FileText,  color: 'text-blue-700 bg-blue-50' },
-  { label: 'Questions',       value: s.totalQuestions, sub: 'In question bank',                                          icon: HelpCircle, color: 'text-indigo-700 bg-indigo-50' },
-  { label: 'Current Affairs', value: s.totalAffairs,   sub: `${s.publishedAffairs} published`,                          icon: Newspaper,  color: 'text-tnpsc-brand bg-tnpsc-brand-light' },
-  { label: 'Notifications',   value: s.totalNotifs,    sub: `${s.activeNotifs} active`,                                  icon: BellRing,   color: 'text-green-700 bg-green-50' },
-  { label: 'Syllabus Topics', value: s.totalTopics,    sub: `${s.totalUnits} units`,                                     icon: BookMarked, color: 'text-purple-700 bg-purple-50' },
-  { label: 'Recall Questions',value: s.totalRecall,    sub: `${s.activeRecall} active`,                                  icon: Brain,      color: 'text-orange-700 bg-orange-50' },
-  { label: 'Total Users',     value: s.totalUsers,     sub: `${s.newUsersWeek} new this week`,                           icon: Users,      color: 'text-emerald-700 bg-emerald-50' },
-  { label: 'Attempts',        value: s.totalAttempts,  sub: `${s.completedAttempts} completed · avg ${s.avgScore}%`,     icon: BarChart3,  color: 'text-slate-700 bg-slate-100' },
+  { label: 'Total Papers',    value: s.totalPapers,    sub: `${s.publishedPapers} published · ${s.draftPapers} drafts`, icon: FileText,  color: 'text-blue-700 bg-blue-50', path: '/admin/papers' },
+  { label: 'Questions',       value: s.totalQuestions, sub: 'In question bank & extracted PDFs',                        icon: HelpCircle, color: 'text-indigo-700 bg-indigo-50', path: '/admin/questions' },
+  { label: 'Current Affairs', value: s.totalAffairs,   sub: `${s.publishedAffairs} published`,                          icon: Newspaper,  color: 'text-tnpsc-brand bg-tnpsc-brand-light', path: '/admin/current-affairs' },
+  { label: 'Notifications',   value: s.totalNotifs,    sub: `${s.activeNotifs} active`,                                  icon: BellRing,   color: 'text-green-700 bg-green-50', path: '/admin/notifications' },
+  { label: 'Syllabus Topics', value: s.totalTopics,    sub: `${s.totalUnits} units`,                                     icon: BookMarked, color: 'text-purple-700 bg-purple-50', path: '/admin/syllabus' },
+  { label: 'Recall Questions',value: s.totalRecall,    sub: `${s.activeRecall} active`,                                  icon: Brain,      color: 'text-orange-700 bg-orange-50', path: '/admin/recall' },
+  { label: 'Total Users',     value: s.totalUsers,     sub: `${s.newUsersWeek} new this week`,                           icon: Users,      color: 'text-emerald-700 bg-emerald-50', path: '/admin/users' },
+  { label: 'Attempts',        value: s.totalAttempts,  sub: `${s.completedAttempts} completed · avg ${s.avgScore}%`,     icon: BarChart3,  color: 'text-slate-700 bg-slate-100', path: '/admin/attempts' },
 ]
 
 const QUICK_ACTIONS = [
@@ -107,15 +107,19 @@ export function AdminDashboard() {
       {/* Stats grid */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {STAT_CARDS(stats).map(({ label, value, sub, icon: Icon, color }) => (
-            <div key={label} className="bg-white rounded-xl border border-surface-border p-4 shadow-subtle">
-              <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-3`}>
+          {STAT_CARDS(stats).map(({ label, value, sub, icon: Icon, color, path }) => (
+            <Link
+              key={label}
+              to={path || '#'}
+              className="bg-white rounded-xl border border-surface-border p-4 shadow-subtle hover:border-slate-300 transition-all hover:shadow-card block group"
+            >
+              <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-3 transition-transform group-hover:scale-105`}>
                 <Icon className="w-4 h-4" />
               </div>
               <p className="text-2xl font-bold text-body-text">{value ?? 0}</p>
-              <p className="text-xs font-semibold text-body-text mt-0.5">{label}</p>
+              <p className="text-xs font-semibold text-body-text mt-0.5 group-hover:text-tnpsc-brand transition-colors">{label}</p>
               <p className="text-[10px] text-body-secondary mt-0.5">{sub}</p>
-            </div>
+            </Link>
           ))}
         </div>
       )}

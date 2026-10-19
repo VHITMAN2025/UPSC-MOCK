@@ -207,6 +207,8 @@ export const questionService = {
         option_d: sanitizeDatabaseText(optD),
         correct_option: validOpt,
         explanation: baseExplanation,
+        source_pdf: sanitizeDatabaseText(q.source_pdf || null),
+        page_number: q.page_number || 1,
         question_text_tamil: sanitizeDatabaseText(q.question_text_tamil || q.tamil_question || null),
         option_a_tamil: sanitizeDatabaseText(q.option_a_tamil || null),
         option_b_tamil: sanitizeDatabaseText(q.option_b_tamil || null),
@@ -352,6 +354,153 @@ export const questionService = {
     }
 
     return data || []
+  },
+
+  async getAllExtractedQuestionsForAdmin({ search = '', unit = '', paperId = '', limit = 2000 } = {}) {
+    // 1. Fetch papers for title and metadata lookup
+    const { data: papersData, error: pErr } = await supabase
+      .from('papers')
+      .select('id, title, exam_name, exam_type, year, total_questions, created_at')
+      .order('created_at', { ascending: false })
+
+    if (pErr) console.warn('[questionService] Error fetching papers list:', pErr)
+    const papersMap = new Map((papersData || []).map(p => [p.id, p]))
+
+    // 2. Query questions from database
+    let query = supabase
+      .from('questions')
+      .select('id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, created_at')
+      .order('created_at', { ascending: false })
+
+    if (paperId && paperId !== 'all') {
+      query = query.eq('paper_id', paperId)
+    }
+
+    if (limit) {
+      query = query.limit(limit)
+    }
+
+    const { data: rawQuestions, error: qErr } = await query
+    if (qErr) throw qErr
+
+    // 3. Enrich each question with Level 1, 2, and 3 taxonomy
+    const enriched = (rawQuestions || []).map((q) => {
+      const linkedPaper = papersMap.get(q.paper_id)
+      let unitName = null
+      let macroName = null
+      let microName = null
+
+      if (q.explanation && q.explanation.includes('[Taxonomy:')) {
+        const m = q.explanation.match(/\[Taxonomy:\s*([^>]+)\s*>\s*([^>]+)\s*>\s*([^\]]+)\]/)
+        if (m) {
+          unitName = m[1]?.trim()
+          macroName = m[2]?.trim()
+          microName = m[3]?.trim()
+        }
+      }
+
+      if (!unitName || !macroName || !microName) {
+        const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(q, CANONICAL_MICROS)
+        if (matched) {
+          unitName = unitName || matched.unit_name
+          macroName = macroName || matched.macro_topic_name
+          microName = microName || matched.micro_topic_name
+        }
+      }
+
+      unitName = unitName || 'Unit I: General Science'
+      macroName = macroName || 'General Studies'
+      microName = microName || 'General Concepts'
+
+      const paperTitle = linkedPaper?.title || q.source_pdf || 'Extracted Paper'
+      const sourcePdfName = q.source_pdf || linkedPaper?.title || 'Uploaded PDF'
+
+      return {
+        ...q,
+        unit_name: unitName,
+        macro_topic_name: macroName,
+        micro_topic_name: microName,
+        paper_title: paperTitle,
+        paper_exam_name: linkedPaper?.exam_name || 'TNPSC',
+        paper_year: linkedPaper?.year || null,
+        source_pdf_display: sourcePdfName,
+        has_db_taxonomy: Boolean(q.explanation && q.explanation.includes('[Taxonomy:')),
+      }
+    })
+
+    return {
+      questions: enriched,
+      papers: papersData || [],
+      totalCount: enriched.length,
+    }
+  },
+
+  async updateQuestionTopic(questionId, { unitName, macroTopicName, microTopicName }) {
+    if (!questionId) throw new Error('Question ID is required')
+
+    // Read current explanation
+    const { data: currentQ, error: fetchErr } = await supabase
+      .from('questions')
+      .select('explanation')
+      .eq('id', questionId)
+      .single()
+
+    if (fetchErr) throw fetchErr
+
+    let baseExpl = (currentQ?.explanation || '').replace(/\[Taxonomy:[^\]]+\]\s*/g, '').trim()
+    const newTaxPrefix = `[Taxonomy: ${unitName} > ${macroTopicName || 'General'} > ${microTopicName || 'General Concepts'}]`
+    const updatedExpl = baseExpl ? `${newTaxPrefix}\n\n${baseExpl}` : newTaxPrefix
+
+    const { data, error } = await supabase
+      .from('questions')
+      .update({
+        explanation: updatedExpl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', questionId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async batchClassifyAndSaveTopics(onProgress) {
+    const { data: unclassified, error: fetchErr } = await supabase
+      .from('questions')
+      .select('id, question_text, option_a, option_b, option_c, option_d, explanation')
+      .not('explanation', 'ilike', '%[Taxonomy:%')
+      .limit(500)
+
+    if (fetchErr) throw fetchErr
+    if (!unclassified || unclassified.length === 0) return { updatedCount: 0, message: 'All questions already have saved topics in database!' }
+
+    let updatedCount = 0
+    const total = unclassified.length
+
+    for (let i = 0; i < unclassified.length; i++) {
+      const q = unclassified[i]
+      const match = syllabusAnalyticsService.classifyQuestionToMicroTopic(q, CANONICAL_MICROS)
+      const uName = match?.unit_name || 'Unit I: General Science'
+      const mName = match?.macro_topic_name || 'General Studies'
+      const miName = match?.micro_topic_name || 'General Concepts'
+
+      let expl = (q.explanation || '').trim()
+      const taxTag = `[Taxonomy: ${uName} > ${mName} > ${miName}]`
+      const newExpl = expl ? `${taxTag}\n\n${expl}` : taxTag
+
+      const { error } = await supabase
+        .from('questions')
+        .update({ explanation: newExpl })
+        .eq('id', q.id)
+
+      if (!error) updatedCount++
+      if (onProgress && (i % 10 === 0 || i === total - 1)) {
+        onProgress({ current: i + 1, total, updatedCount })
+      }
+    }
+
+    return { updatedCount, total }
   },
 
   async updatePaperTotalQuestions(paperId) {

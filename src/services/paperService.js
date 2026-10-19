@@ -107,6 +107,30 @@ export const paperService = {
       .eq('id', paperId)
 
     if (error) throw error
+
+    // Sync deletion: if this paper was linked to any uploaded_papers record, update it so students cannot attempt it
+    try {
+      const { data: linkedUploads } = await supabase
+        .from('uploaded_papers')
+        .select('id, notes')
+        .ilike('notes', `%${paperId}%`)
+
+      if (linkedUploads && linkedUploads.length > 0) {
+        for (const up of linkedUploads) {
+          await supabase
+            .from('uploaded_papers')
+            .update({
+              processing_status: 'review_required',
+              notes: (up.notes || '').replace(paperId, 'deleted') + ' (Paper was deleted by Admin)',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', up.id)
+        }
+      }
+    } catch (e) {
+      console.warn('Syncing paper deletion with uploaded_papers:', e)
+    }
+
     return true
   },
 

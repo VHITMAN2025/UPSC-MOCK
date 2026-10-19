@@ -158,7 +158,9 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
       
       const toSave = questions.map((q, idx) => ({
         ...q,
-        question_number: idx + 1
+        question_number: idx + 1,
+        source_pdf: file?.name || paperTitle || null,
+        page_number: q.page_number || q.source_page || 1,
       }))
 
       if (existing > 0) {

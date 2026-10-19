@@ -718,10 +718,15 @@ export const syllabusAnalyticsService = {
       }
     }
 
-    // Always guarantee all 10 canonical units, merging deduplicated DB unit data if available
+    // Always guarantee all 10 canonical units, merging deduplicated DB unit data ONLY if unit name/subject matches
     const rawUnits = CANONICAL_SYLLABUS_TAXONOMY.map((canonicalUnit, uIdx) => {
       const dbMatch = unitMap.get(canonicalUnit.unit_number)
-      if (dbMatch) {
+      const isNameMatching = dbMatch && (
+        norm(dbMatch.unit_name).includes(norm(canonicalUnit.subject)) ||
+        norm(canonicalUnit.unit_name).includes(norm(dbMatch.unit_name)) ||
+        norm(dbMatch.subject || '').includes(norm(canonicalUnit.subject))
+      )
+      if (dbMatch && isNameMatching) {
         return {
           ...canonicalUnit,
           ...dbMatch,
@@ -743,9 +748,18 @@ export const syllabusAnalyticsService = {
       const unitName = canonicalUnit.unit_name
       const unitNumber = u.unit_number ?? canonicalUnit.unit_number ?? (uIdx + 1)
 
-      const rawMacros = (u.syllabus_topics && u.syllabus_topics.length > 0)
+      const unFilteredMacros = (u.syllabus_topics && u.syllabus_topics.length > 0)
         ? [...u.syllabus_topics].sort((a, b) => (a.topic_number || 0) - (b.topic_number || 0))
         : (canonicalUnit?.macro_topics || [])
+
+      // Deduplicate macro topics by name to eliminate duplicate rows
+      const seenMacroNames = new Set()
+      const rawMacros = unFilteredMacros.filter(mt => {
+        const mName = norm(mt.topic_name || mt.macro_topic_name || '')
+        if (!mName || seenMacroNames.has(mName)) return false
+        seenMacroNames.add(mName)
+        return true
+      })
 
       const macroTopics = rawMacros.map((mt, mIdx) => {
         const macroName = mt.topic_name || mt.macro_topic_name || `Topic ${mIdx + 1}`
@@ -1034,6 +1048,14 @@ export const syllabusAnalyticsService = {
             .eq('user_id', userId)
             .limit(100)
         : Promise.resolve({ data: [] }),
+      userId
+        ? supabase
+            .from('practice_sessions')
+            .select('id, exam_context, subject, questions_json, answers_json, status')
+            .eq('user_id', userId)
+            .eq('status', 'completed')
+            .limit(100)
+        : Promise.resolve({ data: [] }),
     ])
 
     // Process DB questions into the Question Bank
@@ -1122,6 +1144,47 @@ export const syllabusAnalyticsService = {
           const bucket = microBuckets.get(microId)
           bucket.totalAttempts += 1
           if (ans.is_correct === true) {
+            bucket.correctAttempts += 1
+          }
+        }
+      })
+    })
+
+    // 4b. Process Targeted Practice Sessions (Syncs unit mastery after targeted practice)
+    const practiceSessions = arguments?.[0] ? [] : []
+    const userPracticeSessions = userPracticeSessionsRes?.status === 'fulfilled' ? (userPracticeSessionsRes.value.data || []) : []
+    userPracticeSessions.forEach(ps => {
+      const qs = Array.isArray(ps.questions_json) ? ps.questions_json : []
+      const ansMap = ps.answers_json || {}
+      const answeredEntries = Object.entries(ansMap)
+      if (answeredEntries.length === 0) return
+
+      answeredEntries.forEach(([qId, userOpt]) => {
+        if (!userOpt) return
+        const strId = String(qId)
+        let microId = questionToMicroMap.get(strId)
+
+        if (!microId) {
+          const qMeta = qs.find(q => String(q.id) === strId)
+          const fallbackMicro = this.classifyQuestionToMicroTopic(
+            { id: strId, subject: ps.subject, ...(qMeta || {}) },
+            allMicroTopics
+          )
+          if (fallbackMicro) {
+            microId = fallbackMicro.micro_topic_id
+            questionToMicroMap.set(strId, microId)
+          }
+        }
+
+        if (microId && microBuckets.has(microId)) {
+          const bucket = microBuckets.get(microId)
+          bucket.bankQuestionIds.add(strId)
+          bucket.attemptedQuestionIds.add(strId)
+          bucket.totalAttempts += 1
+
+          const qMeta = qs.find(q => String(q.id) === strId)
+          const isCorrect = qMeta?.correct_option ? String(userOpt).toUpperCase() === String(qMeta.correct_option).toUpperCase() : false
+          if (isCorrect) {
             bucket.correctAttempts += 1
           }
         }

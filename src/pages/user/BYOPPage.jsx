@@ -574,6 +574,17 @@ function AttemptButton({ paperId, userId }) {
           }
           navigate(`/exam/${existingPaper.id}`)
           return
+        } else {
+          // The linked paper was deleted by Admin or user
+          toast.error('This test paper was deleted by Admin and is no longer available.')
+          await supabase
+            .from('uploaded_papers')
+            .update({
+              processing_status: 'review_required',
+              notes: (record?.notes || '').replace(targetPaperId, 'deleted') + ' (Paper was deleted by Admin)'
+            })
+            .eq('id', paperId)
+          return
         }
       }
 
@@ -622,6 +633,7 @@ function AttemptButton({ paperId, userId }) {
           description: `BYOP upload: ${record.file_name || record.title}`,
           duration_minutes: Math.max(30, Math.round(rawQuestions.length * 1.5)),
           total_questions: rawQuestions.length,
+          maximum_marks: rawQuestions.length * 2,
           status: 'published',
           created_by: userId,
         })
@@ -906,90 +918,10 @@ export function BYOPPage() {
             processedPages: 1,
           })
 
-          // Auto-create playable paper in central papers table so Attempt Test works immediately
-          let newPaperId = null
-          try {
-            const newPaper = await paperService.createPaper({
-              title:            paper.title || 'Custom Uploaded Paper',
-              exam_name:        'Custom Upload',
-              exam_type:        'Custom',
-              year:             new Date().getFullYear(),
-              subject:          'General',
-              description:      `BYOP upload: ${paper.file_name}`,
-              duration_minutes: Math.max(30, Math.round(questions.length * 1.5)),
-              total_questions:  questions.length,
-              status:           'published',
-              created_by:       user.id,
-            })
-            newPaperId = newPaper.id
-
-            const toSave = questions.map((q, i) => {
-              const eng = (q.question_text_english || q.english_question || '').trim()
-              const tam = (q.question_text_tamil || q.tamil_question || '').trim()
-              let combined = (q.question_text || '').trim()
-
-              if (eng && tam) {
-                if (!combined.includes('தமிழ்:')) {
-                  combined = `${eng}\nதமிழ்: ${tam}`
-                }
-              } else if (!combined) {
-                combined = eng && tam ? `${eng}\nதமிழ்: ${tam}` : (eng || tam || `Question ${i + 1}`)
-              }
-
-              const formatOpt = (engOpt, tamOpt) => {
-                const e = (engOpt || '').trim()
-                const t = (tamOpt || '').trim()
-                if (!t || t === e) return e || t
-                if (!e) return t
-                if (e.includes(' / ')) return e
-                return `${e} / ${t}`
-              }
-
-              const uName = q.unit_name ? normalizeUnitName(q.unit_name) : 'Unit I: General Science'
-              const mName = q.macro_topic_name || 'General Studies'
-              const miName = q.micro_topic_name || 'General Concepts'
-
-              let baseExplanation = (q.explanation || '').trim()
-              if (!baseExplanation.includes('[Taxonomy:')) {
-                const taxPrefix = `[Taxonomy: ${uName} > ${mName} > ${miName}]`
-                baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
-              }
-
-              return {
-                question_number: parseInt(String(q.question_number), 10) || i + 1,
-                question_text: combined,
-                question_text_tamil: tam || null,
-                option_a: formatOpt(q.option_a || q.options?.A || 'Option A', q.option_a_tamil),
-                option_b: formatOpt(q.option_b || q.options?.B || 'Option B', q.option_b_tamil),
-                option_c: formatOpt(q.option_c || q.options?.C || 'Option C', q.option_c_tamil),
-                option_d: formatOpt(q.option_d || q.options?.D || 'Option D', q.option_d_tamil),
-                option_a_tamil: q.option_a_tamil || null,
-                option_b_tamil: q.option_b_tamil || null,
-                option_c_tamil: q.option_c_tamil || null,
-                option_d_tamil: q.option_d_tamil || null,
-                correct_option: ['A','B','C','D'].includes(q.correct_option || q.correct_answer)
-                  ? (q.correct_option || q.correct_answer)
-                  : null,
-                explanation: baseExplanation,
-                explanation_tamil: q.explanation_tamil || null,
-                unit_name: uName,
-                macro_topic_name: mName,
-                micro_topic_name: miName,
-                tags: Array.from(new Set([...(q.tags || []), miName, mName, uName])),
-              }
-            })
-
-            await questionService.saveQuestionsToSupabase(newPaper.id, toSave, false)
-          } catch (autoCreateErr) {
-            console.warn('[BYOP] Auto-creating paper during AI process encountered issue:', autoCreateErr)
-          }
-
-          const notesMsg = newPaperId
-            ? `${questions.length} questions extracted and saved to paper "${newPaperId}".`
-            : `${questions.length} questions extracted using AI Vision.`
+          const notesMsg = `${questions.length} questions extracted using AI Vision. Review & validation required before attempting.`
 
           const storagePayload = sanitizeUnicode({
-            processing_status: 'ready',
+            processing_status: 'review_required',
             total_pages: 1,
             processed_pages: 1,
             extracted_count: questions.length,
@@ -1003,7 +935,7 @@ export function BYOPPage() {
           setPapers(prev => prev.map(p => p.id === paper.id
             ? {
                 ...p,
-                processing_status: 'ready',
+                processing_status: 'review_required',
                 extracted_count: questions.length,
                 notes: notesMsg,
                 questions_json: questions
@@ -1013,7 +945,7 @@ export function BYOPPage() {
 
           setReviewPaperId(paper.id)
           setShowReview(true)
-          toast.success(`AI extracted ${questions.length} questions accurately! Paper is ready for test.`)
+          toast.success(`AI extracted ${questions.length} questions! Please review, edit if needed, and click "Validate & Lock as Complete".`)
           return
         } catch (aiErr) {
           if (aiErr.message === 'NO_API_KEY_CONFIGURED' || aiErr.code === 'NO_API_KEY_CONFIGURED') {
@@ -1452,6 +1384,7 @@ export function BYOPPage() {
           description:      `BYOP upload: ${paper.file_name}`,
           duration_minutes: Math.max(30, Math.round(editedQuestions.length * 1.5)),
           total_questions:  editedQuestions.length,
+          maximum_marks:    editedQuestions.length * 2,
           status:           'published',
           created_by:       user.id,
         })
@@ -1460,6 +1393,7 @@ export function BYOPPage() {
         await supabase.from('papers').update({
           status: 'published',
           total_questions: editedQuestions.length,
+          maximum_marks: editedQuestions.length * 2,
           updated_at: new Date().toISOString()
         }).eq('id', targetPaperId)
       }
@@ -1554,6 +1488,23 @@ export function BYOPPage() {
       toast.error('Save failed: ' + err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDeleteUpload(paper) {
+    if (!window.confirm(`Are you sure you want to delete "${paper.title || paper.file_name}" and its extracted questions?`)) {
+      return
+    }
+    try {
+      await byopService.delete(paper.id, user.id)
+      setPapers(prev => prev.filter(p => p.id !== paper.id))
+      if (reviewPaperId === paper.id) {
+        setShowReview(false)
+        setReviewPaperId(null)
+      }
+      toast.success('Upload deleted successfully.')
+    } catch (err) {
+      toast.error('Failed to delete upload: ' + err.message)
     }
   }
 
@@ -1770,6 +1721,16 @@ export function BYOPPage() {
                         )
                       })()
                     )}
+
+                    {/* Delete Upload button */}
+                    <button
+                      onClick={() => handleDeleteUpload(paper)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete this upload"
+                      aria-label="Delete this upload"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 

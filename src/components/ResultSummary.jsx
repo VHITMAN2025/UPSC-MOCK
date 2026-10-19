@@ -14,6 +14,12 @@ export function ResultSummary({ attempt, paper }) {
   const marksPerQ = Number(paper?.marks_per_question || 2)
   const negPerQ = Number(paper?.negative_marking || 0.66)
 
+  const attemptedCount = correct + incorrect
+  const totalQuestions = attemptedCount + unanswered || Number(paper?.total_questions || 0) || 1
+  const computedMaxMarks = paper?.maximum_marks
+    ? Number(paper.maximum_marks)
+    : (totalQuestions * marksPerQ)
+
   const positiveMarks = (correct * marksPerQ).toFixed(2)
   const negativeMarks = (incorrect * negPerQ).toFixed(2)
 
@@ -33,11 +39,15 @@ export function ResultSummary({ attempt, paper }) {
         <div className="text-xs uppercase font-bold text-primary tracking-wider mb-1">Your Total Score</div>
         <div className="text-4xl sm:text-5xl font-extrabold text-primary my-2 tracking-tight">
           {formatScore(score)}
-          <span className="text-base text-body-secondary font-medium ml-1">/ {paper?.maximum_marks || 200}</span>
+          <span className="text-base text-body-secondary font-medium ml-1">/ {computedMaxMarks}</span>
         </div>
-        <div className="inline-flex items-center space-x-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full mt-1">
-          <Percent className="w-3.5 h-3.5" />
-          <span>Accuracy: <strong>{accuracy}%</strong></span>
+        <div className="inline-flex items-center space-x-1.5 text-xs font-semibold text-emerald-800 bg-emerald-100/90 px-3.5 py-1 rounded-full mt-1.5 flex-wrap justify-center">
+          <Percent className="w-3.5 h-3.5 shrink-0" />
+          <span>
+            {unanswered > 0
+              ? `Attempted Accuracy: ${accuracy}% (${correct} of ${attemptedCount} answered · ${unanswered} unanswered)`
+              : `Overall Accuracy: ${accuracy}% (${correct} of ${totalQuestions} correct)`}
+          </span>
         </div>
       </div>
 
@@ -71,8 +81,12 @@ export function ResultSummary({ attempt, paper }) {
         <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 text-center">
           <Award className="w-6 h-6 text-indigo-600 mx-auto mb-1" />
           <div className="text-2xl font-bold text-indigo-950">{accuracy}%</div>
-          <div className="text-xs font-medium text-indigo-800">Overall Accuracy</div>
-          <div className="text-[10px] text-indigo-700 mt-1 font-semibold">Strike Rate</div>
+          <div className="text-xs font-medium text-indigo-800">
+            {unanswered > 0 ? 'Attempted Accuracy' : 'Overall Accuracy'}
+          </div>
+          <div className="text-[10px] text-indigo-700 mt-1 font-semibold">
+            {attemptedCount}/{totalQuestions} Attempted
+          </div>
         </div>
       </div>
 

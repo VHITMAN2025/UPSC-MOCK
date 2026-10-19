@@ -31,15 +31,19 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 2 — Geography of India & Tamil Nadu',
     displayName: 'Geography of India & Tamil Nadu',
     score: 62,
-    meta: 'Physical & human geography · 16 topics',
+    meta: 'Physical & human geography · 8 topics',
     desc: 'India and Tamil Nadu geography including resources, climate, rivers, agriculture and population.',
     foundationTopics: [
-      { id: 'u2-t1', name: 'Indian Physical Geography', status: 'In Progress' },
-      { id: 'u2-t2', name: 'Tamil Nadu Rivers & Resources', status: 'In Progress' },
+      { id: 'u2-t1', name: 'Indian Physical Geography & Relief Features', status: 'In Progress' },
+      { id: 'u2-t2', name: 'Tamil Nadu Rivers & Water Resources', status: 'In Progress' },
+      { id: 'u2-t3', name: 'Climate, Monsoon & Rainfall Patterns', status: 'In Progress' },
+      { id: 'u2-t4', name: 'Natural Vegetation & Wildlife Sanctuaries', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u2-t3', name: 'Climate & Monsoon', status: 'In Progress' },
-      { id: 'u2-t4', name: 'Agriculture & Minerals', status: 'In Progress' },
+      { id: 'u2-t5', name: 'Agriculture Patterns, Soil & Major Crops', status: 'In Progress' },
+      { id: 'u2-t6', name: 'Mineral Resources & Industrial Centers', status: 'In Progress' },
+      { id: 'u2-t7', name: 'Transport, Communication & Trade', status: 'In Progress' },
+      { id: 'u2-t8', name: 'Population Density & Disaster Management in TN', status: 'In Progress' },
     ]
   },
   {
@@ -169,6 +173,22 @@ export const SYLLABUS_UNITS = [
       { id: 'u10-t3', name: 'Logical Reasoning', status: 'In Progress' },
       { id: 'u10-t4', name: 'Data Interpretation', status: 'In Progress' },
     ]
+  },
+  {
+    unit_number: 11,
+    unit_name: 'Part A — General Tamil / General English (Language)',
+    displayName: 'General Tamil / English (Part A)',
+    score: 82,
+    meta: '100 Qs · Language Paper',
+    desc: 'General Tamil (இலக்கணம், இலக்கியம், தமிழ் அறிஞர்கள்) or General English (Grammar, Literature, Authors) — mandatory 100 questions for TNPSC Group 2/2A and Group 4 (Not in Group 1 Prelims).',
+    foundationTopics: [
+      { id: 'u11-t1', name: 'General Tamil Grammar (இலக்கணம்)', status: 'Mastered' },
+      { id: 'u11-t2', name: 'Tamil Literature & Classical Epics (இலக்கியம்)', status: 'Mastered' },
+    ],
+    applicationTopics: [
+      { id: 'u11-t3', name: 'Tamil Scholars & Cultural Movements (தமிழ் அறிஞர்கள்)', status: 'In Progress' },
+      { id: 'u11-t4', name: 'General English (Grammar & Comprehension)', status: 'In Progress' },
+    ]
   }
 ]
 
@@ -176,9 +196,25 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { selectedExam, toast } = useApp()
+  const isGroup1 = selectedExam?.includes('Group 1')
+  
+  // Group 1 has 175 GS + 25 Aptitude (Units 1-10). Group 2/2A and Group 4 include Part A Language (Unit 11).
+  const initialUnits = useMemo(() => {
+    return SYLLABUS_UNITS.filter(u => {
+      if (u.unit_number === 11 && isGroup1) return false
+      return true
+    })
+  }, [isGroup1])
+
   const [activeUnitIdx, setActiveUnitIdx] = useState(0)
-  const [unitData, setUnitData] = useState(SYLLABUS_UNITS)
+  const [unitData, setUnitData] = useState(initialUnits)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Keep unitData in sync when exam context changes
+  useEffect(() => {
+    setUnitData(initialUnits)
+    setActiveUnitIdx(0)
+  }, [initialUnits])
 
   // Sync with live database attempts (strictly deduplicating by unit_number)
   useEffect(() => {
@@ -195,6 +231,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
             if (!liveMatch || liveMatch.total_attempts === 0) return unit
 
             const liveScore = Math.round(liveMatch.accuracy_percentage || 0)
+            const fLen = unit.foundationTopics.length
             return {
               ...unit,
               score: liveScore,
@@ -207,7 +244,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                 return { ...t, status }
               }),
               applicationTopics: unit.applicationTopics.map((t, idx) => {
-                const liveMacro = liveMatch.macro_topics?.[idx + 2]
+                const liveMacro = liveMatch.macro_topics?.[fLen + idx]
                 if (!liveMacro || !liveMacro.total_attempts) return t
                 const mScore = Number(liveMacro.accuracy_percentage || 0)
                 const status = mScore >= 70 ? 'Mastered' : mScore < 50 ? 'Needs Review' : 'In Progress'
@@ -529,22 +566,45 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                         key={topic.id}
                         className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          onClick={() =>
+                            navigate(
+                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                            )
+                          }
+                          className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
+                          title={`Click to practice ${topic.name}`}
+                        >
                           <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
                             {badge.icon}
                           </span>
-                          <span className="text-xs font-bold text-[#172033] truncate">
+                          <span className="text-xs font-bold text-[#172033] group-hover/item:text-[#635bff] transition-colors truncate">
                             {topic.name}
                           </span>
                         </div>
 
-                        <button
-                          onClick={() => toggleTopicStatus('foundation', topic.id)}
-                          className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
-                          title="Click to toggle status"
-                        >
-                          {badge.label}
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() =>
+                              navigate(
+                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                              )
+                            }
+                            className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"
+                            title={`Practice this topic: ${topic.name}`}
+                          >
+                            <span>🎯</span>
+                            <span>Practice</span>
+                          </button>
+
+                          <button
+                            onClick={() => toggleTopicStatus('foundation', topic.id)}
+                            className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
+                            title="Click to toggle status"
+                          >
+                            {badge.label}
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
@@ -564,22 +624,45 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                         key={topic.id}
                         className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          onClick={() =>
+                            navigate(
+                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                            )
+                          }
+                          className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
+                          title={`Click to practice ${topic.name}`}
+                        >
                           <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
                             {badge.icon}
                           </span>
-                          <span className="text-xs font-bold text-[#172033] truncate">
+                          <span className="text-xs font-bold text-[#172033] group-hover/item:text-[#635bff] transition-colors truncate">
                             {topic.name}
                           </span>
                         </div>
 
-                        <button
-                          onClick={() => toggleTopicStatus('application', topic.id)}
-                          className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
-                          title="Click to toggle status"
-                        >
-                          {badge.label}
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() =>
+                              navigate(
+                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                              )
+                            }
+                            className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"
+                            title={`Practice this topic: ${topic.name}`}
+                          >
+                            <span>🎯</span>
+                            <span>Practice</span>
+                          </button>
+
+                          <button
+                            onClick={() => toggleTopicStatus('application', topic.id)}
+                            className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
+                            title="Click to toggle status"
+                          >
+                            {badge.label}
+                          </button>
+                        </div>
                       </div>
                     )
                   })}

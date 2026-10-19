@@ -21,10 +21,10 @@ const SECTIONS = [
   {
     label: 'CONTENT',
     items: [
-      { label: 'Papers / PYQs',   path: '/admin/papers',        icon: FileText },
-      { label: 'Questions',       path: '/admin/questions',      icon: HelpCircle },
-      { label: 'Syllabus',        path: '/admin/syllabus',       icon: BookMarked },
-      { label: 'Quick Recall',    path: '/admin/recall',         icon: Brain },
+      { label: 'Papers / PYQs',         path: '/admin/papers',        icon: FileText },
+      { label: 'Extracted Questions',   path: '/admin/questions',     icon: HelpCircle },
+      { label: 'Syllabus',              path: '/admin/syllabus',       icon: BookMarked },
+      { label: 'Quick Recall',          path: '/admin/recall',         icon: Brain },
     ],
   },
   {

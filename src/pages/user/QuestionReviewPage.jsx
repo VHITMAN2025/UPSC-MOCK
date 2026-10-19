@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { attemptService } from '../../services/attemptService'
 import { questionService } from '../../services/questionService'
 import { QuestionCard } from '../../components/QuestionCard'
-import { Loader2, ArrowLeft, Filter, CheckCircle2, XCircle, AlertCircle, BookOpen } from 'lucide-react'
+import { Loader2, ArrowLeft, Filter, CheckCircle2, XCircle, AlertCircle, BookOpen, Zap, CheckSquare, Square } from 'lucide-react'
 
 export function QuestionReviewPage() {
   const { attemptId } = useParams()
+  const navigate = useNavigate()
 
   const [attemptDetails, setAttemptDetails] = useState(null)
   const [questions, setQuestions] = useState([])
@@ -14,6 +15,7 @@ export function QuestionReviewPage() {
   const [filter, setFilter] = useState('all') // 'all' | 'correct' | 'incorrect' | 'unanswered'
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedMistakes, setSelectedMistakes] = useState([])
 
   useEffect(() => {
     async function loadReviewData() {
@@ -21,9 +23,10 @@ export function QuestionReviewPage() {
         const details = await attemptService.getAttemptDetails(attemptId)
         setAttemptDetails(details)
 
+        let qList = []
         if (details?.attempt?.paper_id) {
           // Fetch full questions including correct_option & explanation for REVIEW MODE
-          const qList = await questionService.getQuestionsByPaperId(details.attempt.paper_id, false)
+          qList = await questionService.getQuestionsByPaperId(details.attempt.paper_id, false)
           setQuestions(qList || [])
         }
 
@@ -34,6 +37,9 @@ export function QuestionReviewPage() {
         })
         setUserAnswersMap(map)
 
+        // Pre-select all incorrect and unanswered questions for Fix Test
+        const mistakes = (qList || []).filter(q => map[q.id] !== q.correct_option).map(q => q.id)
+        setSelectedMistakes(mistakes)
       } catch (err) {
         console.error('Error loading question review:', err)
         setError(err.message || 'Failed to load question solutions.')
@@ -78,6 +84,28 @@ export function QuestionReviewPage() {
     if (filter === 'unanswered') return !userSel
     return true
   })
+
+  const toggleSelectMistake = (qId) => {
+    setSelectedMistakes(prev =>
+      prev.includes(qId) ? prev.filter(id => id !== qId) : [...prev, qId]
+    )
+  }
+
+  const selectAllMistakes = () => {
+    const allMistakeIds = questions.filter(q => userAnswersMap[q.id] !== q.correct_option).map(q => q.id)
+    setSelectedMistakes(allMistakeIds)
+  }
+
+  const deselectAll = () => {
+    setSelectedMistakes([])
+  }
+
+  const handleLaunchFixTest = () => {
+    if (selectedMistakes.length === 0) return
+    const ids = selectedMistakes.join(',')
+    const subject = encodeURIComponent(paper?.subject || 'Targeted Revision')
+    navigate(`/practice?mode=fix_test&mistakes=${ids}&subject=${subject}`)
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -131,6 +159,49 @@ export function QuestionReviewPage() {
         </div>
       </div>
 
+      {/* Fix Test Generation Action Banner */}
+      <div className="bg-gradient-to-r from-[#1e1b4b] to-[#312e81] text-white rounded-2xl p-4 sm:p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded-md bg-amber-400/20 text-amber-300">
+              <Zap className="w-4 h-4" />
+            </span>
+            <h3 className="text-sm font-bold tracking-tight">Adaptive Error Targeter</h3>
+            <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+              {selectedMistakes.length} Selected
+            </span>
+          </div>
+          <p className="text-xs text-slate-300">
+            Generate an instant targeted Fix Test containing the exact questions you missed or skipped.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={selectAllMistakes}
+            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 transition-colors"
+          >
+            Select All Errors
+          </button>
+          {selectedMistakes.length > 0 && (
+            <button
+              onClick={deselectAll}
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={handleLaunchFixTest}
+            disabled={selectedMistakes.length === 0}
+            className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-black text-xs transition-colors flex items-center gap-1.5 shadow-subtle"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Generate Fix Test ({selectedMistakes.length}) →</span>
+          </button>
+        </div>
+      </div>
+
       {/* Filtered Question List */}
       {filteredQuestions.length === 0 ? (
         <div className="bg-white rounded-xl border border-surface-border p-12 text-center text-body-secondary text-xs">
@@ -138,17 +209,44 @@ export function QuestionReviewPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {filteredQuestions.map((q) => (
-            <QuestionCard
-              key={q.id}
-              question={q}
-              totalQuestions={questions.length}
-              selectedOption={userAnswersMap[q.id] || null}
-              mode="review"
-              correctOption={q.correct_option}
-              explanation={q.explanation}
-            />
-          ))}
+          {filteredQuestions.map((q) => {
+            const isSelectedForFix = selectedMistakes.includes(q.id)
+            const isMistake = userAnswersMap[q.id] !== q.correct_option
+            return (
+              <div key={q.id} className="relative">
+                {/* Checkbox badge to include in Fix Test */}
+                <div className="mb-2 flex items-center justify-between px-2">
+                  <label
+                    onClick={() => toggleSelectMistake(q.id)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-body-secondary hover:text-body-text cursor-pointer select-none"
+                  >
+                    {isSelectedForFix ? (
+                      <CheckSquare className="w-4 h-4 text-tnpsc-brand" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span>
+                      {isSelectedForFix ? 'Targeted in Fix Test' : 'Include in Fix Test Drill'}
+                    </span>
+                    {isMistake && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold ml-1">
+                        Mistake
+                      </span>
+                    )}
+                  </label>
+                </div>
+
+                <QuestionCard
+                  question={q}
+                  totalQuestions={questions.length}
+                  selectedOption={userAnswersMap[q.id] || null}
+                  mode="review"
+                  correctOption={q.correct_option}
+                  explanation={q.explanation}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   User, Save, Loader2, CheckCircle2, Sparkles, Key,
-  Eye, EyeOff, ShieldCheck, AlertTriangle, Trash2, ExternalLink
+  Eye, EyeOff, ShieldCheck, AlertTriangle, Trash2, ExternalLink, Activity
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp, EXAM_OPTIONS } from '../../contexts/AppContext'
@@ -30,6 +30,8 @@ export function ProfilePage() {
   const [showKey, setShowKey]   = useState(false)
   const [validatingKey, setValidatingKey] = useState(false)
   const [validationStatus, setValidationStatus] = useState(null)
+  const [testingPing, setTestingPing] = useState(false)
+  const [testResult, setTestResult] = useState(null)
 
   useEffect(() => {
     if (profile) {
@@ -56,6 +58,11 @@ export function ProfilePage() {
     e.preventDefault()
     setSaving(true)
     try {
+      // Also ensure localStorage is synced directly
+      if (group2LanguagePref) {
+        localStorage.setItem('tnpsc_group2_language_pref', group2LanguagePref)
+        if (user?.id) localStorage.setItem(`tnpsc_group2_language_pref_${user.id}`, group2LanguagePref)
+      }
       await profileService.update(user.id, {
         ...form,
         selected_exam:        selectedExam,
@@ -70,7 +77,7 @@ export function ProfilePage() {
   }
 
   async function handleValidateAndSaveKey() {
-    const raw = keyInput.trim()
+    const raw = keyInput.trim() || geminiApiKey
     if (!raw) {
       toast.error('Please enter an API key to validate.')
       return
@@ -78,14 +85,19 @@ export function ProfilePage() {
 
     setValidatingKey(true)
     setValidationStatus(null)
+    setTestResult(null)
 
     try {
       const res = await apiKeyService.validateApiKey(raw)
       if (res.valid) {
         setValidationStatus({ valid: true })
-        await saveGeminiApiKey(raw)
-        setKeyInput('')
-        toast.success('Gemini API Key verified and saved successfully!')
+        if (keyInput.trim()) {
+          await saveGeminiApiKey(keyInput.trim())
+          setKeyInput('')
+          toast.success('Gemini API Key verified and saved successfully!')
+        } else {
+          toast.success('Saved Gemini API key is valid and active!')
+        }
         await refreshProfile()
       } else {
         setValidationStatus({ valid: false, error: res.error })
@@ -96,6 +108,33 @@ export function ProfilePage() {
       toast.error(`Validation error: ${err.message}`)
     } finally {
       setValidatingKey(false)
+    }
+  }
+
+  async function handleTestConnection() {
+    const keyToTest = keyInput.trim() || geminiApiKey
+    if (!keyToTest) {
+      toast.error('No API key available to test. Please enter or save a Gemini key first.')
+      return
+    }
+    setTestingPing(true)
+    setTestResult(null)
+    try {
+      const start = Date.now()
+      const res = await apiKeyService.validateApiKey(keyToTest)
+      const latency = Date.now() - start
+      if (res.valid) {
+        setTestResult({ success: true, latency, message: `Connected to Google Gemini successfully in ${latency}ms!` })
+        toast.success(`Google Gemini Connected (${latency}ms)`)
+      } else {
+        setTestResult({ success: false, latency, message: res.error || 'Connection failed' })
+        toast.error(`Connection failed: ${res.error}`)
+      }
+    } catch (err) {
+      setTestResult({ success: false, message: err.message })
+      toast.error(`Connection test error: ${err.message}`)
+    } finally {
+      setTestingPing(false)
     }
   }
 
@@ -116,6 +155,7 @@ export function ProfilePage() {
     await removeGeminiApiKey()
     setKeyInput('')
     setValidationStatus(null)
+    setTestResult(null)
     toast.info('Personal Gemini API Key removed.')
     await refreshProfile()
   }
@@ -365,10 +405,31 @@ export function ProfilePage() {
             ) : (
               <>
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Verify &amp; Save Key
+                {keyInput.trim() ? 'Verify & Save Key' : 'Test Saved Key'}
               </>
             )}
           </button>
+
+          {hasGeminiApiKey && (
+            <button
+              type="button"
+              onClick={handleTestConnection}
+              disabled={testingPing}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl transition-all border border-emerald-200"
+            >
+              {testingPing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Testing Ping…
+                </>
+              ) : (
+                <>
+                  <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                  Test Connection
+                </>
+              )}
+            </button>
+          )}
 
           {keyInput.trim().length > 0 && (
             <button
@@ -402,6 +463,23 @@ export function ProfilePage() {
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
+
+        {/* Connection Test Result Banner */}
+        {testResult && (
+          <div className={`p-3 rounded-xl border flex items-center gap-2.5 text-xs ${
+            testResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {testResult.success ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            )}
+            <div className="flex-1">
+              <span className="font-bold">{testResult.success ? 'Connection Healthy: ' : 'Connection Issue: '}</span>
+              <span>{testResult.message}</span>
+            </div>
+          </div>
+        )}
 
         {/* Help Guide Box */}
         <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 text-[11px] text-slate-600 space-y-1.5">
