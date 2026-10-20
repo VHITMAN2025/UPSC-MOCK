@@ -21,11 +21,12 @@ function PracticeBuilder({ onStart }) {
   const { toast } = useApp()
   const { user }  = useAuth()
   const [searchParams] = useSearchParams()
-  const urlSubject  = searchParams.get('subject')
-  const urlTopic    = searchParams.get('topic')
-  const urlUnit     = searchParams.get('unit')
-  const urlMode     = searchParams.get('mode')
-  const urlMistakes = searchParams.get('mistakes')
+  const urlSubject      = searchParams.get('subject')
+  const urlTopic        = searchParams.get('topic')
+  const urlUnit         = searchParams.get('unit')
+  const urlMode         = searchParams.get('mode')
+  const urlMistakes     = searchParams.get('mistakes')
+  const urlMicroTopicId = searchParams.get('micro_topic_id')
 
   const mistakeIds = React.useMemo(() => {
     return urlMistakes ? urlMistakes.split(',').map(s => s.trim()).filter(Boolean) : []
@@ -35,11 +36,14 @@ function PracticeBuilder({ onStart }) {
 
   const [subjects, setSubjects]   = useState(['All Subjects'])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
+  const [availableCount, setAvailableCount] = useState(null)
+  const [checkingCount, setCheckingCount] = useState(false)
 
   const [config, setConfig] = useState({
     subject: urlSubject || 'All Subjects',
     topic: urlTopic || null,
     unit: urlUnit || null,
+    micro_topic_id: urlMicroTopicId || null,
     question_count: isFixTest ? mistakeIds.length : 25,
     timer_mode: 'strict',
     difficulty: 'adaptive',
@@ -58,6 +62,7 @@ function PracticeBuilder({ onStart }) {
       subject: urlSubject || 'All Subjects',
       topic: urlTopic || null,
       unit: urlUnit || null,
+      micro_topic_id: urlMicroTopicId || null,
       exam_context: selectedExam,
       mode: urlMode || 'standard',
       mistakes: mistakeIds,
@@ -66,7 +71,35 @@ function PracticeBuilder({ onStart }) {
     }))
     setError(null)
     loadSubjects(urlSubject)
-  }, [selectedExam, urlSubject, urlTopic, urlUnit, urlMode, mistakeIds, isFixTest])
+  }, [selectedExam, urlSubject, urlTopic, urlUnit, urlMicroTopicId, urlMode, mistakeIds, isFixTest])
+
+  // Real-time available question count check for targeted micro-topics
+  useEffect(() => {
+    let active = true
+    async function checkCount() {
+      if (isFixTest) {
+        setAvailableCount(mistakeIds.length)
+        return
+      }
+      setCheckingCount(true)
+      try {
+        const count = await practiceService.getAvailableQuestionCount({
+          exam_context: selectedExam,
+          subject: config.subject,
+          unit: config.unit,
+          topic: config.topic,
+          micro_topic_id: config.micro_topic_id,
+        })
+        if (active) setAvailableCount(count)
+      } catch (e) {
+        if (active) setAvailableCount(null)
+      } finally {
+        if (active) setCheckingCount(false)
+      }
+    }
+    checkCount()
+    return () => { active = false }
+  }, [selectedExam, config.subject, config.unit, config.topic, config.micro_topic_id, isFixTest, mistakeIds.length])
 
   async function loadSubjects(preferredSubject) {
     setSubjectsLoading(true)
@@ -163,11 +196,18 @@ function PracticeBuilder({ onStart }) {
 
         {urlTopic && !isFixTest && (
           <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-200 rounded-xl px-4 py-2.5 text-xs">
-            <span className="text-indigo-800 font-semibold">
-              Targeted Micro-Topic Focus: <strong className="font-bold">{urlTopic}</strong>
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
-              From Syllabus
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span className="text-indigo-800 font-semibold">
+                Targeted Micro-Topic Focus: <strong className="font-bold">{urlTopic}</strong>
+              </span>
+              {availableCount !== null && (
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full inline-block">
+                  {checkingCount ? 'Checking pool…' : `${availableCount} Questions Ready`}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 shrink-0">
+              Strict Topic Filter
             </span>
           </div>
         )}
@@ -175,7 +215,11 @@ function PracticeBuilder({ onStart }) {
         {/* Subject */}
         <div>
           <label className="block text-sm font-bold text-body-text mb-2">Target Subject</label>
-          {subjectsLoading ? (
+          {isFixTest ? (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 font-semibold">
+              🎯 Locked to {mistakeIds.length} Checked Exam Mistakes ({config.subject || 'All Exam Topics'})
+            </div>
+          ) : subjectsLoading ? (
             <div className="flex items-center gap-2 text-xs text-body-secondary">
               <Loader2 className="w-4 h-4 animate-spin text-tnpsc-brand" />
               Loading subjects…

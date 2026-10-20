@@ -28,54 +28,54 @@ export const SYLLABUS_UNITS = [
   },
   {
     unit_number: 2,
-    unit_name: 'Unit 2 — Geography of India & Tamil Nadu',
-    displayName: 'Geography of India & Tamil Nadu',
-    score: 62,
-    meta: 'Physical & human geography · 8 topics',
-    desc: 'India and Tamil Nadu geography including resources, climate, rivers, agriculture and population.',
+    unit_name: 'Unit 2 — Current Events',
+    displayName: 'Current Events',
+    score: 65,
+    meta: 'National & regional events · 6 topics',
+    desc: 'History, national symbols, appointments, state profiles, awards, honors, sports and government welfare schemes.',
     foundationTopics: [
-      { id: 'u2-t1', name: 'Indian Physical Geography & Relief Features', status: 'In Progress' },
-      { id: 'u2-t2', name: 'Tamil Nadu Rivers & Water Resources', status: 'In Progress' },
-      { id: 'u2-t3', name: 'Climate, Monsoon & Rainfall Patterns', status: 'In Progress' },
-      { id: 'u2-t4', name: 'Natural Vegetation & Wildlife Sanctuaries', status: 'In Progress' },
+      { id: 'u2-t1', name: 'National & State Current Events', status: 'In Progress' },
+      { id: 'u2-t2', name: 'Government Welfare Schemes & Policies', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u2-t5', name: 'Agriculture Patterns, Soil & Major Crops', status: 'In Progress' },
-      { id: 'u2-t6', name: 'Mineral Resources & Industrial Centers', status: 'In Progress' },
-      { id: 'u2-t7', name: 'Transport, Communication & Trade', status: 'In Progress' },
-      { id: 'u2-t8', name: 'Population Density & Disaster Management in TN', status: 'In Progress' },
+      { id: 'u2-t3', name: 'Science, Technology & Defense Milestones', status: 'In Progress' },
+      { id: 'u2-t4', name: 'Awards, Honors & Sports Profiles', status: 'In Progress' },
     ]
   },
   {
     unit_number: 3,
-    unit_name: 'Unit 3 — Indian National Movement',
-    displayName: 'Indian National Movement',
-    score: 55,
-    meta: 'Freedom movement · 14 topics',
-    desc: 'Major events, organisations, leaders, acts and chronology of the Indian national movement.',
+    unit_name: 'Unit 3 — Geography of India',
+    displayName: 'Geography of India',
+    score: 62,
+    meta: 'Physical & human geography · 8 topics',
+    desc: 'Location & physical features, monsoon, rainfall, weather, climate, water resources and rivers of India & Tamil Nadu.',
     foundationTopics: [
-      { id: 'u3-t1', name: 'Early Nationalism', status: 'In Progress' },
-      { id: 'u3-t2', name: 'Gandhian Era', status: 'In Progress' },
+      { id: 'geo_himalayan_mountains', name: 'Himalayan Mountains', status: 'In Progress' },
+      { id: 'geo_peninsular_plateau', name: 'Peninsular Plateau', status: 'In Progress' },
+      { id: 'geo_coastal_plains', name: 'Coastal Plains', status: 'In Progress' },
+      { id: 'geo_elnino_lanina', name: 'El-Nino & La-Nina', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u3-t3', name: 'Acts & Constitutional Developments', status: 'Needs Review' },
-      { id: 'u3-t4', name: 'Important Leaders & Events', status: 'In Progress' },
+      { id: 'geo_monsoon_mechanism', name: 'Indian Monsoon Mechanism', status: 'In Progress' },
+      { id: 'geo_himalayan_rivers', name: 'Himalayan Rivers (Ganga, Indus)', status: 'In Progress' },
+      { id: 'geo_tn_rivers', name: 'Tamil Nadu Rivers (Cauvery, Vaigai)', status: 'In Progress' },
+      { id: 'geo_water_resources', name: 'Water Resources & Climate Patterns', status: 'In Progress' },
     ]
   },
   {
     unit_number: 4,
-    unit_name: 'Unit 4 — Indian Culture & Heritage',
-    displayName: 'Indian Culture & Heritage',
+    unit_name: 'Unit 4 — History & Culture of India',
+    displayName: 'History & Culture of India',
     score: 69,
-    meta: 'Culture, art & literature · 12 topics',
-    desc: 'Indian and Tamil culture, literature, architecture, art forms and heritage.',
+    meta: 'Ancient & medieval India · 8 topics',
+    desc: 'Indus Valley civilization, Guptas, Delhi Sultans, Mughals and Marathas, Age of Vijayanagaram and Bahmani Kingdoms, South Indian history.',
     foundationTopics: [
-      { id: 'u4-t1', name: 'Tamil Literature', status: 'Mastered' },
-      { id: 'u4-t2', name: 'Temple Architecture', status: 'In Progress' },
+      { id: 'u4-t1', name: 'Indus Valley Civilization & Vedic Period', status: 'Mastered' },
+      { id: 'u4-t2', name: 'Guptas, Delhi Sultanate & Mughals', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u4-t3', name: 'Folk & Classical Arts', status: 'In Progress' },
-      { id: 'u4-t4', name: 'Heritage Sites', status: 'Mastered' },
+      { id: 'u4-t3', name: 'South Indian History & Vijayanagar Empire', status: 'In Progress' },
+      { id: 'u4-t4', name: 'Social Harmony & Cultural Synthesis', status: 'Mastered' },
     ]
   },
   {
@@ -83,79 +83,79 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 5 — Indian Polity',
     displayName: 'Indian Polity',
     score: 46,
-    meta: 'Constitution & governance · 20 topics',
-    desc: 'Constitution, fundamental rights, Parliament, judiciary, local government and constitutional bodies.',
+    meta: 'Constitution & governance · 8 topics',
+    desc: 'Constitution of India, Preamble to the Constitution, Salient features of the Constitution, Union, State and Union Territory, Citizenship, Fundamental Rights, Fundamental Duties.',
     foundationTopics: [
-      { id: 'u5-t1', name: 'Fundamental Rights & Duties', status: 'In Progress' },
-      { id: 'u5-t2', name: 'Parliament & President', status: 'Needs Review' },
+      { id: 'u5-t1', name: 'Preamble, Fundamental Rights & Duties', status: 'In Progress' },
+      { id: 'u5-t2', name: 'Union Executive, Parliament & President', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u5-t3', name: 'Judiciary & Constitutional Bodies', status: 'Needs Review' },
-      { id: 'u5-t4', name: 'Local Government', status: 'Needs Review' },
+      { id: 'u5-t3', name: 'State Executive & Judiciary', status: 'Needs Review' },
+      { id: 'u5-t4', name: 'Panchayati Raj & Constitutional Authorities', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 6,
-    unit_name: 'Unit 6 — Geography & Environment',
-    displayName: 'Geography & Environment',
-    score: 62,
-    meta: 'Environment & resources · 15 topics',
-    desc: 'Environmental issues, biodiversity, natural resources, disaster management and sustainability.',
+    unit_name: 'Unit 6 — Indian Economy',
+    displayName: 'Indian Economy',
+    score: 58,
+    meta: 'Economy & planning · 6 topics',
+    desc: 'Nature of Indian Economy, Five year plan models, Planning Commission and Niti Aayog, Sources of revenue, Reserve Bank of India, Fiscal Policy and Monetary Policy.',
     foundationTopics: [
-      { id: 'u6-t1', name: 'Biodiversity', status: 'In Progress' },
-      { id: 'u6-t2', name: 'Pollution & Climate Change', status: 'In Progress' },
+      { id: 'u6-t1', name: 'Nature of Indian Economy & Planning Models', status: 'In Progress' },
+      { id: 'u6-t2', name: 'Banking, RBI & Monetary Policy', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u6-t3', name: 'Natural Resources', status: 'In Progress' },
-      { id: 'u6-t4', name: 'Disaster Management', status: 'In Progress' },
+      { id: 'u6-t3', name: 'Public Finance, GST & Budgeting', status: 'In Progress' },
+      { id: 'u6-t4', name: 'Economic Reforms & Tamil Nadu Economy', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 7,
-    unit_name: 'Unit 7 — Indian Economy',
-    displayName: 'Indian Economy',
-    score: 58,
-    meta: 'Economy & development · 17 topics',
-    desc: 'Basic economic concepts, public finance, banking, development indicators and Tamil Nadu economy.',
+    unit_name: 'Unit 7 — Indian National Movement',
+    displayName: 'Indian National Movement',
+    score: 55,
+    meta: 'Freedom movement · 6 topics',
+    desc: 'National renaissance, Early uprising against British rule, Indian National Congress, Emergence of leaders, Different modes of agitations.',
     foundationTopics: [
-      { id: 'u7-t1', name: 'National Income & Growth', status: 'In Progress' },
-      { id: 'u7-t2', name: 'Banking & Monetary Policy', status: 'In Progress' },
+      { id: 'u7-t1', name: 'Early Uprisings & 1857 Revolt', status: 'In Progress' },
+      { id: 'u7-t2', name: 'Indian National Congress & Moderate Era', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u7-t3', name: 'Government Schemes', status: 'In Progress' },
-      { id: 'u7-t4', name: 'Tamil Nadu Economy', status: 'Needs Review' },
+      { id: 'u7-t3', name: 'Gandhian Era & Mass Mobilization', status: 'Needs Review' },
+      { id: 'u7-t4', name: 'Communalism, Partition & Independence', status: 'In Progress' },
     ]
   },
   {
     unit_number: 8,
-    unit_name: 'Unit 8 — History & Culture of Tamil Nadu',
-    displayName: 'History & Culture of Tamil Nadu',
+    unit_name: 'Unit 8 — History, Culture, Heritage of Tamil Nadu',
+    displayName: 'History, Culture, Heritage of TN',
     score: 31,
-    meta: 'Tamil history · 19 topics',
-    desc: 'Ancient, medieval and modern Tamil Nadu history, social movements, leaders and cultural development.',
+    meta: 'Tamil heritage · 6 topics',
+    desc: 'History of Tamil Society, Archaeological discoveries, Sangam literature to contemporary literature, Thirukkural, Role of Tamil Nadu in freedom struggle.',
     foundationTopics: [
-      { id: 'u8-t1', name: 'Sangam Age', status: 'Needs Review' },
-      { id: 'u8-t2', name: 'Chola & Pandya Periods', status: 'Needs Review' },
+      { id: 'u8-t1', name: 'Sangam Literature & Archaeological Finds', status: 'Needs Review' },
+      { id: 'u8-t2', name: 'Thirukkural — Secular & Universal Ethics', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u8-t3', name: 'Social Reform Movements', status: 'Needs Review' },
-      { id: 'u8-t4', name: 'Justice Party & Dravidian Movement', status: 'Needs Review' },
+      { id: 'u8-t3', name: 'Role of TN in Freedom Struggle', status: 'Needs Review' },
+      { id: 'u8-t4', name: 'Self-Respect & Dravidian Movement', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 9,
-    unit_name: 'Unit 9 — Tamil Nadu Administration & Schemes',
-    displayName: 'Tamil Nadu Administration & Schemes',
+    unit_name: 'Unit 9 — Development Administration in Tamil Nadu',
+    displayName: 'Development Administration in TN',
     score: 74,
-    meta: 'Administration & welfare · 13 topics',
-    desc: 'Tamil Nadu administration, welfare schemes, social development and state institutions.',
+    meta: 'State administration · 6 topics',
+    desc: 'Human Development Indicators in Tamil Nadu, Social Justice and Social Harmony as Cornerstones of Socio-Economic Development, Education and Health systems.',
     foundationTopics: [
-      { id: 'u9-t1', name: 'State Administration', status: 'Mastered' },
-      { id: 'u9-t2', name: 'Welfare Schemes', status: 'Mastered' },
+      { id: 'u9-t1', name: 'Human Development Indicators & Social Justice', status: 'Mastered' },
+      { id: 'u9-t2', name: 'Education & Health Delivery Systems', status: 'Mastered' },
     ],
     applicationTopics: [
-      { id: 'u9-t3', name: 'Education & Health Initiatives', status: 'Mastered' },
-      { id: 'u9-t4', name: 'Local Administration', status: 'Mastered' },
+      { id: 'u9-t3', name: 'e-Governance & Administrative Reforms in TN', status: 'Mastered' },
+      { id: 'u9-t4', name: 'Welfare Schemes & Economic Geography of TN', status: 'Mastered' },
     ]
   },
   {
@@ -163,31 +163,31 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 10 — Aptitude & Mental Ability',
     displayName: 'Aptitude & Mental Ability',
     score: 67,
-    meta: 'Quantitative & reasoning · 18 topics',
-    desc: 'Numerical ability, reasoning, data interpretation and problem-solving practice.',
+    meta: 'Aptitude & reasoning · 6 topics',
+    desc: 'Simplification, Percentage, Highest Common Factor (HCF), Lowest Common Multiple (LCM), Ratio and Proportion, Simple interest, Compound interest, Time and Work, Logical Reasoning.',
     foundationTopics: [
-      { id: 'u10-t1', name: 'Percentage & Ratio', status: 'Mastered' },
-      { id: 'u10-t2', name: 'Time, Work & Speed', status: 'In Progress' },
+      { id: 'u10-t1', name: 'Percentage, Ratio & Simple/Compound Interest', status: 'Mastered' },
+      { id: 'u10-t2', name: 'Time, Work & Mensuration', status: 'In Progress' },
     ],
     applicationTopics: [
-      { id: 'u10-t3', name: 'Logical Reasoning', status: 'In Progress' },
-      { id: 'u10-t4', name: 'Data Interpretation', status: 'In Progress' },
+      { id: 'u10-t3', name: 'Logical Reasoning, Number Series & Puzzles', status: 'In Progress' },
+      { id: 'u10-t4', name: 'Data Interpretation & Graphs', status: 'In Progress' },
     ]
   },
   {
     unit_number: 11,
-    unit_name: 'Part A — General Tamil / General English (Language)',
-    displayName: 'General Tamil / English (Part A)',
+    unit_name: 'Unit 11 — Language: General Tamil / General English',
+    displayName: 'Language Paper (Part A)',
     score: 82,
-    meta: '100 Qs · Language Paper',
-    desc: 'General Tamil (இலக்கணம், இலக்கியம், தமிழ் அறிஞர்கள்) or General English (Grammar, Literature, Authors) — mandatory 100 questions for TNPSC Group 2/2A and Group 4 (Not in Group 1 Prelims).',
+    meta: '100 Qs · Group 2/2A & Group 4 Only',
+    desc: 'General Tamil (இலக்கணம், இலக்கியம், தமிழ் அறிஞர்கள்) OR General English (Grammar, Prescribed Poems, Authors). Mandatory 100 questions for Group 2/2A and Group 4 (Not in Group 1).',
     foundationTopics: [
-      { id: 'u11-t1', name: 'General Tamil Grammar (இலக்கணம்)', status: 'Mastered' },
-      { id: 'u11-t2', name: 'Tamil Literature & Classical Epics (இலக்கியம்)', status: 'Mastered' },
+      { id: 'eng_active_passive', name: 'Active & Passive Voice / பொதுத்தமிழ் இலக்கணம்', status: 'Mastered' },
+      { id: 'eng_question_tags', name: 'Question Tags / பிரித்தெழுதுக & சேர்த்தெழுதுக', status: 'Mastered' },
     ],
     applicationTopics: [
-      { id: 'u11-t3', name: 'Tamil Scholars & Cultural Movements (தமிழ் அறிஞர்கள்)', status: 'In Progress' },
-      { id: 'u11-t4', name: 'General English (Grammar & Comprehension)', status: 'In Progress' },
+      { id: 'eng_sea_fever', name: 'Sea Fever / திருக்குறள் தொடர்பான செய்திகள்', status: 'In Progress' },
+      { id: 'eng_the_comet', name: 'The Comet / சிலப்பதிகாரம் & மணிமேகலை', status: 'In Progress' },
     ]
   }
 ]
@@ -569,7 +569,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                         <div
                           onClick={() =>
                             navigate(
-                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
                             )
                           }
                           className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
@@ -587,7 +587,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                           <button
                             onClick={() =>
                               navigate(
-                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
                               )
                             }
                             className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"
@@ -627,7 +627,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                         <div
                           onClick={() =>
                             navigate(
-                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
                             )
                           }
                           className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
@@ -645,7 +645,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                           <button
                             onClick={() =>
                               navigate(
-                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}`
+                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
                               )
                             }
                             className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"

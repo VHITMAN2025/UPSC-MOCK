@@ -40,17 +40,20 @@ export function AdminPapersPage() {
     }
   }
 
-  const handleDeleteDraft = async (paperId, title) => {
-    if (!window.confirm(`Are you sure you want to delete draft paper "${title}"?`)) return
+  const handleDeletePaper = async (paperId, title, isPublished) => {
+    const confirmMsg = isPublished
+      ? `Are you sure you want to permanently delete published paper "${title}"? This will also remove it from students' test lists.`
+      : `Are you sure you want to delete paper "${title}"?`
+    if (!window.confirm(confirmMsg)) return
     setError(null)
     setActionSuccess(null)
 
     try {
       await paperService.deletePaper(paperId)
-      setActionSuccess(`Draft paper deleted successfully.`)
+      setActionSuccess(`Paper "${title}" deleted successfully.`)
       await loadPapers()
     } catch (err) {
-      console.error('Delete draft error:', err)
+      console.error('Delete paper error:', err)
       setError(err.message || 'Failed to delete paper.')
     }
   }
@@ -182,15 +185,14 @@ export function AdminPapersPage() {
                             {isPublished ? 'Unpublish' : 'Publish'}
                           </button>
 
-                          {isDraft && (
-                            <button
-                              onClick={() => handleDeleteDraft(p.id, p.title)}
-                              className="p-1.5 text-body-secondary hover:text-status-error hover:bg-red-50 rounded"
-                              title="Delete Draft"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleDeletePaper(p.id, p.title, isPublished)}
+                            className="p-1.5 text-body-secondary hover:text-status-error hover:bg-red-50 rounded transition-colors"
+                            title="Delete Paper"
+                            aria-label="Delete Paper"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>

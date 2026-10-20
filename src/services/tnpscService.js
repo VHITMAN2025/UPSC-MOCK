@@ -265,9 +265,9 @@ export const FALLBACK_SYNTHETIC_POOL = [
 ]
 
 export const CURATED_UNIT_QUESTIONS = [
-  // ── Unit 2: Geography of India & Tamil Nadu ──
+  // ── Unit 3: Geography of India — Water Resources & Rivers: Tamil Nadu Rivers (Cauvery, Vaigai) ──
   {
-    id: 'geo-c-1',
+    id: 'geo-tn-riv-1',
     question_text: 'Where does the River Cauvery, the lifeline of Tamil Nadu, originate?',
     question_text_tamil: 'தமிழ்நாட்டின் ஜீவநதியான காவிரி ஆறு எங்கு உற்பத்தியாகிறது?',
     option_a: 'Mahabaleshwar, Maharashtra',
@@ -280,14 +280,154 @@ export const CURATED_UNIT_QUESTIONS = [
     option_d_tamil: 'அமர்கண்டக் பீடபூமி, மத்தியப் பிரதேசம்',
     correct_option: 'B',
     question_type: 'SYNTHETIC',
-    subject: 'Geography of India & Tamil Nadu',
-    macro_topic_name: 'Rivers of India & Tamil Nadu',
-    micro_topic_name: 'Rivers of India & Tamil Nadu',
-    explanation: 'River Cauvery originates at Talakaveri in the Brahmagiri Range of Kodagu (Coorg) district in Karnataka and flows through Tamil Nadu into the Bay of Bengal.',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Water Resources & Rivers',
+    micro_topic_name: 'Tamil Nadu Rivers (Cauvery, Vaigai)',
+    micro_topic_id: 'geo_tn_rivers',
+    explanation: 'River Cauvery originates at Talakaveri in the Brahmagiri Range of Kodagu (Coorg) district in Karnataka and enters Tamil Nadu at Hogenakkal.',
     explanation_tamil: 'காவிரி ஆறு கர்நாடக மாநிலம் குடகு மாவட்டத்திலுள்ள பிரம்மகிரி மலைத்தொடரில் உள்ள தலைக்காவிரியில் உற்பத்தியாகிறது.',
   },
   {
-    id: 'geo-c-2',
+    id: 'geo-tn-riv-2',
+    question_text: 'The River Vaigai, on whose banks the historic city of Madurai flourished, originates in which hills?',
+    question_text_tamil: 'வரலாற்றுச் சிறப்புமிக்க மதுரை நகரம் அமைந்துள்ள வைகை ஆறு எந்த மலையில் உற்பத்தியாகிறது?',
+    option_a: 'Varusanadu Hills of the Western Ghats',
+    option_a_tamil: 'மேற்கு தொடர்ச்சி மலையின் வருசநாடு குன்றுகள்',
+    option_b: 'Javadi Hills',
+    option_b_tamil: 'ஜவ்வாது மலை',
+    option_c: 'Kolli Hills',
+    option_c_tamil: 'கொல்லி மலை',
+    option_d: 'Shevaroy Hills',
+    option_d_tamil: 'சேர்வராயன் மலை',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Water Resources & Rivers',
+    micro_topic_name: 'Tamil Nadu Rivers (Cauvery, Vaigai)',
+    micro_topic_id: 'geo_tn_rivers',
+    explanation: 'River Vaigai originates in the Varusanadu Hills of the Western Ghats in Theni district and drains into Palk Strait.',
+    explanation_tamil: 'வைகை ஆறு தேனி மாவட்டத்தில் உள்ள மேற்கு தொடர்ச்சி மலையின் வருசநாடு மலைப்பகுதியில் உற்பத்தியாகி பாக் நீர்ச்சந்தியில் கலக்கிறது.',
+  },
+  {
+    id: 'geo-tn-riv-3',
+    question_text: 'Which is the only perennial river in Tamil Nadu that originates on the eastern slopes of the Western Ghats (Agasthyamalai)?',
+    question_text_tamil: 'தமிழ்நாட்டில் வற்றாத ஜீவநதியாக விளங்கும் தாமிரபரணி ஆறு எந்த மலையில் உற்பத்தியாகிறது?',
+    option_a: 'Agasthyamalai (Pothigai Hills)',
+    option_a_tamil: 'அகத்தியர் மலை (பொதிகை மலை)',
+    option_b: 'Sirumalai',
+    option_b_tamil: 'சிறுமலை',
+    option_c: 'Kalrayan Hills',
+    option_c_tamil: 'கல்வராயன் மலை',
+    option_d: 'Pachaimalai',
+    option_d_tamil: 'பச்சைமலை',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Water Resources & Rivers',
+    micro_topic_name: 'Tamil Nadu Rivers (Cauvery, Vaigai)',
+    micro_topic_id: 'geo_tn_rivers',
+    explanation: 'Thamirabarani originates on the Pothigai Hills of Agasthyamalai in Tirunelveli and is the only perennial river of Tamil Nadu.',
+    explanation_tamil: 'தாமிரபரணி ஆறு திருநெல்வேலி மாவட்டத்தில் உள்ள பொதிகை மலையில் உற்பத்தியாகிறது; இது தமிழ்நாட்டின் ஒரே வற்றாத நதியாகும்.',
+  },
+
+  // ── Unit 3: Geography of India — Water Resources & Rivers: Himalayan Rivers (Ganga, Indus) ──
+  {
+    id: 'geo-him-riv-1',
+    question_text: 'At which confluence do the headstream rivers Bhagirathi and Alaknanda merge to form the River Ganga?',
+    question_text_tamil: 'பாகீரதி மற்றும் அலக்நந்தா ஆகிய இரு ஆறுகளும் எந்த இடத்தில் இணைந்து கங்கை என்ற பெயரைப் பெறுகின்றன?',
+    option_a: 'Rudraprayag',
+    option_a_tamil: 'ருத்ரபிரயாக்',
+    option_b: 'Devprayag',
+    option_b_tamil: 'தேவபிரயாக்',
+    option_c: 'Karnaprayag',
+    option_c_tamil: 'கர்ணபிரயாக்',
+    option_d: 'Vishnuprayag',
+    option_d_tamil: 'விஷ்ணுபிரயாக்',
+    correct_option: 'B',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Water Resources & Rivers',
+    micro_topic_name: 'Himalayan Rivers (Ganga, Indus)',
+    micro_topic_id: 'geo_himalayan_rivers',
+    explanation: 'The River Ganga officially forms at Devprayag in Uttarakhand through the sacred union of the Bhagirathi and Alaknanda rivers.',
+    explanation_tamil: 'உத்தரகாண்டில் உள்ள தேவபிரயாகையில் பாகீரதியும் அலக்நந்தாவும் இணையும் இடத்திலிருந்தே கங்கை என்று அழைக்கப்படுகிறது.',
+  },
+  {
+    id: 'geo-him-riv-2',
+    question_text: 'Near which high-altitude lake in the Tibetan plateau does the River Indus (Sindhu) originate?',
+    question_text_tamil: 'சிந்து ஆறு (Indus River) திபெத் பீடபூமியில் எந்த ஏரிக்கு அருகில் உற்பத்தியாகிறது?',
+    option_a: 'Lake Mansarovar (near Mount Kailash)',
+    option_a_tamil: 'மானசரோவர் ஏரி (கைலாஷ் மலை அருகில்)',
+    option_b: 'Pangong Tso',
+    option_b_tamil: 'பாங்காங் ஏரி',
+    option_c: 'Wular Lake',
+    option_c_tamil: 'உலார் ஏரி',
+    option_d: 'Tsomgo Lake',
+    option_d_tamil: 'சோம்கோ ஏரி',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Water Resources & Rivers',
+    micro_topic_name: 'Himalayan Rivers (Ganga, Indus)',
+    micro_topic_id: 'geo_himalayan_rivers',
+    explanation: 'The Indus originates from the glaciers of the Kailash range near Lake Mansarovar in Tibet (known there as Singi Khamban / Lion’s Mouth).',
+    explanation_tamil: 'சிந்து நதி திபெத்தில் உள்ள மானசரோவர் ஏரிக்கு அருகில் கைலாச மலைத்தொடரில் உற்பத்தியாகிறது.',
+  },
+
+  // ── Unit 3: Geography of India — Location & Physical Features: Himalayan Mountains ──
+  {
+    id: 'geo-him-mtn-1',
+    question_text: 'Which is the northernmost, highest and most continuous parallel range of the Himalayas, crowned with perpetual snow?',
+    question_text_tamil: 'இமயமலையின் மிக உயர்ந்த, தொடர்ச்சியான மற்றும் வடக்கு நோக்கிய முதன்மை மலைத்தொடர் எது?',
+    option_a: 'Himadri (Greater Himalayas)',
+    option_a_tamil: 'இமாத்ரி (பெரிய இமயமலை)',
+    option_b: 'Himachal (Lesser Himalayas)',
+    option_b_tamil: 'இமாச்சல் (சிறிய இமயமலை)',
+    option_c: 'Shiwaliks (Outer Himalayas)',
+    option_c_tamil: 'சிவாலிக் (வெளி இமயமலை)',
+    option_d: 'Purvanchal',
+    option_d_tamil: 'பூர்வாஞ்சல்',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Location & Physical Features',
+    micro_topic_name: 'Himalayan Mountains',
+    micro_topic_id: 'geo_himalayan_mountains',
+    explanation: 'The Himadri or Greater Himalayas has an average elevation of ~6,000 meters and contains the world’s tallest peaks including Mount Everest and Kanchenjunga.',
+    explanation_tamil: 'இமாத்ரி அல்லது பெரிய இமயமலை சராசரியாக 6,000 மீட்டர் உயரமும் உலகிலேயே மிக உயரமான சிகரங்களையும் கொண்டுள்ளது.',
+  },
+  {
+    id: 'geo-him-mtn-2',
+    question_text: 'Mount K2 (Godwin-Austen), the second highest mountain peak on Earth (8,611 m), lies in which mountain range?',
+    question_text_tamil: 'உலகின் இரண்டாவது மிக உயரமான சிகரமான கே2 (காட்வின் ஆஸ்டின் - 8,611 மீ) எந்த மலைத்தொடரில் அமைந்துள்ளது?',
+    option_a: 'Karakoram Range',
+    option_a_tamil: 'காரகோரம் மலைத்தொடர்',
+    option_b: 'Zanskar Range',
+    option_b_tamil: 'ஜாஸ்கர் மலைத்தொடர்',
+    option_c: 'Pir Panjal Range',
+    option_c_tamil: 'பீர் பாஞ்சால் மலைத்தொடர்',
+    option_d: 'Dhauladhar Range',
+    option_d_tamil: 'தௌலதார் மலைத்தொடர்',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Location & Physical Features',
+    micro_topic_name: 'Himalayan Mountains',
+    micro_topic_id: 'geo_himalayan_mountains',
+    explanation: 'K2 (8,611 meters) is situated in the Karakoram range of the Trans-Himalayan system.',
+    explanation_tamil: 'கே-2 சிகரம் டிரான்ஸ்-இமயமலைப் பகுதியில் உள்ள காரகோரம் மலைத்தொடரில் அமைந்துள்ளது.',
+  },
+
+  // ── Unit 3: Geography of India — Location & Physical Features: Peninsular Plateau ──
+  {
+    id: 'geo-pen-plat-1',
     question_text: 'Which is the highest peak in peninsular India and the Western Ghats?',
     question_text_tamil: 'தீபகற்ப இந்தியாவிலும் மேற்கு தொடர்ச்சி மலையிலும் மிக உயரமான சிகரம் எது?',
     option_a: 'Doddabetta',
@@ -300,14 +440,88 @@ export const CURATED_UNIT_QUESTIONS = [
     option_d_tamil: 'கல்சுபாய்',
     correct_option: 'B',
     question_type: 'SYNTHETIC',
-    subject: 'Geography of India & Tamil Nadu',
-    macro_topic_name: 'Physical Features & Relief',
-    micro_topic_name: 'Physical Features & Relief',
-    explanation: 'Anamudi (2,695 meters) located in the Anaimalai Hills in Kerala is the highest peak in South India. Doddabetta (2,637 m) is the highest in Nilgiris.',
-    explanation_tamil: 'ஆனைமுடி சிகரம் (2,695 மீ) தென்னிந்தியாவின் மற்றும் மேற்கு தொடர்ச்சி மலையின் மிக உயரமான சிகரமாகும். தொட்டபெட்டா (2,637 மீ) நீலகிரியின் உயரமான சிகரம்.',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Location & Physical Features',
+    micro_topic_name: 'Peninsular Plateau',
+    micro_topic_id: 'geo_peninsular_plateau',
+    explanation: 'Anamudi (2,695 meters) located in the Anaimalai Hills is the highest peak in Peninsular India.',
+    explanation_tamil: 'ஆனைமுடி சிகரம் (2,695 மீ) தீபகற்ப இந்தியாவின் மற்றும் மேற்கு தொடர்ச்சி மலையின் மிக உயரமான சிகரமாகும்.',
   },
   {
-    id: 'geo-c-3',
+    id: 'geo-pen-plat-2',
+    question_text: 'At which hills do the Western Ghats and Eastern Ghats converge in Southern India?',
+    question_text_tamil: 'மேற்கு தொடர்ச்சி மலையும் கிழக்கு தொடர்ச்சி மலையும் சந்திக்கும் மலைப்பகுதி எது?',
+    option_a: 'Nilgiri Hills',
+    option_a_tamil: 'நீலகிரி மலை',
+    option_b: 'Palani Hills',
+    option_b_tamil: 'பழனி மலை',
+    option_c: 'Cardamom Hills',
+    option_c_tamil: 'ஏலக்காய் மலை',
+    option_d: 'Shevaroy Hills',
+    option_d_tamil: 'சேர்வராயன் மலை',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Location & Physical Features',
+    micro_topic_name: 'Peninsular Plateau',
+    micro_topic_id: 'geo_peninsular_plateau',
+    explanation: 'The Western Ghats and Eastern Ghats meet at the Nilgiri Hills in Tamil Nadu, crowned by Doddabetta peak (2,637m).',
+    explanation_tamil: 'மேற்கு மற்றும் கிழக்கு தொடர்ச்சி மலைகள் நீலகிரி மலையில் சந்திக்கின்றன. இதன் உயரமான சிகரம் தொட்டபெட்டா ஆகும்.',
+  },
+
+  // ── Unit 3: Geography of India — Location & Physical Features: Coastal Plains ──
+  {
+    id: 'geo-coast-pln-1',
+    question_text: 'The eastern coastal plain of India stretching along Tamil Nadu is traditionally designated as the:',
+    question_text_tamil: 'தமிழ்நாடு நெடுகிலும் அமைந்துள்ள கிழக்குக் கடற்கரைச் சமவெளி எவ்வாறு அழைக்கப்படுகிறது?',
+    option_a: 'Malabar Coast',
+    option_a_tamil: 'மலபார் கடற்கரை',
+    option_b: 'Coromandel Coast (Cholamandalam Coast)',
+    option_b_tamil: 'சோழமண்டலக் கடற்கரை (கோரமண்டல்)',
+    option_c: 'Konkan Coast',
+    option_c_tamil: 'கொங்கண் கடற்கரை',
+    option_d: 'Utkal Plain',
+    option_d_tamil: 'உத்கல் சமவெளி',
+    correct_option: 'B',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Location & Physical Features',
+    micro_topic_name: 'Coastal Plains',
+    micro_topic_id: 'geo_coastal_plains',
+    explanation: 'The Coromandel Coast is the coastal plain extending along Tamil Nadu and southern Andhra Pradesh along the Bay of Bengal.',
+    explanation_tamil: 'தமிழ்நாட்டின் கிழக்கு கடற்கரை சமவெளி சோழமண்டலக் கடற்கரை (Coromandel Coast) என்று அழைக்கப்படுகிறது.',
+  },
+
+  // ── Unit 3: Geography of India — Monsoon & Climate: El-Nino & La-Nina ──
+  {
+    id: 'geo-elnino-1',
+    question_text: 'What is the characteristic impact of a strong El-Niño event on the Indian South-West Summer Monsoon?',
+    question_text_tamil: 'வலுவான எல்-நினோ (El-Nino) நிகழ்வு இந்திய தென்மேற்குப் பருவமழையில் ஏற்படுத்தும் முதன்மைத் தாக்கம் என்ன?',
+    option_a: 'Excess and catastrophic rainfall across Central India',
+    option_a_tamil: 'மத்திய இந்தியாவில் அதிகப்படியான பெருமழை',
+    option_b: 'Drought conditions or delayed, weakened rainfall',
+    option_b_tamil: 'வறட்சி அல்லது பருவமழை தாமதப்பட்டு பலவீனமடைதல்',
+    option_c: 'Continuous severe winter snowstorms',
+    option_c_tamil: 'தொடர்ச்சியான பனிப்புயல்',
+    option_d: 'Complete cooling of the Indian Ocean Dipole',
+    option_d_tamil: 'இந்தியப் பெருங்கடல் வெப்பநிலை முழுமையாகக் குறைதல்',
+    correct_option: 'B',
+    question_type: 'SYNTHETIC',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Monsoon & Climate',
+    micro_topic_name: 'El-Nino & La-Nina',
+    micro_topic_id: 'geo_elnino_lanina',
+    explanation: 'El-Niño causes abnormal warming of sea surface temperatures in the central/eastern Pacific, disrupting Walker circulation and often triggering droughts in India.',
+    explanation_tamil: 'எல்-நினோ பசிபிக் பெருங்கடலில் அசாதாரண வெப்பமயமாதலை ஏற்படுத்தி, இந்திய தென்மேற்கு பருவமழையை பலவீனப்படுத்தி வறட்சியை உருவாக்குகிறது.',
+  },
+
+  // ── Unit 3: Geography of India — Monsoon & Climate: Indian Monsoon Mechanism ──
+  {
+    id: 'geo-monsoon-1',
     question_text: 'Tamil Nadu receives the maximum share of its annual rainfall from which monsoon system?',
     question_text_tamil: 'தமிழ்நாடு தனது சராசரி ஆண்டு மழையளவில் பெரும்பகுதியை எந்தப் பருவமழையின் மூலம் பெறுகிறது?',
     option_a: 'South-West Monsoon (June–September)',
@@ -320,51 +534,157 @@ export const CURATED_UNIT_QUESTIONS = [
     option_d_tamil: 'மாஞ்சாரல் மழை',
     correct_option: 'B',
     question_type: 'SYNTHETIC',
-    subject: 'Geography of India & Tamil Nadu',
-    macro_topic_name: 'Climate & Monsoon Patterns',
-    micro_topic_name: 'Climate & Monsoon Patterns',
-    explanation: 'Tamil Nadu is situated in the rain shadow region during the South-West Monsoon and receives nearly 48% of its annual precipitation from the retreating North-East Monsoon.',
+    subject: 'Geography of India',
+    unit_name: 'Unit 3 — Geography of India',
+    macro_topic_name: 'Monsoon & Climate',
+    micro_topic_name: 'Indian Monsoon Mechanism',
+    micro_topic_id: 'geo_monsoon_mechanism',
+    explanation: 'Tamil Nadu lies in the rain-shadow of the Western Ghats during the South-West Monsoon, receiving nearly 48% of its rain from the retreating North-East Monsoon.',
     explanation_tamil: 'தமிழ்நாடு தென்மேற்கு பருவமழைக் காலத்தில் மழை மறைவுப் பிரதேசமாக இருப்பதால், தனது ஆண்டு மழையில் சுமார் 48% மழையை வடகிழக்குப் பருவமழையிலிருந்து பெறுகிறது.',
   },
+
+  // ── Unit 11: General English — Grammar: Active & Passive Voice ──
   {
-    id: 'geo-c-4',
-    question_text: 'In which district of Tamil Nadu are the largest lignite (brown coal) reserves situated?',
-    question_text_tamil: 'தமிழ்நாட்டின் எந்த மாவட்டத்தில் மிகப்பெரிய பழுப்பு நிலக்கரி (Lignite) படிவுகள் அமைந்துள்ளன?',
-    option_a: 'Cuddalore (Neyveli)',
-    option_a_tamil: 'கடலூர் (நெய்வேலி)',
-    option_b: 'Salem',
-    option_b_tamil: 'சேலம்',
-    option_c: 'Thoothukudi',
-    option_c_tamil: 'தூத்துக்குடி',
-    option_d: 'Tiruchirappalli',
-    option_d_tamil: 'திருச்சிராப்பள்ளி',
+    id: 'eng-act-pas-1',
+    question_text: 'Identify the correct passive voice form: "The architect designed the grand library."',
+    question_text_tamil: 'சரியான செயப்பாட்டு வினை வாக்கியத்தைக் கண்டறிக: "The architect designed the grand library."',
+    option_a: 'The grand library was designed by the architect.',
+    option_a_tamil: 'The grand library was designed by the architect.',
+    option_b: 'The grand library is designed by the architect.',
+    option_b_tamil: 'The grand library is designed by the architect.',
+    option_c: 'The grand library has designed by the architect.',
+    option_c_tamil: 'The grand library has designed by the architect.',
+    option_d: 'The grand library was being designed by the architect.',
+    option_d_tamil: 'The grand library was being designed by the architect.',
     correct_option: 'A',
     question_type: 'SYNTHETIC',
-    subject: 'Geography of India & Tamil Nadu',
-    macro_topic_name: 'Minerals & Industrial Geography',
-    micro_topic_name: 'Minerals & Industrial Geography',
-    explanation: 'Neyveli in Cuddalore district has the largest deposit of lignite in India, managed by NLC India Limited for thermal power generation.',
-    explanation_tamil: 'கடலூர் மாவட்டம் நெய்வேலியில் இந்தியாவின் மிகப்பெரிய பழுப்பு நிலக்கரிச் சுரங்கம் மற்றும் அனல்மின் நிலையம் அமைந்துள்ளது.',
+    subject: 'General English',
+    unit_name: 'Unit 11 — General English',
+    macro_topic_name: 'Grammar',
+    micro_topic_name: 'Active & Passive Voice',
+    micro_topic_id: 'eng_active_passive',
+    explanation: 'Simple past tense active ("designed") transforms into "was/were + past participle" ("was designed by").',
+    explanation_tamil: 'கடந்த கால செயலில் "was designed by" என்பதே சரியான செயப்பாட்டு வினை அமைப்பாகும்.',
   },
+
+  // ── Unit 11: General English — Grammar: Question Tags ──
   {
-    id: 'geo-c-5',
-    question_text: 'The famous Pichavaram Mangrove Forest, one of the largest in the world, is situated in which district of Tamil Nadu?',
-    question_text_tamil: 'உலகின் மிகப்பெரிய அலையாத்திக் காடுகளில் ஒன்றான புகழ்பெற்ற பிச்சாவரம் சதுப்புநிலக் காடுகள் எந்த மாவட்டத்தில் உள்ளன?',
-    option_a: 'Nagapattinam',
-    option_a_tamil: 'நாகப்பட்டினம்',
-    option_b: 'Cuddalore',
-    option_b_tamil: 'கடலூர்',
-    option_c: 'Ramanathapuram',
-    option_c_tamil: 'இராமநாதபுரம்',
-    option_d: 'Thanjavur',
-    option_d_tamil: 'தஞ்சாவூர்',
+    id: 'eng-tag-1',
+    question_text: 'Select the correct question tag: "She has completed the civil service registration, _______?"',
+    question_text_tamil: 'சரியான Question Tag-ஐத் தேர்ந்தெடுக்க: "She has completed the civil service registration, _______?"',
+    option_a: "hasn't she?",
+    option_a_tamil: "hasn't she?",
+    option_b: "doesn't she?",
+    option_b_tamil: "doesn't she?",
+    option_c: "isn't she?",
+    option_c_tamil: "isn't she?",
+    option_d: "didn't she?",
+    option_d_tamil: "didn't she?",
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'General English',
+    unit_name: 'Unit 11 — General English',
+    macro_topic_name: 'Grammar',
+    micro_topic_name: 'Question Tags',
+    micro_topic_id: 'eng_question_tags',
+    explanation: 'A positive statement containing auxiliary "has" takes a negative tag "hasn\'t she?".',
+    explanation_tamil: 'நேர்மறை வாக்கியத்தில் "has" துணைவினை வரும்போது "hasn\'t she?" என்ற எதிர்மறை tag பொருந்தும்.',
+  },
+
+  // ── Unit 11: General English — Prescribed Poems: Sea Fever ──
+  {
+    id: 'eng-poem-sea-1',
+    question_text: 'In John Masefield’s celebrated poem "Sea Fever", the speaker yearns for "a tall ship and a _______ to steer her by":',
+    question_text_tamil: '"Sea Fever" கவிதையில் கவிஞர் ஜான் மேஸ்பீல்ட் கப்பலைச் செலுத்த எதைக் கேட்கிறார்?',
+    option_a: 'compass',
+    option_a_tamil: 'திசைகாட்டி',
+    option_b: 'star',
+    option_b_tamil: 'நட்சத்திரம் (star)',
+    option_c: 'beacon',
+    option_c_tamil: 'கலங்கரை விளக்கு',
+    option_d: 'lighthouse',
+    option_d_tamil: 'விளக்கு',
     correct_option: 'B',
     question_type: 'SYNTHETIC',
-    subject: 'Geography of India & Tamil Nadu',
-    macro_topic_name: 'Natural Vegetation & Forest Types',
-    micro_topic_name: 'Natural Vegetation & Forest Types',
-    explanation: 'Pichavaram mangrove forest is located near Chidambaram in Cuddalore district, between the Vellar and Coleroon estuaries.',
-    explanation_tamil: 'பிச்சாவரம் அலையாத்திக் காடு கடலூர் மாவட்டம் சிதம்பரம் அருகே வெள்ளாறு மற்றும் கொள்ளிடம் முகத்துவாரப் பகுதியில் அமைந்துள்ளது.',
+    subject: 'General English',
+    unit_name: 'Unit 11 — General English',
+    macro_topic_name: 'Prescribed Poems',
+    micro_topic_name: 'Sea Fever',
+    micro_topic_id: 'eng_sea_fever',
+    explanation: 'The famous opening line is: "I must go down to the seas again, to the lonely sea and the sky, And all I ask is a tall ship and a star to steer her by".',
+    explanation_tamil: '"Sea Fever" கவிதையில் கவிஞர் ஜான் மேஸ்பீல்ட் "a tall ship and a star to steer her by" என்று குறிப்பிடுகிறார்.',
+  },
+
+  // ── Unit 11: General English — Prescribed Poems: The Comet ──
+  {
+    id: 'eng-poem-comet-1',
+    question_text: 'According to Norman Littleford’s poem "The Comet", what trails behind the comet as it speeds through space?',
+    question_text_tamil: '"The Comet" கவிதையில் வால் நட்சத்திரத்தின் பின்னால் வருவது எதுவாகக் குறிப்பிடப்பட்டுள்ளது?',
+    option_a: 'A trail of pure oxygen',
+    option_a_tamil: 'தூய ஆக்ஸிஜன் பாதை',
+    option_b: 'A tail miles long of ice and dust',
+    option_b_tamil: 'பனிக்கட்டியும் தூசியும் கலந்த பல மைல் நீள வால்',
+    option_c: 'A ring of sulfur crystals',
+    option_c_tamil: 'கந்தக படிகங்களின் வளையம்',
+    option_d: 'A flash of laser beams',
+    option_d_tamil: 'லேசர் கதிர்கள்',
+    correct_option: 'B',
+    question_type: 'SYNTHETIC',
+    subject: 'General English',
+    unit_name: 'Unit 11 — General English',
+    macro_topic_name: 'Prescribed Poems',
+    micro_topic_name: 'The Comet',
+    micro_topic_id: 'eng_the_comet',
+    explanation: 'Norman Littleford describes the comet rampaging through the heavens leaving "a tail that is miles long" composed of ice and dust particles.',
+    explanation_tamil: 'வால் நட்சத்திரம் வான்வெளியில் பனி மற்றும் தூசிகளால் ஆன மைல் கணக்கிலான வாலை விட்டுச் செல்கிறது.',
+  },
+
+  // ── Unit 11: General Tamil — பகுதி - அ (இலக்கணம்): பொருத்துதல் ──
+  {
+    id: 'tam-poruthu-1',
+    question_text: 'பொருத்துக: (நூல் மற்றும் ஆசிரியர்)\n(a) பாஞ்சாலி சபதம் — 1. பாரதிதாசன்\n(b) குடும்ப விளக்கு — 2. பாரதியார்\n(c) கம்பராமாயணம் — 3. கம்பர்',
+    question_text_tamil: 'பொருத்துக: (நூல் மற்றும் ஆசிரியர்)\n(a) பாஞ்சாலி சபதம் — 1. பாரதிதாசன்\n(b) குடும்ப விளக்கு — 2. பாரதியார்\n(c) கம்பராமாயணம் — 3. கம்பர்',
+    option_a: 'a-2, b-1, c-3',
+    option_a_tamil: 'a-2, b-1, c-3',
+    option_b: 'a-1, b-2, c-3',
+    option_b_tamil: 'a-1, b-2, c-3',
+    option_c: 'a-3, b-1, c-2',
+    option_c_tamil: 'a-3, b-1, c-2',
+    option_d: 'a-2, b-3, c-1',
+    option_d_tamil: 'a-2, b-3, c-1',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'General Tamil',
+    unit_name: 'Unit 11 — General Tamil',
+    macro_topic_name: 'பகுதி - அ (இலக்கணம்)',
+    micro_topic_name: 'பொருத்துதல் மற்றும் புகழ்பெற்ற நூல்',
+    micro_topic_id: 'tam_poruthuthal',
+    explanation: 'பாஞ்சாலி சபதம் — பாரதியார்; குடும்ப விளக்கு — பாரதிதாசன்; கம்பராமாயணம் — கம்பர்.',
+    explanation_tamil: 'பாஞ்சாலி சபதம் பாரதியாராலும், குடும்ப விளக்கு பாரதிதாசனாலும், கம்பராமாயணம் கம்பரினாலும் இயற்றப்பட்டது.',
+  },
+
+  // ── Unit 11: General Tamil — பகுதி - அ (இலக்கணம்): பிரித்தெழுதுக ──
+  {
+    id: 'tam-pirithu-1',
+    question_text: "'செந்தமிழ்' என்னும் சொல்லைப் பிரித்து எழுதக் கிடைப்பது யாது?",
+    question_text_tamil: "'செந்தமிழ்' என்னும் சொல்லைப் பிரித்து எழுதக் கிடைப்பது யாது?",
+    option_a: 'செம்மை + தமிழ்',
+    option_a_tamil: 'செம்மை + தமிழ்',
+    option_b: 'செந் + தமிழ்',
+    option_b_tamil: 'செந் + தமிழ்',
+    option_c: 'செந்து + தமிழ்',
+    option_c_tamil: 'செந்து + தமிழ்',
+    option_d: 'செம் + தமிழ்',
+    option_d_tamil: 'செம் + தமிழ்',
+    correct_option: 'A',
+    question_type: 'SYNTHETIC',
+    subject: 'General Tamil',
+    unit_name: 'Unit 11 — General Tamil',
+    macro_topic_name: 'பகுதி - அ (இலக்கணம்)',
+    micro_topic_name: 'பிரித்தெழுதுக & சேர்த்தெழுதுக',
+    micro_topic_id: 'tam_pirithu',
+    explanation: "ஈறுபோதல் விதியின்படி 'மை' விகுதி கெட்டு, முன்னின்ற மெய்திரிதல் விதியின்படி 'செந்தமிழ்' என்றானது (செம்மை + தமிழ்).",
+    explanation_tamil: "பண்புப்பெயர் புணர்ச்சி விதிகளின்படி செம்மை + தமிழ் = செந்தமிழ் எனப் புணரும்.",
   },
   // ── Unit 1: General Science ──
   {
@@ -490,26 +810,110 @@ export const CURATED_UNIT_QUESTIONS = [
   },
 ]
 
-export function getCuratedSubjectQuestions(subject = '', topic = '') {
+export function getCuratedSubjectQuestions(subject = '', topic = '', microTopicId = '') {
   const normSubj = (subject || '').toLowerCase()
   const normTopic = (topic || '').toLowerCase()
+  const normMicroId = (microTopicId || '').toLowerCase()
 
   const pool = [...CURATED_UNIT_QUESTIONS, ...FALLBACK_PYQ_POOL, ...FALLBACK_SYNTHETIC_POOL]
 
+  // If a specific micro-topic is targeted, strictly filter to only questions matching that micro-topic!
+  if (normTopic || normMicroId) {
+    // 1. Tamil Nadu Rivers
+    if (normMicroId.includes('geo_tn_rivers') || /tamil\s*nadu\s*rivers|cauvery|vaigai|thamirabarani|bhavani/i.test(normTopic)) {
+      const match = pool.filter(q => /cauvery|vaigai|thamirabarani|bhavani|mettur|noyyal|அமராவதி|காவிரி|வைகை|தாமிரபரணி|ஆறு/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 2. Himalayan Rivers
+    if (normMicroId.includes('geo_himalayan_rivers') || /himalayan\s*rivers|ganga|indus|brahmaputra/i.test(normTopic)) {
+      const match = pool.filter(q => /ganga|indus|brahmaputra|gangotri|bhagirathi|alakananda|mansarovar|யமுனை|கங்கை|சிந்து/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 3. Himalayan Mountains
+    if (normMicroId.includes('geo_himalayan_mountains') || /himalayan\s*mountains|himalaya|everest|k2|siachen|peak/i.test(normTopic)) {
+      const match = pool.filter(q => /himalaya|everest|k2|siachen|himadri|shivalik|mountain|சிகரம்|இமயமலை/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 4. Peninsular Plateau
+    if (normMicroId.includes('geo_peninsular_plateau') || /peninsular\s*plateau|deccan|anamudi|doddabetta|western\s*ghats/i.test(normTopic)) {
+      const match = pool.filter(q => /plateau|deccan|anamudi|doddabetta|western ghats|eastern ghats|பீடபூமி|தொடர்ச்சி மலை/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 5. Coastal Plains
+    if (normMicroId.includes('geo_coastal_plains') || /coastal\s*plains|coromandel|malabar|pichavaram|pulicat/i.test(normTopic)) {
+      const match = pool.filter(q => /coast|coromandel|malabar|pichavaram|pulicat|chilika|mangrove|கடற்கரை/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 6. El-Nino & La-Nina
+    if (normMicroId.includes('geo_elnino_lanina') || /el-nino|la-nina|enso/i.test(normTopic)) {
+      const match = pool.filter(q => /el-nino|la-nina|enso|pacific|sea surface|walker|எல்-நினோ|லா-நினா/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 7. Indian Monsoon Mechanism
+    if (normMicroId.includes('geo_monsoon_mechanism') || /monsoon\s*mechanism|south-west\s*monsoon|north-east\s*monsoon|itcz/i.test(normTopic)) {
+      const match = pool.filter(q => /monsoon|itcz|south-west monsoon|north-east monsoon|rainfall|retreating|பருவமழை/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 8. Active & Passive Voice
+    if (normMicroId.includes('eng_active_passive') || /active\s*&\s*passive|voice/i.test(normTopic)) {
+      const match = pool.filter(q => /active voice|passive voice|voice|transitive/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 9. Question Tags
+    if (normMicroId.includes('eng_question_tags') || /question\s*tag/i.test(normTopic)) {
+      const match = pool.filter(q => /question tag|tag/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 10. Sea Fever
+    if (normMicroId.includes('eng_sea_fever') || /sea\s*fever/i.test(normTopic)) {
+      const match = pool.filter(q => /sea fever|masefield|tall ship/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 11. The Comet
+    if (normMicroId.includes('eng_the_comet') || /the\s*comet/i.test(normTopic)) {
+      const match = pool.filter(q => /the comet|littleford|heavens|tail behind/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    // 12. Tamil Topics
+    if (/பொருத்துதல்|நூல்/i.test(normTopic)) {
+      const match = pool.filter(q => /பொருத்து|நூல்|பாரதியார்|கம்பன்/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    if (/பிரித்தெழுதுக|சேர்த்தெழுதுக/i.test(normTopic)) {
+      const match = pool.filter(q => /பிரித்தெழுதுக|சேர்த்தெழுதுக|புணர்ச்சி/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    if (/திருக்குறள்/i.test(normTopic)) {
+      const match = pool.filter(q => /திருக்குறள்|வள்ளுவர்|குறள்/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+    if (/சிலப்பதிகாரம்|மணிமேகலை/i.test(normTopic)) {
+      const match = pool.filter(q => /சிலப்பதிகாரம்|மணிமேகலை|கண்ணகி|கோவலன்|இளங்கோ/i.test((q.micro_topic_name || '') + ' ' + (q.question_text || '') + ' ' + (q.explanation || '')))
+      if (match.length > 0) return match
+    }
+  }
+
+  // Broad subject-level matching if no micro-topic matched
   if (normSubj.includes('geo') || normSubj.includes('புவியியல்')) {
-    return pool.filter(q => /geo|cauvery|highest peak|monsoon|lignite|pichavaram|tropic of cancer|biosphere|river/i.test(q.subject + ' ' + q.question_text))
+    return pool.filter(q => /geo|cauvery|highest peak|monsoon|lignite|pichavaram|tropic of cancer|biosphere|river|plateau|mountain|himalaya/i.test((q.subject || '') + ' ' + (q.micro_topic_name || '') + ' ' + (q.question_text || '')))
   }
   if (normSubj.includes('sci') || normSubj.includes('அறிவியல்')) {
-    return pool.filter(q => /sci|physics|chemistry|biology|rocket|chlorophyll|baking soda|blood|density|vitamin/i.test(q.subject + ' ' + q.question_text))
+    return pool.filter(q => /sci|physics|chemistry|biology|rocket|chlorophyll|baking soda|blood|density|vitamin/i.test((q.subject || '') + ' ' + (q.question_text || '')))
   }
   if (normSubj.includes('apt') || normSubj.includes('math') || normSubj.includes('கணிதம்')) {
-    return pool.filter(q => /aptitude|hcf|lcm|interest|ratio|percentage|work/i.test(q.subject + ' ' + q.question_text))
+    return pool.filter(q => /aptitude|hcf|lcm|interest|ratio|percentage|work/i.test((q.subject || '') + ' ' + (q.question_text || '')))
   }
   if (normSubj.includes('polity') || normSubj.includes('அரசியல்')) {
-    return pool.filter(q => /polity|article|constitution|amendment|supreme court|rajya sabha|finance commission/i.test(q.subject + ' ' + q.question_text))
+    return pool.filter(q => /polity|article|constitution|amendment|supreme court|rajya sabha|finance commission/i.test((q.subject || '') + ' ' + (q.question_text || '')))
   }
   if (normSubj.includes('hist') || normSubj.includes('வரலாறு')) {
-    return pool.filter(q => /history|chola|swadeshi|poona pact|khudai|chidambaram/i.test(q.subject + ' ' + q.question_text))
+    return pool.filter(q => /history|chola|swadeshi|poona pact|khudai|chidambaram/i.test((q.subject || '') + ' ' + (q.question_text || '')))
+  }
+  if (normSubj.includes('english') || normSubj.includes('ஆங்கிலம்')) {
+    return pool.filter(q => /english|voice|tag|poem|sea fever|the comet|grammar/i.test((q.subject || '') + ' ' + (q.micro_topic_name || '') + ' ' + (q.question_text || '')))
+  }
+  if (normSubj.includes('tamil') || normSubj.includes('தமிழ்')) {
+    return pool.filter(q => /tamil|பொருத்து|பிரித்து|திருக்குறள்|சிலப்பதிகாரம்/i.test((q.subject || '') + ' ' + (q.micro_topic_name || '') + ' ' + (q.question_text || '')))
   }
 
   return pool
@@ -1354,16 +1758,105 @@ export const quickRecallService = {
 
 // ─── Practice Sessions ────────────────────────────────────────────────────────
 export const practiceService = {
+  async getAvailableQuestionCount({ exam_context, subject, unit, topic, micro_topic_id }) {
+    try {
+      const targetTopic = topic || null
+      const targetSubj = subject && subject !== 'All Subjects' ? subject : null
+
+      let q = supabase
+        .from('questions')
+        .select('id, question_text, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name', { count: 'exact' })
+        .not('correct_option', 'is', null)
+
+      if (exam_context) {
+        const { data: examPapers } = await supabase
+          .from('papers')
+          .select('id')
+          .eq('status', 'published')
+          .eq('exam_name', exam_context)
+
+        if (examPapers && examPapers.length > 0) {
+          q = q.in('paper_id', examPapers.map(p => p.id))
+        }
+      }
+
+      const { data: dbQuestions } = await q.limit(300)
+
+      let matchCount = 0
+      if (dbQuestions && dbQuestions.length > 0) {
+        const filtered = dbQuestions.filter(q => {
+          const qText = (q.question_text || '') + ' ' + (q.explanation || '')
+          const qSubj = (q.subject || '') + ' ' + (q.unit_name || '') + ' ' + (q.macro_topic_name || '') + ' ' + (q.micro_topic_name || '')
+          const combined = (qSubj + ' ' + qText).toLowerCase()
+
+          if (micro_topic_id === 'geo_tn_rivers' || /tamil\s*nadu\s*rivers|cauvery|vaigai|thamirabarani/i.test(targetTopic || '')) {
+            if (/everest|himalaya|mountain|monsoon|climate|rainfall|el-nino/i.test(combined)) return false
+            return /cauvery|vaigai|thamirabarani|bhavani|mettur|river|reservoir|dam|காவிரி|வைகை|தாமிரபரணி|ஆறு/i.test(combined)
+          }
+          if (micro_topic_id === 'geo_himalayan_rivers' || /himalayan\s*rivers|ganga|indus/i.test(targetTopic || '')) {
+            return /ganga|indus|brahmaputra|gangotri|bhagirathi|alakananda|mansarovar|யமுனை|கங்கை|சிந்து/i.test(combined)
+          }
+          if (micro_topic_id === 'geo_himalayan_mountains' || /himalayan\s*mountains/i.test(targetTopic || '')) {
+            if (/river|cauvery|vaigai|monsoon|rainfall/i.test(combined)) return false
+            return /himalaya|everest|k2|siachen|peak|shivalik|mountain|சிகரம்|இமயமலை/i.test(combined)
+          }
+          if (micro_topic_id === 'geo_peninsular_plateau' || /peninsular\s*plateau/i.test(targetTopic || '')) {
+            return /plateau|deccan|anamudi|doddabetta|western ghats|eastern ghats|பீடபூமி|தொடர்ச்சி மலை/i.test(combined)
+          }
+          if (micro_topic_id === 'geo_coastal_plains' || /coastal\s*plains/i.test(targetTopic || '')) {
+            return /coast|coromandel|malabar|pichavaram|pulicat|chilika|mangrove|கடற்கரை/i.test(combined)
+          }
+          if (micro_topic_id === 'geo_monsoon_mechanism' || micro_topic_id === 'geo_elnino_lanina' || /monsoon|climate|el-nino/i.test(targetTopic || '')) {
+            if (/river|cauvery|vaigai|mountain|everest/i.test(combined)) return false
+            return /monsoon|climate|rainfall|el-nino|la-nina|itcz|பருவமழை|மழை/i.test(combined)
+          }
+          if (micro_topic_id === 'eng_active_passive' || /active\s*&\s*passive/i.test(targetTopic || '')) {
+            return /active voice|passive voice|voice|transitive/i.test(combined)
+          }
+          if (micro_topic_id === 'eng_question_tags' || /question\s*tag/i.test(targetTopic || '')) {
+            return /question tag|tag/i.test(combined)
+          }
+          if (micro_topic_id === 'eng_sea_fever' || /sea\s*fever/i.test(targetTopic || '')) {
+            return /sea fever|masefield|tall ship/i.test(combined)
+          }
+          if (micro_topic_id === 'eng_the_comet' || /the\s*comet/i.test(targetTopic || '')) {
+            return /the comet|littleford|heavens/i.test(combined)
+          }
+
+          if (targetTopic) {
+            const targetNorm = targetTopic.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
+            return combined.includes(targetNorm)
+          }
+          if (targetSubj) {
+            const targetNorm = targetSubj.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
+            return combined.includes(targetNorm)
+          }
+          return true
+        })
+        matchCount = filtered.length
+      }
+
+      const curated = getCuratedSubjectQuestions(targetSubj || 'General', targetTopic, micro_topic_id)
+      return Math.max(matchCount + curated.length, curated.length)
+    } catch (err) {
+      console.warn('Error counting available questions:', err)
+      const curated = getCuratedSubjectQuestions(subject || 'General', topic, micro_topic_id)
+      return Math.max(curated.length, 5)
+    }
+  },
+
   async createSession(userId, config) {
     let selected = []
 
     // 1. Fix Test Mode: target specific mistake question IDs if provided
     const mistakeIds = config.mistake_ids || config.mistakes || []
-    if (Array.isArray(mistakeIds) && mistakeIds.length > 0) {
+    const isFixTest = config.mode === 'fix_test' || (Array.isArray(mistakeIds) && mistakeIds.length > 0)
+
+    if (isFixTest && mistakeIds.length > 0) {
       try {
         const { data: mistakeQuestions } = await supabase
           .from('questions')
-          .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject')
+          .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name')
           .in('id', mistakeIds)
 
         if (mistakeQuestions && mistakeQuestions.length > 0) {
@@ -1372,9 +1865,27 @@ export const practiceService = {
       } catch (err) {
         console.warn('Error fetching mistake questions for fix test:', err)
       }
+
+      // Check fallback and curated pools if any IDs were not in questions table
+      const foundIds = new Set(selected.map(q => q.id))
+      const missingIds = mistakeIds.filter(id => !foundIds.has(id))
+      if (missingIds.length > 0) {
+        const allPools = [...CURATED_UNIT_QUESTIONS, ...FALLBACK_PYQ_POOL, ...FALLBACK_SYNTHETIC_POOL]
+        missingIds.forEach(id => {
+          const found = allPools.find(q => q.id === id)
+          if (found && !foundIds.has(found.id)) {
+            selected.push(found)
+            foundIds.add(found.id)
+          }
+        })
+      }
+
+      if (selected.length === 0) {
+        throw new Error('Unable to find the selected mistake questions for this Fix Test. Please reselect from your exam review.')
+      }
     }
 
-    // 2. Targeted Unit / Subject Practice Mode (or when not in fix test mode)
+    // 2. Targeted Unit / Subject / Micro-Topic Practice Mode
     if (selected.length === 0) {
       let paperIds = []
       if (config.exam_context) {
@@ -1389,25 +1900,25 @@ export const practiceService = {
 
       let q = supabase
         .from('questions')
-        .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject')
+        .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name')
         .not('correct_option', 'is', null)
 
       if (paperIds.length > 0) {
         q = q.in('paper_id', paperIds)
       }
 
-      const { data: pool } = await q.limit(300)
+      const { data: pool } = await q.limit(400)
       let candidatePool = pool ? [...pool] : []
 
-      // If a specific subject is requested (e.g. Geography or General Science):
       const targetSubject = config.subject && config.subject !== 'All Subjects' ? config.subject : null
       const targetTopic   = config.topic || null
+      const microTopicId  = config.micro_topic_id || null
 
-      if (targetSubject) {
-        const isLanguageReq = /tamil|english|language|இலக்கணம்|மொழி/i.test(targetSubject)
-        const isAptitudeReq = /aptitude|mental\s*ability|math|reasoning|கணிதம்/i.test(targetSubject)
-        const isGeoReq      = /geography|புவியியல்/i.test(targetSubject)
-        const isScienceReq  = /science|அறிவியல்|physics|chemistry|biology/i.test(targetSubject)
+      if (targetSubject || targetTopic || microTopicId) {
+        const isLanguageReq = /tamil|english|language|இலக்கணம்|மொழி/i.test(targetSubject || targetTopic || '')
+        const isAptitudeReq = /aptitude|mental\s*ability|math|reasoning|கணிதம்/i.test(targetSubject || targetTopic || '')
+        const isGeoReq      = /geography|புவியியல்/i.test(targetSubject || targetTopic || '')
+        const isScienceReq  = /science|அறிவியல்|physics|chemistry|biology/i.test(targetSubject || targetTopic || '')
 
         candidatePool = candidatePool.filter(q => {
           const qText = (q.question_text || '') + ' ' + (q.explanation || '')
@@ -1425,6 +1936,48 @@ export const practiceService = {
             if (/aptitude|mental\s*ability/i.test(qSubj)) return false
           }
 
+          // If a specific micro-topic is targeted (e.g. Tamil Nadu Rivers):
+          if (targetTopic || microTopicId) {
+            const combined = (qSubj + ' ' + qText).toLowerCase()
+
+            if (microTopicId === 'geo_tn_rivers' || /tamil\s*nadu\s*rivers|cauvery|vaigai|thamirabarani/i.test(targetTopic)) {
+              if (/everest|himalaya|mountain|monsoon|climate|rainfall|el-nino/i.test(combined)) return false
+              return /cauvery|vaigai|thamirabarani|bhavani|mettur|river|reservoir|dam|காவிரி|வைகை|தாமிரபரணி|ஆறு/i.test(combined)
+            }
+            if (microTopicId === 'geo_himalayan_rivers' || /himalayan\s*rivers|ganga|indus/i.test(targetTopic)) {
+              return /ganga|indus|brahmaputra|gangotri|bhagirathi|alakananda|mansarovar|யமுனை|கங்கை|சிந்து/i.test(combined)
+            }
+            if (microTopicId === 'geo_himalayan_mountains' || /himalayan\s*mountains/i.test(targetTopic)) {
+              if (/river|cauvery|vaigai|monsoon|rainfall/i.test(combined)) return false
+              return /himalaya|everest|k2|siachen|peak|shivalik|mountain|சிகரம்|இமயமலை/i.test(combined)
+            }
+            if (microTopicId === 'geo_peninsular_plateau' || /peninsular\s*plateau/i.test(targetTopic)) {
+              return /plateau|deccan|anamudi|doddabetta|western ghats|eastern ghats|பீடபூமி|தொடர்ச்சி மலை/i.test(combined)
+            }
+            if (microTopicId === 'geo_coastal_plains' || /coastal\s*plains/i.test(targetTopic)) {
+              return /coast|coromandel|malabar|pichavaram|pulicat|chilika|mangrove|கடற்கரை/i.test(combined)
+            }
+            if (microTopicId === 'geo_monsoon_mechanism' || microTopicId === 'geo_elnino_lanina' || /monsoon|climate|el-nino/i.test(targetTopic)) {
+              if (/river|cauvery|vaigai|mountain|everest/i.test(combined)) return false
+              return /monsoon|climate|rainfall|el-nino|la-nina|itcz|பருவமழை|மழை/i.test(combined)
+            }
+            if (microTopicId === 'eng_active_passive' || /active\s*&\s*passive/i.test(targetTopic)) {
+              return /active voice|passive voice|voice|transitive/i.test(combined)
+            }
+            if (microTopicId === 'eng_question_tags' || /question\s*tag/i.test(targetTopic)) {
+              return /question tag|tag/i.test(combined)
+            }
+            if (microTopicId === 'eng_sea_fever' || /sea\s*fever/i.test(targetTopic)) {
+              return /sea fever|masefield|tall ship/i.test(combined)
+            }
+            if (microTopicId === 'eng_the_comet' || /the\s*comet/i.test(targetTopic)) {
+              return /the comet|littleford|heavens/i.test(combined)
+            }
+
+            const targetNorm = targetTopic.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
+            return combined.includes(targetNorm)
+          }
+
           if (isGeoReq) {
             return /geography|புவியியல்|river|climate|soil|monsoon|mountain|forest|latitude|plateau|tropic/i.test(qSubj + ' ' + qText)
           }
@@ -1433,12 +1986,12 @@ export const practiceService = {
             return /science|அறிவியல்|physics|chemistry|biology|planet|cell|element|vitamin|acid|force|energy/i.test(qSubj + ' ' + qText)
           }
 
-          const targetNorm = targetSubject.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
+          const targetNorm = (targetSubject || '').toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
           return (qSubj + ' ' + qText).toLowerCase().includes(targetNorm)
         })
 
-        // Supplement candidate pool with high-yield curated questions for the subject
-        const curated = getCuratedSubjectQuestions(targetSubject, targetTopic)
+        // Supplement candidate pool with high-yield curated questions for the exact topic
+        const curated = getCuratedSubjectQuestions(targetSubject, targetTopic, microTopicId)
         curated.forEach(cq => {
           if (!candidatePool.some(p => p.id === cq.id || p.question_text === cq.question_text)) {
             candidatePool.push(cq)
@@ -1446,9 +1999,8 @@ export const practiceService = {
         })
       }
 
-      // If candidate pool is still completely empty, fallback gracefully to curated/PYQ questions
       if (candidatePool.length === 0) {
-        candidatePool = getCuratedSubjectQuestions(targetSubject || 'General', targetTopic)
+        candidatePool = getCuratedSubjectQuestions(targetSubject || 'General', targetTopic, microTopicId)
       }
 
       const shuffled = [...candidatePool]
@@ -1596,7 +2148,42 @@ export const byopService = {
       .from('uploaded_papers').select('*').eq('user_id', userId)
       .order('created_at', { ascending: false })
     if (error) throw error
-    return data ?? []
+    if (!data || data.length === 0) return []
+
+    // Check linked papers so unpublished or deleted papers disappear immediately from student view
+    const paperIds = []
+    data.forEach(up => {
+      const match = up.notes?.match(/"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"/)
+      if (match?.[1]) paperIds.push(match[1])
+    })
+
+    if (paperIds.length > 0) {
+      try {
+        const { data: linkedPapers } = await supabase
+          .from('papers')
+          .select('id, status')
+          .in('id', paperIds)
+
+        const paperMap = new Map((linkedPapers || []).map(p => [p.id, p]))
+
+        return data.filter(up => {
+          const match = up.notes?.match(/"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"/)
+          const pid = match?.[1]
+          if (pid) {
+            const linked = paperMap.get(pid)
+            // If the paper was deleted or unpublished by admin, hide it immediately from student
+            if (!linked || linked.status !== 'published') {
+              return false
+            }
+          }
+          return true
+        })
+      } catch (checkErr) {
+        console.warn('Error checking linked paper status:', checkErr)
+      }
+    }
+
+    return data
   },
 
   async create(userId, payload) {
@@ -1779,14 +2366,14 @@ export const analyticsService = {
         .from('attempts')
         .select('*, papers(title, subject, exam_name, total_questions, duration_minutes), attempt_answers(*, questions(id, question_number, question_text, correct_option))')
         .eq('user_id', userId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'submitted'])
         .order('created_at', { ascending: false })
         .limit(50),
       supabase
         .from('practice_sessions')
         .select('*')
         .eq('user_id', userId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'submitted'])
         .order('completed_at', { ascending: false })
         .limit(30),
       supabase
@@ -2195,6 +2782,7 @@ export const analyticsService = {
       totalCorrect,
       totalWrong,
       totalSkipped,
+      totalAnswered: (totalCorrect + totalWrong),
       avgScore:    avgScore.toFixed(2),
       avgAccuracy: avgAccuracy.toFixed(1),
       subjectBreakdown,

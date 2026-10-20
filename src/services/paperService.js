@@ -90,25 +90,21 @@ export const paperService = {
   },
 
   async deletePaper(paperId) {
-    // Verify paper is in draft state before deleting
-    const { data: paper } = await supabase
-      .from('papers')
-      .select('status')
-      .eq('id', paperId)
-      .single()
-
-    if (paper && paper.status === 'published') {
-      throw new Error('Cannot delete a published paper. Please unpublish or archive it first.')
+    // Cascade delete any questions for this paper first
+    try {
+      await supabase.from('questions').delete().eq('paper_id', paperId)
+    } catch (e) {
+      console.warn('Cascade deleting questions error:', e)
     }
 
-    const { error } = await supabase
-      .from('papers')
-      .delete()
-      .eq('id', paperId)
+    // Cascade delete any user attempts for this paper
+    try {
+      await supabase.from('user_attempts').delete().eq('paper_id', paperId)
+    } catch (e) {
+      console.warn('Cascade deleting attempts error:', e)
+    }
 
-    if (error) throw error
-
-    // Sync deletion: if this paper was linked to any uploaded_papers record, update it so students cannot attempt it
+    // Sync deletion: if this paper was linked to any uploaded_papers record, delete them so students cannot attempt them
     try {
       const { data: linkedUploads } = await supabase
         .from('uploaded_papers')
@@ -119,17 +115,20 @@ export const paperService = {
         for (const up of linkedUploads) {
           await supabase
             .from('uploaded_papers')
-            .update({
-              processing_status: 'review_required',
-              notes: (up.notes || '').replace(paperId, 'deleted') + ' (Paper was deleted by Admin)',
-              updated_at: new Date().toISOString()
-            })
+            .delete()
             .eq('id', up.id)
         }
       }
     } catch (e) {
       console.warn('Syncing paper deletion with uploaded_papers:', e)
     }
+
+    const { error } = await supabase
+      .from('papers')
+      .delete()
+      .eq('id', paperId)
+
+    if (error) throw error
 
     return true
   },

@@ -467,7 +467,7 @@ function QuestionsPanel({ questions, onSave, saving }) {
           className="flex items-center gap-2 px-5 py-2.5 bg-tnpsc-brand text-white rounded-xl text-xs font-bold hover:bg-tnpsc-brand-hover transition-colors shadow-brand disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          {saving ? 'Saving…' : `Save ${valid.length} Questions to My Papers`}
+          {saving ? 'Validating & Saving…' : `Validate & Lock as Complete (${valid.length} Questions)`}
         </button>
       </div>
 
@@ -570,7 +570,8 @@ function AttemptButton({ paperId, userId }) {
 
         if (existingPaper?.id) {
           if (existingPaper.status !== 'published') {
-            await supabase.from('papers').update({ status: 'published' }).eq('id', existingPaper.id)
+            toast.error('This test paper is currently unpublished or disabled by Admin and cannot be attempted.')
+            return
           }
           navigate(`/exam/${existingPaper.id}`)
           return
@@ -600,7 +601,8 @@ function AttemptButton({ paperId, userId }) {
 
       if (papers?.[0]?.id) {
         if (papers[0].status !== 'published') {
-          await supabase.from('papers').update({ status: 'published' }).eq('id', papers[0].id)
+          toast.error('This test paper is currently unpublished or disabled by Admin and cannot be attempted.')
+          return
         }
         await supabase
           .from('uploaded_papers')
@@ -1134,10 +1136,10 @@ export function BYOPPage() {
         processedPages: extractionResult.pages.length,
       })
 
-      // Determine status based on validation
-      const needsReview = questions.some(q => q.parser_status === 'needs_review')
+      // Determine status based on validation: require explicit review and validation before locking as complete
+      const needsReview = true
       const validCount = questions.filter(q => q.parser_status === 'ready').length
-      const newStatus = needsReview ? 'review_required' : 'extracted'
+      const newStatus = 'review_required'
 
       console.log('[BYOP] Final status:', {
         processingJobId,

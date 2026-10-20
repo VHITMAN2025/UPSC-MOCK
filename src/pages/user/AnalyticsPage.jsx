@@ -263,7 +263,11 @@ export function AnalyticsPage() {
                 {hasAttempts ? `${data.avgAccuracy}%` : '—'}
               </b>
               <span className="block text-[10px] text-slate-400 mt-0.5">
-                {hasAttempts ? 'Based on answered questions' : 'No attempts recorded'}
+                {hasAttempts
+                  ? (data.totalAnswered === 1
+                      ? 'Based on only 1 answered question'
+                      : `Based on ${data.totalAnswered || 0} answered questions`)
+                  : 'No attempts recorded'}
               </span>
             </div>
 
