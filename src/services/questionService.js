@@ -17,17 +17,78 @@ export const questionService = {
     
     // In exam mode, do not expose correct_option or explanation to client network responses
     if (isExamMode) {
-      selectFields = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil'
+      selectFields = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, group_tag, group_name, unit_tag, unit_name, macro_topic, macro_topic_name, micro_topic, micro_topic_name, micro_topic_id, exam_year, is_pyq, difficulty_level, tags'
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('questions')
       .select(selectFields)
       .eq('paper_id', paperId)
       .order('question_number', { ascending: true })
 
+    // Resilient fallback if some metadata columns are not yet applied on Supabase table
+    if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
+      const basicFields = isExamMode
+        ? 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil'
+        : '*'
+      const fallbackRes = await supabase
+        .from('questions')
+        .select(basicFields)
+        .eq('paper_id', paperId)
+        .order('question_number', { ascending: true })
+      data = fallbackRes.data
+      error = fallbackRes.error
+    }
+
     if (error) throw error
-    return data || []
+
+    // Ensure all 5 identifiers are always populated on every question
+    return (data || []).map(q => {
+      let group = q.group_tag || q.group_name || null
+      let unit = q.unit_tag || q.unit_name || null
+      let macro = q.macro_topic || q.macro_topic_name || null
+      let micro = q.micro_topic || q.micro_topic_name || null
+      let year = q.exam_year || null
+      let isPyq = q.is_pyq ?? null
+
+      const expl = q.explanation || ''
+      if (expl.includes('[Metadata:')) {
+        const gMatch = expl.match(/Group=([^|\]]+)/i)
+        const uMatch = expl.match(/Unit=([^|\]]+)/i)
+        const maMatch = expl.match(/Macro=([^|\]]+)/i)
+        const miMatch = expl.match(/Micro=([^|\]]+)/i)
+        const yMatch = expl.match(/Year=([^|\]]+)/i)
+        const pMatch = expl.match(/PYQ=([^|\]]+)/i)
+        if (gMatch && !group) group = gMatch[1].trim()
+        if (uMatch && !unit) unit = uMatch[1].trim()
+        if (maMatch && !macro) macro = maMatch[1].trim()
+        if (miMatch && !micro) micro = miMatch[1].trim()
+        if (yMatch && !year) year = yMatch[1].trim()
+        if (pMatch && isPyq === null) isPyq = pMatch[1].trim() === 'true'
+      } else if (expl.includes('[Taxonomy:')) {
+        const taxMatch = expl.match(/\[Taxonomy:\s*([^>\]]+)(?:>\s*([^>\]]+))?(?:>\s*([^>\]]+))?\]/i)
+        if (taxMatch) {
+          if (!unit) unit = taxMatch[1]?.trim()
+          if (!macro) macro = taxMatch[2]?.trim()
+          if (!micro) micro = taxMatch[3]?.trim()
+        }
+      }
+
+      return {
+        ...q,
+        group_tag: group || 'Group 4',
+        group_name: group ? (group.startsWith('TNPSC') ? group : `TNPSC ${group}`) : 'TNPSC Group 4',
+        unit_tag: unit ? (unit.startsWith('Unit') ? unit.split('—')[0].trim() : unit) : 'Unit 1',
+        unit_name: unit || 'Unit 1 — General Science',
+        macro_topic: macro || 'General Studies',
+        macro_topic_name: macro || 'General Studies',
+        micro_topic: micro || 'General Concepts',
+        micro_topic_name: micro || 'General Concepts',
+        exam_year: year || '2024',
+        is_pyq: isPyq !== null ? Boolean(isPyq) : Boolean(q.is_pyq),
+        difficulty_level: q.difficulty_level || 'Medium',
+      }
+    })
   },
 
   async getExistingQuestionCount(paperId) {
@@ -40,12 +101,57 @@ export const questionService = {
     return count || 0
   },
 
-  async queryQuestionsByCriteria({ tags, unitId, unitCode, difficultyLevel, partCode, groupName, limit = 100 } = {}) {
+  async queryQuestionsByCriteria({
+    groupTag,
+    groupName,
+    unitTag,
+    unitName,
+    unitId,
+    unitCode,
+    macroTopic,
+    microTopic,
+    microTopicId,
+    examYear,
+    isPyq,
+    difficultyLevel,
+    partCode,
+    tags,
+    limit = 100
+  } = {}) {
     let query = supabase.from('questions').select('*')
 
-    if (groupName) {
-      query = query.eq('group_name', groupName)
+    if (groupTag) {
+      query = query.eq('group_tag', groupTag)
+    } else if (groupName) {
+      query = query.or(`group_name.eq.${groupName},group_tag.eq.${groupName}`)
     }
+
+    if (unitTag) {
+      query = query.eq('unit_tag', unitTag)
+    } else if (unitName) {
+      query = query.eq('unit_name', unitName)
+    }
+
+    if (macroTopic) {
+      query = query.or(`macro_topic.eq.${macroTopic},macro_topic_name.eq.${macroTopic}`)
+    }
+
+    if (microTopic) {
+      query = query.or(`micro_topic.eq.${microTopic},micro_topic_name.eq.${microTopic}`)
+    }
+
+    if (microTopicId) {
+      query = query.eq('micro_topic_id', microTopicId)
+    }
+
+    if (examYear) {
+      query = query.eq('exam_year', String(examYear))
+    }
+
+    if (isPyq !== undefined && isPyq !== null) {
+      query = query.eq('is_pyq', Boolean(isPyq))
+    }
+
     if (unitId) {
       query = query.eq('unit_id', unitId)
     }
@@ -65,7 +171,15 @@ export const questionService = {
       query = query.limit(limit)
     }
 
-    const { data, error } = await query
+    let { data, error } = await query
+    if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
+      // Fallback query without metadata columns
+      console.warn('[questionService] queryQuestionsByCriteria column fallback:', error.message)
+      const fb = await supabase.from('questions').select('*').limit(limit)
+      data = fb.data
+      error = fb.error
+    }
+
     if (error) {
       console.warn('[questionService] queryQuestionsByCriteria error:', error)
       return []
@@ -74,11 +188,37 @@ export const questionService = {
   },
 
   async createQuestion(questionData) {
-    const { data, error } = await supabase
+    let payload = { ...questionData }
+    const gTag = payload.group_tag || 'Group 4'
+    const uTag = payload.unit_tag || (payload.unit_name ? (payload.unit_name.startsWith('Unit') ? payload.unit_name.split('—')[0].trim() : payload.unit_name) : 'Unit 1')
+    const mName = payload.macro_topic || payload.macro_topic_name || 'General'
+    const miName = payload.micro_topic || payload.micro_topic_name || 'General Concepts'
+    const eYear = payload.exam_year || '2024'
+    const pyq = Boolean(payload.is_pyq)
+
+    let expl = payload.explanation || ''
+    if (!expl.includes('[Metadata:')) {
+      const metaTag = `[Metadata: Group=${gTag} | Unit=${uTag} | Macro=${mName} | Micro=${miName} | Year=${eYear} | PYQ=${pyq}]`
+      expl = expl ? `${metaTag}\n\n${expl}` : metaTag
+      payload.explanation = expl
+    }
+
+    let { data, error } = await supabase
       .from('questions')
-      .insert([questionData])
+      .insert([payload])
       .select()
       .single()
+
+    if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
+      const {
+        group_tag, group_name, unit_tag, unit_name,
+        macro_topic, macro_topic_name, micro_topic, micro_topic_name,
+        micro_topic_id, exam_year, is_pyq, difficulty_level, tags, ...basePayload
+      } = payload
+      const retry = await supabase.from('questions').insert([basePayload]).select().single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) throw error
 
@@ -87,12 +227,40 @@ export const questionService = {
   },
 
   async updateQuestion(questionId, updates) {
-    const { data, error } = await supabase
+    let payload = { ...updates, updated_at: new Date().toISOString() }
+    const gTag = payload.group_tag || 'Group 4'
+    const uTag = payload.unit_tag || (payload.unit_name ? (payload.unit_name.startsWith('Unit') ? payload.unit_name.split('—')[0].trim() : payload.unit_name) : 'Unit 1')
+    const mName = payload.macro_topic || payload.macro_topic_name || 'General'
+    const miName = payload.micro_topic || payload.micro_topic_name || 'General Concepts'
+    const eYear = payload.exam_year || '2024'
+    const pyq = Boolean(payload.is_pyq)
+
+    if (payload.explanation !== undefined) {
+      let expl = (payload.explanation || '')
+        .replace(/\[Metadata:[^\]]+\]\s*/g, '')
+        .replace(/\[Taxonomy:[^\]]+\]\s*/g, '')
+        .trim()
+      const metaTag = `[Metadata: Group=${gTag} | Unit=${uTag} | Macro=${mName} | Micro=${miName} | Year=${eYear} | PYQ=${pyq}]`
+      payload.explanation = expl ? `${metaTag}\n\n${expl}` : metaTag
+    }
+
+    let { data, error } = await supabase
       .from('questions')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', questionId)
       .select()
       .single()
+
+    if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
+      const {
+        group_tag, group_name, unit_tag, unit_name,
+        macro_topic, macro_topic_name, micro_topic, micro_topic_name,
+        micro_topic_id, exam_year, is_pyq, difficulty_level, tags, ...basePayload
+      } = payload
+      const retry = await supabase.from('questions').update(basePayload).eq('id', questionId).select().single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) throw error
     return data
@@ -142,6 +310,21 @@ export const questionService = {
       if (delErr) throw delErr
     }
 
+    // Fetch linked paper metadata to extract exam group and year
+    let paperMeta = null
+    try {
+      const { data: p } = await supabase
+        .from('papers')
+        .select('id, title, exam_name, year')
+        .eq('id', paperId)
+        .maybeSingle()
+      paperMeta = p
+    } catch {}
+
+    const paperExam = paperMeta?.exam_name || paperMeta?.title || 'TNPSC Group 4'
+    const defaultGroupTag = paperExam.includes('Group 1') ? 'Group 1' : paperExam.includes('Group 2') ? 'Group 2' : 'Group 4'
+    const defaultYear = String(paperMeta?.year || '2024')
+
     // 2. Map frontend fields to actual Supabase database schema with automatic 3-level taxonomy classification
     const formattedList = questionsList.map((q, idx) => {
       const opt = q.correct_option || q.marked_answer ? String(q.correct_option || q.marked_answer).toUpperCase().trim() : null
@@ -165,8 +348,8 @@ export const questionService = {
       // Automatic 3-Level Syllabus Categorization
       // Level 1: Unit, Level 2: Macro-Topic, Level 3: Micro-Topic
       let unitName = q.unit_name || null
-      let macroName = q.macro_topic_name || null
-      let microName = q.micro_topic_name || null
+      let macroName = q.macro_topic_name || q.macro_topic || null
+      let microName = q.micro_topic_name || q.micro_topic || null
 
       if (!unitName || !macroName || !microName) {
         const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(q, CANONICAL_MICROS)
@@ -182,18 +365,28 @@ export const questionService = {
       macroName = macroName || 'General Studies'
       microName = microName || 'General Concepts'
 
-      // Embed taxonomy tag in explanation as resilient guarantee
+      const groupTag = q.group_tag || defaultGroupTag
+      const groupName = q.group_name || `TNPSC ${groupTag}`
+      const unitTag = q.unit_tag || (unitName.startsWith('Unit') ? unitName.split('—')[0].trim() : 'Unit 1')
+      const examYear = String(q.exam_year || q.year || defaultYear)
+      const isPyq = Boolean(q.is_pyq ?? (paperMeta?.year ? true : false))
+
+      // Embed resilient metadata guarantee tag into explanation
       let baseExplanation = sanitizeDatabaseText(q.explanation || q.extraction_notes || '') || ''
-      if (!baseExplanation.includes('[Taxonomy:')) {
-        const taxPrefix = `[Taxonomy: ${unitName} > ${macroName} > ${microName}]`
-        baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
+      const metaTag = `[Metadata: Group=${groupTag} | Unit=${unitTag} | Macro=${macroName} | Micro=${microName} | Year=${examYear} | PYQ=${isPyq}]`
+      if (!baseExplanation.includes('[Metadata:')) {
+        baseExplanation = baseExplanation ? `${metaTag}\n\n${baseExplanation}` : metaTag
       }
 
       const qTags = Array.from(new Set([
         ...(Array.isArray(q.tags) ? q.tags : []),
+        groupTag,
+        unitTag,
         microName,
         macroName,
         unitName,
+        examYear,
+        isPyq ? 'PYQ' : 'Mock',
       ].filter(Boolean)))
 
       // CRITICAL: Sanitize all text fields to remove null bytes before database insert
@@ -215,9 +408,17 @@ export const questionService = {
         option_c_tamil: sanitizeDatabaseText(q.option_c_tamil || null),
         option_d_tamil: sanitizeDatabaseText(q.option_d_tamil || null),
         explanation_tamil: sanitizeDatabaseText(q.explanation_tamil || null),
+        group_tag: groupTag,
+        group_name: groupName,
+        unit_tag: unitTag,
         unit_name: unitName,
+        macro_topic: macroName,
         macro_topic_name: macroName,
+        micro_topic: microName,
         micro_topic_name: microName,
+        micro_topic_id: q.micro_topic_id || null,
+        exam_year: examYear,
+        is_pyq: isPyq,
         difficulty_level: q.difficulty_level || 'Medium',
         tags: qTags,
       }
@@ -261,8 +462,12 @@ export const questionService = {
       // Resilient fallback: if Supabase returns code 42703 (undefined column) or message indicates column does not exist,
       // strip taxonomy columns and upsert base fields without crashing
       if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
-        console.warn(`[questionService] Taxonomy columns missing in DB schema, falling back to base question schema:`, error.message)
-        const strippedBatch = batch.map(({ unit_name, macro_topic_name, micro_topic_name, difficulty_level, tags, ...rest }) => rest)
+        console.warn(`[questionService] Metadata columns not yet in DB schema, falling back to base question schema:`, error.message)
+        const strippedBatch = batch.map(({
+          group_tag, group_name, unit_tag, unit_name,
+          macro_topic, macro_topic_name, micro_topic, micro_topic_name,
+          micro_topic_id, exam_year, is_pyq, difficulty_level, tags, ...rest
+        }) => rest)
         const retryRes = await supabase
           .from('questions')
           .upsert(strippedBatch, { onConflict: 'paper_id,question_number' })
@@ -435,31 +640,65 @@ export const questionService = {
     }
   },
 
-  async updateQuestionTopic(questionId, { unitName, macroTopicName, microTopicName }) {
+  async updateQuestionTopic(questionId, { unitName, macroTopicName, microTopicName, groupTag, examYear, isPyq }) {
     if (!questionId) throw new Error('Question ID is required')
 
-    // Read current explanation
+    // Read current question
     const { data: currentQ, error: fetchErr } = await supabase
       .from('questions')
-      .select('explanation')
+      .select('explanation, group_tag, exam_year, is_pyq')
       .eq('id', questionId)
       .single()
 
     if (fetchErr) throw fetchErr
 
-    let baseExpl = (currentQ?.explanation || '').replace(/\[Taxonomy:[^\]]+\]\s*/g, '').trim()
-    const newTaxPrefix = `[Taxonomy: ${unitName} > ${macroTopicName || 'General'} > ${microTopicName || 'General Concepts'}]`
-    const updatedExpl = baseExpl ? `${newTaxPrefix}\n\n${baseExpl}` : newTaxPrefix
+    const gTag = groupTag || currentQ?.group_tag || 'Group 4'
+    const uTag = unitName ? (unitName.startsWith('Unit') ? unitName.split('—')[0].trim() : unitName) : 'Unit 1'
+    const eYear = String(examYear || currentQ?.exam_year || '2024')
+    const pyqFlag = isPyq !== undefined ? Boolean(isPyq) : Boolean(currentQ?.is_pyq)
 
-    const { data, error } = await supabase
+    let baseExpl = (currentQ?.explanation || '')
+      .replace(/\[Metadata:[^\]]+\]\s*/g, '')
+      .replace(/\[Taxonomy:[^\]]+\]\s*/g, '')
+      .trim()
+    const metaTag = `[Metadata: Group=${gTag} | Unit=${uTag} | Macro=${macroTopicName || 'General'} | Micro=${microTopicName || 'General Concepts'} | Year=${eYear} | PYQ=${pyqFlag}]`
+    const updatedExpl = baseExpl ? `${metaTag}\n\n${baseExpl}` : metaTag
+
+    const updates = {
+      explanation: updatedExpl,
+      updated_at: new Date().toISOString()
+    }
+
+    // Try full metadata columns
+    let { data, error } = await supabase
       .from('questions')
       .update({
-        explanation: updatedExpl,
-        updated_at: new Date().toISOString()
+        ...updates,
+        group_tag: gTag,
+        unit_tag: uTag,
+        unit_name: unitName,
+        macro_topic: macroTopicName || 'General',
+        macro_topic_name: macroTopicName || 'General',
+        micro_topic: microTopicName || 'General Concepts',
+        micro_topic_name: microTopicName || 'General Concepts',
+        exam_year: eYear,
+        is_pyq: pyqFlag,
       })
       .eq('id', questionId)
       .select()
       .single()
+
+    // If column missing in schema, fallback to explanation only
+    if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
+      const fb = await supabase
+        .from('questions')
+        .update(updates)
+        .eq('id', questionId)
+        .select()
+        .single()
+      data = fb.data
+      error = fb.error
+    }
 
     if (error) throw error
     return data
@@ -469,7 +708,7 @@ export const questionService = {
     const { data: unclassified, error: fetchErr } = await supabase
       .from('questions')
       .select('id, question_text, option_a, option_b, option_c, option_d, explanation')
-      .not('explanation', 'ilike', '%[Taxonomy:%')
+      .not('explanation', 'ilike', '%[Metadata:%')
       .limit(500)
 
     if (fetchErr) throw fetchErr
@@ -481,20 +720,48 @@ export const questionService = {
     for (let i = 0; i < unclassified.length; i++) {
       const q = unclassified[i]
       const match = syllabusAnalyticsService.classifyQuestionToMicroTopic(q, CANONICAL_MICROS)
-      const uName = match?.unit_name || 'Unit I: General Science'
+      const uName = match?.unit_name || 'Unit 1 — General Science'
       const mName = match?.macro_topic_name || 'General Studies'
       const miName = match?.micro_topic_name || 'General Concepts'
+      const uTag = uName.startsWith('Unit') ? uName.split('—')[0].trim() : 'Unit 1'
+      const gTag = 'Group 4'
+      const eYear = '2024'
+      const isPyq = false
 
-      let expl = (q.explanation || '').trim()
-      const taxTag = `[Taxonomy: ${uName} > ${mName} > ${miName}]`
-      const newExpl = expl ? `${taxTag}\n\n${expl}` : taxTag
+      let expl = (q.explanation || '')
+        .replace(/\[Metadata:[^\]]+\]\s*/g, '')
+        .replace(/\[Taxonomy:[^\]]+\]\s*/g, '')
+        .trim()
+      const metaTag = `[Metadata: Group=${gTag} | Unit=${uTag} | Macro=${mName} | Micro=${miName} | Year=${eYear} | PYQ=${isPyq}]`
+      const newExpl = expl ? `${metaTag}\n\n${expl}` : metaTag
 
-      const { error } = await supabase
-        .from('questions')
-        .update({ explanation: newExpl })
-        .eq('id', q.id)
+      try {
+        const { error } = await supabase
+          .from('questions')
+          .update({
+            explanation: newExpl,
+            group_tag: gTag,
+            unit_tag: uTag,
+            unit_name: uName,
+            macro_topic: mName,
+            macro_topic_name: mName,
+            micro_topic: miName,
+            micro_topic_name: miName,
+            exam_year: eYear,
+            is_pyq: isPyq,
+          })
+          .eq('id', q.id)
 
-      if (!error) updatedCount++
+        if (!error) updatedCount++
+        else {
+          // Fallback to updating explanation
+          await supabase.from('questions').update({ explanation: newExpl }).eq('id', q.id)
+          updatedCount++
+        }
+      } catch {
+        // Continue
+      }
+
       if (onProgress && (i % 10 === 0 || i === total - 1)) {
         onProgress({ current: i + 1, total, updatedCount })
       }

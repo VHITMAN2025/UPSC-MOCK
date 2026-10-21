@@ -1852,12 +1852,20 @@ export const practiceService = {
     const mistakeIds = config.mistake_ids || config.mistakes || []
     const isFixTest = config.mode === 'fix_test' || (Array.isArray(mistakeIds) && mistakeIds.length > 0)
 
+    const SELECT_FIELDS = 'id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, macro_topic, micro_topic, micro_topic_id, exam_year, is_pyq'
+    const FALLBACK_FIELDS = 'id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil'
+
     if (isFixTest && mistakeIds.length > 0) {
       try {
-        const { data: mistakeQuestions } = await supabase
+        let { data: mistakeQuestions, error: mErr } = await supabase
           .from('questions')
-          .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name')
+          .select(SELECT_FIELDS)
           .in('id', mistakeIds)
+
+        if (mErr && (mErr.code === '42703' || String(mErr.message).toLowerCase().includes('column'))) {
+          const fb = await supabase.from('questions').select(FALLBACK_FIELDS).in('id', mistakeIds)
+          mistakeQuestions = fb.data
+        }
 
         if (mistakeQuestions && mistakeQuestions.length > 0) {
           selected = [...mistakeQuestions]
@@ -1900,14 +1908,20 @@ export const practiceService = {
 
       let q = supabase
         .from('questions')
-        .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name')
+        .select(SELECT_FIELDS)
         .not('correct_option', 'is', null)
 
       if (paperIds.length > 0) {
         q = q.in('paper_id', paperIds)
       }
 
-      const { data: pool } = await q.limit(400)
+      let { data: pool, error: poolErr } = await q.limit(400)
+      if (poolErr && (poolErr.code === '42703' || String(poolErr.message).toLowerCase().includes('column'))) {
+        let fallbackQ = supabase.from('questions').select(FALLBACK_FIELDS).not('correct_option', 'is', null)
+        if (paperIds.length > 0) fallbackQ = fallbackQ.in('paper_id', paperIds)
+        const fbRes = await fallbackQ.limit(400)
+        pool = fbRes.data
+      }
       let candidatePool = pool ? [...pool] : []
 
       const targetSubject = config.subject && config.subject !== 'All Subjects' ? config.subject : null
@@ -2035,10 +2049,25 @@ export const practiceService = {
             id: q.id,
             correct_option: q.correct_option,
             subject: q.subject || config.subject,
-            macro_topic_name: q.macro_topic_name || config.topic,
-            micro_topic_name: q.micro_topic_name || config.topic,
-            unit_name: q.unit_name || config.subject,
+            macro_topic_name: q.macro_topic_name || q.macro_topic || config.topic,
+            micro_topic_name: q.micro_topic_name || q.micro_topic || config.topic,
+            unit_name: q.unit_name || q.unit_tag || config.subject,
             question_text: q.question_text,
+            question_text_tamil: q.question_text_tamil || null,
+            option_a: q.option_a,
+            option_a_tamil: q.option_a_tamil || null,
+            option_b: q.option_b,
+            option_b_tamil: q.option_b_tamil || null,
+            option_c: q.option_c,
+            option_c_tamil: q.option_c_tamil || null,
+            option_d: q.option_d,
+            option_d_tamil: q.option_d_tamil || null,
+            explanation: q.explanation || null,
+            explanation_tamil: q.explanation_tamil || null,
+            group_tag: q.group_tag || config.exam_context || null,
+            unit_tag: q.unit_tag || null,
+            exam_year: q.exam_year || null,
+            is_pyq: Boolean(q.is_pyq),
           })),
           started_at:     new Date().toISOString(),
         }])
@@ -2061,10 +2090,25 @@ export const practiceService = {
           id: q.id,
           correct_option: q.correct_option,
           subject: q.subject || config.subject,
-          macro_topic_name: q.macro_topic_name || config.topic,
-          micro_topic_name: q.micro_topic_name || config.topic,
-          unit_name: q.unit_name || config.subject,
+          macro_topic_name: q.macro_topic_name || q.macro_topic || config.topic,
+          micro_topic_name: q.micro_topic_name || q.micro_topic || config.topic,
+          unit_name: q.unit_name || q.unit_tag || config.subject,
           question_text: q.question_text,
+          question_text_tamil: q.question_text_tamil || null,
+          option_a: q.option_a,
+          option_a_tamil: q.option_a_tamil || null,
+          option_b: q.option_b,
+          option_b_tamil: q.option_b_tamil || null,
+          option_c: q.option_c,
+          option_c_tamil: q.option_c_tamil || null,
+          option_d: q.option_d,
+          option_d_tamil: q.option_d_tamil || null,
+          explanation: q.explanation || null,
+          explanation_tamil: q.explanation_tamil || null,
+          group_tag: q.group_tag || config.exam_context || null,
+          unit_tag: q.unit_tag || null,
+          exam_year: q.exam_year || null,
+          is_pyq: Boolean(q.is_pyq),
         })),
         started_at: new Date().toISOString(),
       }

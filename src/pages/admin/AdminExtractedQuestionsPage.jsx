@@ -207,7 +207,7 @@ export function AdminExtractedQuestionsPage() {
     return groups
   }, [filteredQuestions])
 
-  // Save updated topic
+  // Save updated topic & 5 metadata identifiers
   async function handleSaveTopic(e) {
     e.preventDefault()
     if (!editingTopicQ) return
@@ -217,6 +217,9 @@ export function AdminExtractedQuestionsPage() {
         unitName: editingTopicQ.unit_name,
         macroTopicName: editingTopicQ.macro_topic_name,
         microTopicName: editingTopicQ.micro_topic_name,
+        groupTag: editingTopicQ.group_tag || 'Group 4',
+        examYear: editingTopicQ.exam_year || '2024',
+        isPyq: Boolean(editingTopicQ.is_pyq),
       })
 
       // Update local state
@@ -228,13 +231,16 @@ export function AdminExtractedQuestionsPage() {
                 unit_name: editingTopicQ.unit_name,
                 macro_topic_name: editingTopicQ.macro_topic_name,
                 micro_topic_name: editingTopicQ.micro_topic_name,
+                group_tag: editingTopicQ.group_tag,
+                exam_year: editingTopicQ.exam_year,
+                is_pyq: editingTopicQ.is_pyq,
                 has_db_taxonomy: true,
               }
             : q
         )
       )
 
-      toast.success('Question topic updated and saved to database successfully!')
+      toast.success('Question topic & metadata updated and saved to database successfully!')
       setEditingTopicQ(null)
     } catch (err) {
       toast.error('Failed to update topic: ' + err.message)
@@ -659,13 +665,27 @@ export function AdminExtractedQuestionsPage() {
 
                       {/* Syllabus Unit */}
                       <td className="py-3 px-3.5">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
-                            unitConfig?.badgeColor || 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                          }`}
-                        >
-                          {unitConfig?.shortName || canonicalUnit}
-                        </span>
+                        <div className="space-y-1">
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
+                              unitConfig?.badgeColor || 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            }`}
+                          >
+                            {unitConfig?.shortName || canonicalUnit}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {(q.group_tag || q.group_name) && (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                {q.group_tag || q.group_name}
+                              </span>
+                            )}
+                            {(q.is_pyq || q.exam_year) && (
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-50 text-amber-900 border border-amber-300">
+                                PYQ {q.exam_year || ''}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Micro-Topic */}
@@ -1046,6 +1066,49 @@ export function AdminExtractedQuestionsPage() {
                 placeholder="e.g. Mechanics & Properties of Matter, Preamble & Rights"
                 className="w-full text-xs border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand"
               />
+            </div>
+
+            {/* Exam Group & Year Grid */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-body-secondary mb-1">
+                  Exam Group Tag
+                </label>
+                <select
+                  value={editingTopicQ.group_tag || 'Group 4'}
+                  onChange={e => setEditingTopicQ(prev => ({ ...prev, group_tag: e.target.value }))}
+                  className="w-full text-xs border border-surface-border rounded-xl px-3 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand bg-white"
+                >
+                  <option value="Group 4">TNPSC Group 4</option>
+                  <option value="Group 1">TNPSC Group 1</option>
+                  <option value="Group 2/2A">TNPSC Group 2/2A</option>
+                  <option value="General">General TNPSC</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-body-secondary mb-1">
+                  Exam Year &amp; PYQ
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingTopicQ.exam_year || ''}
+                    onChange={e => setEditingTopicQ(prev => ({ ...prev, exam_year: e.target.value }))}
+                    placeholder="e.g. 2024"
+                    className="w-20 text-xs border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand font-bold"
+                  />
+                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingTopicQ.is_pyq)}
+                      onChange={e => setEditingTopicQ(prev => ({ ...prev, is_pyq: e.target.checked }))}
+                      className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>Official PYQ</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-surface-border">

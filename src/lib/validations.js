@@ -38,5 +38,21 @@ export const questionSchema = z.object({
   option_c: z.string().min(1, 'Option C is required'),
   option_d: z.string().min(1, 'Option D is required'),
   correct_option: z.enum(['A', 'B', 'C', 'D'], { required_error: 'Please select correct answer' }),
-  explanation: z.string().optional()
+  explanation: z.string().optional().nullable(),
+  // 5 Required Metadata Identifiers & Syllabus Hierarchy
+  group_tag: z.string().optional().nullable(),
+  unit_tag: z.string().optional().nullable(),
+  macro_topic: z.string().optional().nullable(),
+  micro_topic: z.string().optional().nullable(),
+  micro_topic_id: z.string().optional().nullable(),
+  exam_year: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  is_pyq: z.boolean().optional().nullable(),
+  // Bilingual Fields
+  question_text_tamil: z.string().optional().nullable(),
+  option_a_tamil: z.string().optional().nullable(),
+  option_b_tamil: z.string().optional().nullable(),
+  option_c_tamil: z.string().optional().nullable(),
+  option_d_tamil: z.string().optional().nullable(),
+  explanation_tamil: z.string().optional().nullable(),
 })
+

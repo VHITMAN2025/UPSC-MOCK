@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Brain, Play, Clock, Zap, BookOpen, Loader2, CheckCircle2, XCircle,
-  ChevronLeft, ChevronRight, AlertCircle, BarChart3, Timer,
+  ChevronLeft, ChevronRight, AlertCircle, BarChart3, Timer, Sparkles, Globe
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -319,10 +319,11 @@ function PracticeBuilder({ onStart }) {
 // ─── Practice Session ─────────────────────────────────────────────────────────
 function PracticeSession({ session, questions, onComplete }) {
   const { toast } = useApp()
-  const [index, setIndex]   = useState(0)
-  const [answers, setAnswers] = useState({})
+  const [index, setIndex]         = useState(0)
+  const [answers, setAnswers]     = useState({})
   const [submitted, setSubmitted] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [lang, setLang]           = useState('english') // 'english' | 'tamil'
 
   const totalSec = session.timer_mode === 'strict'
     ? session.question_count * 72  // ~72s per question
@@ -337,8 +338,35 @@ function PracticeSession({ session, questions, onComplete }) {
     }
   }, [seconds, isRunning])
 
-  const currentQ = questions[index]
+  const currentQ = questions[index] || {}
   const OPTS = ['A', 'B', 'C', 'D']
+
+  // Determine available bilingual texts
+  const hasTamil = Boolean(
+    currentQ.question_text_tamil ||
+    currentQ.option_a_tamil ||
+    currentQ.option_b_tamil ||
+    currentQ.tamil_question
+  )
+
+  const activeLang = hasTamil ? lang : 'english'
+
+  // Question metadata
+  const groupLabel = currentQ.group_tag
+    ? `TNPSC ${currentQ.group_tag}`
+    : (session.exam_context || 'TNPSC Exam')
+  const unitLabel = currentQ.unit_tag || currentQ.unit_name || currentQ.subject || session.subject || null
+  const microLabel = currentQ.micro_topic || currentQ.micro_topic_name || currentQ.topic || null
+  const isPyq = Boolean(currentQ.is_pyq || currentQ.question_type === 'PYQ')
+  const examYear = currentQ.exam_year || (isPyq ? 'Official PYQ' : null)
+
+  const questionText = activeLang === 'tamil' && (currentQ.question_text_tamil || currentQ.tamil_question)
+    ? (currentQ.question_text_tamil || currentQ.tamil_question)
+    : currentQ.question_text
+
+  const secondaryText = activeLang === 'tamil' && currentQ.question_text
+    ? currentQ.question_text
+    : (activeLang === 'english' && (currentQ.question_text_tamil || currentQ.tamil_question) ? (currentQ.question_text_tamil || currentQ.tamil_question) : null)
 
   async function handleSubmit() {
     setSaving(true)
@@ -377,9 +405,9 @@ function PracticeSession({ session, questions, onComplete }) {
   if (submitted) return null
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in">
-      {/* Top bar */}
-      <div className="flex items-center justify-between mb-4 bg-white rounded-xl border border-surface-border px-4 py-3 shadow-subtle">
+    <div className="max-w-2xl mx-auto animate-fade-in space-y-4">
+      {/* Top bar with progress and countdown timer */}
+      <div className="flex items-center justify-between bg-white rounded-xl border border-surface-border px-4 py-3 shadow-subtle">
         <span className="text-sm font-bold text-body-text">{index + 1} / {questions.length}</span>
         {session.timer_mode === 'strict' && (
           <span className={`flex items-center gap-1.5 text-sm font-mono font-bold ${seconds < 300 ? 'text-red-600' : 'text-body-text'}`}>
@@ -389,34 +417,117 @@ function PracticeSession({ session, questions, onComplete }) {
         <span className="text-xs text-body-secondary">{Object.keys(answers).length} answered</span>
       </div>
 
-      {/* Question */}
-      <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-6 space-y-4">
-        <p className="text-sm font-semibold text-body-text leading-relaxed">{currentQ.question_text}</p>
+      {/* Question Card */}
+      <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-6 space-y-5">
+        {/* Metadata Badges & Bilingual Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border pb-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {groupLabel && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                {groupLabel}
+              </span>
+            )}
+            {unitLabel && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-200 max-w-[200px] truncate" title={unitLabel}>
+                {unitLabel}
+              </span>
+            )}
+            {microLabel && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 max-w-[180px] truncate" title={microLabel}>
+                {microLabel}
+              </span>
+            )}
+            {isPyq && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 shadow-xs">
+                <Sparkles className="w-3 h-3 text-amber-600" />
+                <span>PYQ {examYear && examYear !== 'Official PYQ' ? examYear : ''}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Bilingual Switch */}
+          {hasTamil && (
+            <div className="inline-flex items-center rounded-lg border border-surface-border bg-slate-50 p-0.5 text-[11px] font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setLang('english')}
+                className={`px-2 py-0.5 rounded-md transition-colors ${
+                  activeLang === 'english'
+                    ? 'bg-white text-body-text shadow-xs'
+                    : 'text-body-secondary hover:text-body-text'
+                }`}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang('tamil')}
+                className={`px-2 py-0.5 rounded-md transition-colors ${
+                  activeLang === 'tamil'
+                    ? 'bg-tnpsc-brand text-white shadow-xs'
+                    : 'text-body-secondary hover:text-body-text'
+                }`}
+              >
+                தமிழ்
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Question Text */}
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold text-body-text leading-relaxed">
+            {questionText}
+          </p>
+          {secondaryText && (
+            <p className="text-xs text-body-secondary leading-relaxed font-tamil">
+              {secondaryText}
+            </p>
+          )}
+        </div>
+
+        {/* Options */}
         <div className="space-y-2.5">
           {OPTS.map(opt => {
-            const text = currentQ[`option_${opt.toLowerCase()}`]
-            if (!text) return null
+            const letter = opt.toLowerCase()
+            const textEn = currentQ[`option_${letter}`]
+            const textTa = currentQ[`option_${letter}_tamil`]
+            const primaryOptionText = activeLang === 'tamil' && textTa ? textTa : textEn
+            const secondaryOptionText = activeLang === 'tamil' && textTa ? textEn : (activeLang === 'english' && textTa ? textTa : null)
+
+            if (!textEn && !textTa) return null
             const isSelected = answers[currentQ.id] === opt
             return (
               <button
                 key={opt}
                 onClick={() => setAnswers(a => ({ ...a, [currentQ.id]: opt }))}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium text-left transition-all ${
+                className={`w-full flex items-start gap-3 px-4 py-3 rounded-xl border text-sm font-medium text-left transition-all ${
                   isSelected
                     ? 'border-tnpsc-brand bg-tnpsc-brand-light text-tnpsc-brand'
                     : 'border-surface-border hover:border-tnpsc-brand/40 hover:bg-slate-50'
                 }`}
               >
-                <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${isSelected ? 'border-tnpsc-brand bg-tnpsc-brand text-white' : 'border-slate-300'}`}>{opt}</span>
-                {text}
+                <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                  isSelected ? 'border-tnpsc-brand bg-tnpsc-brand text-white' : 'border-slate-300'
+                }`}>
+                  {opt}
+                </span>
+                <div className="min-w-0">
+                  <span className="block leading-relaxed">{primaryOptionText}</span>
+                  {secondaryOptionText && (
+                    <span className="block text-xs text-body-secondary font-tamil leading-relaxed mt-0.5">
+                      {secondaryOptionText}
+                    </span>
+                  )}
+                </div>
               </button>
             )
           })}
         </div>
       </div>
 
-      {/* Nav */}
-      <div className="flex items-center justify-between mt-4">
+      {/* Navigation Buttons */}
+      <div className="flex items-center justify-between">
         <button
           onClick={() => setIndex(i => Math.max(0, i - 1))}
           disabled={index === 0}
@@ -428,7 +539,7 @@ function PracticeSession({ session, questions, onComplete }) {
         {index < questions.length - 1 ? (
           <button
             onClick={() => setIndex(i => i + 1)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-tnpsc-brand text-white rounded-xl text-sm font-bold hover:bg-tnpsc-brand-hover transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-tnpsc-brand text-white rounded-xl text-sm font-bold hover:bg-tnpsc-brand-hover transition-colors shadow-brand"
           >
             Next <ChevronRight className="w-4 h-4" />
           </button>
@@ -436,10 +547,10 @@ function PracticeSession({ session, questions, onComplete }) {
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 shadow-subtle"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            Submit
+            Submit Practice Set
           </button>
         )}
       </div>
@@ -470,24 +581,47 @@ function PracticeResult({ result, onRetry }) {
           ))}
         </div>
 
-        {/* Quick review */}
-        <div className="space-y-2 text-left max-h-64 overflow-y-auto mb-6">
+        {/* Detailed Question Review with Micro-Topics & Explanations */}
+        <div className="space-y-3 text-left max-h-80 overflow-y-auto mb-6 pr-1">
           {questions.map((q, i) => {
             const sel = answers[q.id]
             const isCorrect = sel === q.correct_option
+            const microName = q.micro_topic || q.micro_topic_name || q.topic || null
             return (
-              <div key={q.id} className={`flex items-start gap-2 px-3 py-2 rounded-lg ${isCorrect ? 'bg-emerald-50' : sel ? 'bg-red-50' : 'bg-slate-50'}`}>
-                {isCorrect
-                  ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  : <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                }
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-body-text line-clamp-1">Q{i + 1}: {q.question_text}</p>
-                  {!isCorrect && (
-                    <p className="text-xs text-body-secondary mt-0.5">
-                      Your: {sel ?? '—'} | Correct: {q.correct_option}
+              <div key={q.id} className={`p-3.5 rounded-xl border space-y-1.5 ${isCorrect ? 'bg-emerald-50/70 border-emerald-200' : sel ? 'bg-red-50/70 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-start gap-2">
+                  {isCorrect
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    : <XCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  }
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <span className="text-xs font-bold text-body-text">Q{i + 1}</span>
+                      {microName && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/80 border border-slate-200 text-indigo-900">
+                          {microName}
+                        </span>
+                      )}
+                      {(q.is_pyq || q.exam_year) && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                          PYQ {q.exam_year || ''}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium text-body-text">{q.question_text}</p>
+                    {q.question_text_tamil && (
+                      <p className="text-[11px] text-body-secondary font-tamil">{q.question_text_tamil}</p>
+                    )}
+                    <p className="text-xs text-body-secondary mt-1">
+                      Your answer: <strong className={isCorrect ? 'text-emerald-700' : 'text-red-700'}>{sel ?? 'Unanswered'}</strong> | Correct: <strong className="text-emerald-800">{q.correct_option}</strong>
                     </p>
-                  )}
+                    {q.explanation && (
+                      <div className="text-[11px] text-slate-600 bg-white/90 p-2 rounded-lg border border-slate-200/80 mt-1.5 space-y-0.5">
+                        <p><strong>Rationale:</strong> {q.explanation}</p>
+                        {q.explanation_tamil && <p className="font-tamil text-slate-500">{q.explanation_tamil}</p>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -495,7 +629,7 @@ function PracticeResult({ result, onRetry }) {
         </div>
 
         <div className="flex gap-3">
-          <button onClick={onRetry} className="flex-1 py-3 bg-tnpsc-brand text-white rounded-xl font-bold text-sm hover:bg-tnpsc-brand-hover transition-colors">
+          <button onClick={onRetry} className="flex-1 py-3 bg-tnpsc-brand text-white rounded-xl font-bold text-sm hover:bg-tnpsc-brand-hover transition-colors shadow-brand">
             New Practice Set
           </button>
         </div>

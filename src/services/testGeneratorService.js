@@ -194,38 +194,9 @@ export function sampleBucketWithoutReplacement(pool, count, usedIds = new Set(),
   }
 }
 
-// ─── Synthetic Template Generator for Mock Backfill ──────────────────────────
-
-export function createSyntheticQuestion({
-  paperId,
-  questionNumber,
-  examName = 'TNPSC Group 1',
-  unitCode,
-  unitName,
-  difficultyLevel = 'medium',
-  partCode = 'PART_A',
-  subject = 'General Studies',
-}) {
-  const diffLabel = difficultyLevel.toUpperCase()
-  return {
-    id: `syn-gen-${unitCode}-${difficultyLevel}-${questionNumber}-${Math.random().toString(36).slice(2, 7)}`,
-    paper_id: paperId || null,
-    question_number: questionNumber,
-    question_text: `[${examName} - ${unitName}] (${diffLabel} Standard Assessment Question ${questionNumber}) Which of the following statements is conceptually correct regarding ${unitName}?`,
-    option_a: `Statement A is thoroughly substantiated by standard academic syllabus for ${unitName}.`,
-    option_b: `Statement B is an alternative contextual hypothesis often tested in competitive examinations.`,
-    option_c: `Statement C is partially supported under specific historical or constitutional provisions.`,
-    option_d: `Statement D represents an exception to general statutory principles.`,
-    correct_option: ['A', 'B', 'C', 'D'][Math.floor(Math.random() * 4)],
-    explanation: `Detailed explanation: Option is verified against the official syllabus curriculum for ${unitName} (${diffLabel} tier).`,
-    difficulty_level: difficultyLevel,
-    part_code: partCode,
-    unit_code: unitCode,
-    unit_name: unitName,
-    group_name: examName,
-    tags: [examName, unitCode, unitName, difficultyLevel],
-  }
-}
+// ─── Zero AI Hallucination Policy ─────────────────────────────────────────────
+// Under no circumstances are synthetic or placeholder questions generated on the fly.
+// All test questions are queried strictly from the curated admin database question bank.
 
 // ─── Main Test Generator Service ──────────────────────────────────────────────
 
@@ -358,26 +329,12 @@ export const testGeneratorService = {
               }
             }
 
-            // Synthetic backfill if still short
+            // Zero AI Hallucination: Never backfill with fake questions
             const remainingDeficit = deficit - backfilled
-            for (let k = 0; k < remainingDeficit; k++) {
-              const qNum = selectedQuestions.length + 1
-              const synQ = createSyntheticQuestion({
-                questionNumber: qNum,
-                examName: 'TNPSC Group 1',
-                unitCode: unitRow.unitCode,
-                unitName: unitRow.unitName,
-                difficultyLevel: diff,
-                partCode: unitRow.partCode,
-              })
-              selectedQuestions.push(synQ)
-              usedIds.add(synQ.id)
-              fallbacks.push({
-                unitCode: unitRow.unitCode,
-                originalDiff: diff,
-                fallbackType: 'synthetic_template',
-                count: 1,
-              })
+            if (remainingDeficit > 0) {
+              warnings.push(
+                `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${remainingDeficit} questions in curated database question bank.`
+              )
             }
           }
         }
@@ -575,26 +532,12 @@ export const testGeneratorService = {
               }
             }
 
-            // Synthetic backfill
+            // Zero AI Hallucination: Never backfill with fake questions
             const remainingDeficit = deficit - backfilled
-            for (let k = 0; k < remainingDeficit; k++) {
-              const qNum = selectedQuestions.length + 1
-              const synQ = createSyntheticQuestion({
-                questionNumber: qNum,
-                examName: 'TNPSC Group 2/2A',
-                unitCode: unitRow.unitCode,
-                unitName: unitRow.unitName,
-                difficultyLevel: diff,
-                partCode: unitRow.partCode,
-              })
-              selectedQuestions.push(synQ)
-              usedIds.add(synQ.id)
-              fallbacks.push({
-                unitCode: unitRow.unitCode,
-                originalDiff: diff,
-                fallbackType: 'synthetic_template',
-                count: 1,
-              })
+            if (remainingDeficit > 0) {
+              warnings.push(
+                `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${remainingDeficit} questions in curated database question bank.`
+              )
             }
           }
         }
@@ -799,26 +742,12 @@ export const testGeneratorService = {
               }
             }
 
-            // Synthetic backfill
+            // Zero AI Hallucination: Never backfill with fake questions
             const remainingDeficit = deficit - backfilled
-            for (let k = 0; k < remainingDeficit; k++) {
-              const qNum = selectedQuestions.length + 1
-              const synQ = createSyntheticQuestion({
-                questionNumber: qNum,
-                examName: 'TNPSC Group 4',
-                unitCode: unitRow.unitCode,
-                unitName: unitRow.unitName,
-                difficultyLevel: diff,
-                partCode: unitRow.partCode,
-              })
-              selectedQuestions.push(synQ)
-              usedIds.add(synQ.id)
-              fallbacks.push({
-                unitCode: unitRow.unitCode,
-                originalDiff: diff,
-                fallbackType: 'synthetic_template',
-                count: 1,
-              })
+            if (remainingDeficit > 0) {
+              warnings.push(
+                `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${remainingDeficit} questions in curated database question bank.`
+              )
             }
           }
         }
@@ -945,7 +874,7 @@ export const testGeneratorService = {
     }
     const paper = createdPaper
 
-    // 2. Insert questions for this paper (clean DB columns only)
+    // 2. Insert questions for this paper with complete 5-identifier metadata
     const questionRecords = generatedTest.questions.map((q, idx) => ({
       paper_id: paper.id,
       question_number: idx + 1,
@@ -962,6 +891,17 @@ export const testGeneratorService = {
       option_c_tamil: q.option_c_tamil || null,
       option_d_tamil: q.option_d_tamil || null,
       explanation_tamil: q.explanation_tamil || null,
+      group_tag: q.group_tag || (generatedTest.examType?.includes('Group 1') ? 'Group 1' : generatedTest.examType?.includes('Group 2') ? 'Group 2' : 'Group 4'),
+      group_name: q.group_name || generatedTest.examType || 'TNPSC Group 4',
+      unit_tag: q.unit_tag || (q.unit_name ? q.unit_name.split('—')[0].trim() : 'Unit 1'),
+      unit_name: q.unit_name || null,
+      macro_topic: q.macro_topic || q.macro_topic_name || null,
+      macro_topic_name: q.macro_topic_name || q.macro_topic || null,
+      micro_topic: q.micro_topic || q.micro_topic_name || null,
+      micro_topic_name: q.micro_topic_name || q.micro_topic || null,
+      exam_year: String(q.exam_year || '2024'),
+      is_pyq: Boolean(q.is_pyq),
+      difficulty_level: q.difficulty_level || 'Medium',
     }))
 
     await questionService.saveQuestionsToSupabase(paper.id, questionRecords, true)
