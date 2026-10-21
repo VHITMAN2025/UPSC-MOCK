@@ -155,8 +155,18 @@ function PracticeBuilder({ onStart }) {
     setLoading(true); setError(null)
     try {
       const result = await practiceService.createSession(user.id, config)
-      toast.success('Practice session created!')
-      onStart(result)
+      if (result.isInventoryLimited && result.inventoryNotice) {
+        toast.info(result.inventoryNotice)
+      } else {
+        toast.success('Practice session created!')
+      }
+      onStart({
+        ...result,
+        session: {
+          ...result.session,
+          inventoryNotice: result.inventoryNotice
+        }
+      })
     } catch (err) {
       setError(err.message)
       toast.error(err.message)
@@ -406,6 +416,13 @@ function PracticeSession({ session, questions, onComplete }) {
 
   return (
     <div className="max-w-2xl mx-auto animate-fade-in space-y-4">
+      {session.inventoryNotice && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-xs text-amber-900 font-semibold shadow-2xs">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>{session.inventoryNotice}</span>
+        </div>
+      )}
+
       {/* Top bar with progress and countdown timer */}
       <div className="flex items-center justify-between bg-white rounded-xl border border-surface-border px-4 py-3 shadow-subtle">
         <span className="text-sm font-bold text-body-text">{index + 1} / {questions.length}</span>

@@ -852,31 +852,52 @@ function norm(str) {
   return String(str || '').trim().toLowerCase()
 }
 
+function clean(str) {
+  return String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
 /**
  * Helper to determine if a candidate macro topic aligns with the canonical unit subject,
  * preventing cross-subject contamination (e.g. History topics leaking into General Science).
  */
 function isMacroTopicSubjectAligned(macroTopicName, unitNumber, unitSubject) {
   const mNorm = norm(macroTopicName)
+  const mClean = clean(macroTopicName)
   const sNorm = norm(unitSubject)
 
+  const canonicalUnit = CANONICAL_SYLLABUS_TAXONOMY.find(u => u.unit_number === unitNumber)
+  if (canonicalUnit) {
+    const isMatchingCanonical = canonicalUnit.macro_topics.some(cm => {
+      const cmClean = clean(cm.macro_topic_name)
+      return cmClean === mClean || cmClean.includes(mClean) || mClean.includes(cmClean)
+    })
+    if (isMatchingCanonical) return true
+  }
+
   if (unitNumber === 1 || sNorm.includes('science')) {
-    // General Science: must not contain History, Polity, Geography, Movement, Economy, Aptitude
-    if (/history|polity|constitution|movement|freedom|revolt|economy|panchayat|chola|sangam|math|aptitude|parliament|governor|court/i.test(mNorm)) {
+    // General Science: must strictly not contain History, Polity, Geography, Movement, Economy, Aptitude, Language
+    if (/history|ancient|medieval|indus|vedic|delhi|mughal|vijayanagar|bahmani|maratha|chola|pallava|pandya|sangam|thirukkural|heritage|freedom|national\s*movement|congress|gandhi|revolt|1857|polity|constitution|preamble|parliament|judiciary|governor|panchayat|court|writs|economy|gdp|rbi|banking|planning|fiscal|budget|gst|tamil\s*nadu\s*admin|e-governance|welfare|aptitude|math|reasoning|simplification|percentage|hcf|lcm|ratio|interest|tamil|english|language/i.test(mNorm)) {
+      return false
+    }
+    return /physics|chemistry|biology|science|matter|force|motion|heat|light|electricity|element|acid|base|cell|human|disease|nutrition|ecosystem|ecology|environment|universe/i.test(mNorm)
+  }
+
+  if (unitNumber === 3 || sNorm.includes('geography')) {
+    if (/history|polity|constitution|movement|freedom|revolt|physics|chemistry|biology|blood|cell|vitamin|acid|ancient|medieval|chola|pallava|delhi|mughal|vijayanagar|sangam/i.test(mNorm)) {
       return false
     }
     return true
   }
 
-  if (unitNumber === 3 || sNorm.includes('geography')) {
-    if (/history|polity|constitution|movement|freedom|revolt|physics|chemistry|biology|blood|cell|vitamin|acid/i.test(mNorm)) {
+  if (unitNumber === 4 || sNorm.includes('history')) {
+    if (/physics|chemistry|biology|science|cell|monsoon|river|plateau|soil|mineral|aptitude|math|geometry/i.test(mNorm)) {
       return false
     }
     return true
   }
 
   if (unitNumber === 5 || sNorm.includes('polity')) {
-    if (/science|physics|chemistry|biology|monsoon|river|plateau|chola|pallava/i.test(mNorm)) {
+    if (/science|physics|chemistry|biology|monsoon|river|plateau|chola|pallava|ancient|indus|vedic/i.test(mNorm)) {
       return false
     }
     return true
@@ -998,33 +1019,28 @@ export const syllabusAnalyticsService = {
       const unitName = canonicalUnit.unit_name
       const unitNumber = u.unit_number ?? canonicalUnit.unit_number ?? (uIdx + 1)
 
-      const unFilteredMacros = (u.syllabus_topics && u.syllabus_topics.length > 0)
-        ? [...u.syllabus_topics].sort((a, b) => (a.topic_number || 0) - (b.topic_number || 0))
-        : (canonicalUnit?.macro_topics || [])
-
-      // Deduplicate macro topics by name and filter out any contaminated cross-subject topics
-      const seenMacroNames = new Set()
-      const rawMacros = unFilteredMacros.filter(mt => {
-        const mName = norm(mt.topic_name || mt.macro_topic_name || '')
-        if (!mName || seenMacroNames.has(mName)) return false
-        if (!isMacroTopicSubjectAligned(mName, unitNumber, canonicalUnit.subject)) return false
-        seenMacroNames.add(mName)
-        return true
+      // Derive macro topics strictly from official canonical taxonomy to prevent alien cross-subject topics or duplicates
+      const canonicalMacros = canonicalUnit?.macro_topics || []
+      const effectiveMacros = canonicalMacros.map((cm, cmIdx) => {
+        const cmClean = clean(cm.macro_topic_name)
+        const dbMatch = (u.syllabus_topics || []).find(mt => {
+          const mClean = clean(mt.topic_name || mt.macro_topic_name || '')
+          return mClean === cmClean || mClean.includes(cmClean) || cmClean.includes(mClean)
+        })
+        return {
+          ...cm,
+          id: dbMatch?.id || cm.id || `${unitId}-macro-${cm.topic_number || cmIdx + 1}`,
+          topic_number: cm.topic_number || cmIdx + 1,
+          macro_topic_name: cm.macro_topic_name,
+        }
       })
 
-      // If filtering removed valid topics, ensure at least canonical macro topics are preserved
-      const effectiveMacros = rawMacros.length > 0 ? rawMacros : (canonicalUnit?.macro_topics || [])
-
       const macroTopics = effectiveMacros.map((mt, mIdx) => {
-        const macroName = mt.topic_name || mt.macro_topic_name || `Topic ${mIdx + 1}`
+        const macroName = mt.macro_topic_name || mt.topic_name || `Topic ${mIdx + 1}`
         const macroId = mt.id || `${unitId}-macro-${mt.topic_number || mIdx + 1}`
         const macroNumber = mt.topic_number ?? (mIdx + 1)
 
-        const canonicalMacro = canonicalUnit?.macro_topics?.find(
-          cm => norm(cm.macro_topic_name) === norm(macroName) ||
-                norm(macroName).includes(norm(cm.macro_topic_name)) ||
-                norm(cm.macro_topic_name).includes(norm(macroName))
-        ) || canonicalUnit?.macro_topics?.[mIdx]
+        const canonicalMacro = canonicalUnit?.macro_topics?.[mIdx] || mt
 
         const dbMicrosForMacro = microByMacroId.get(macroId) || []
         const rawMicros = dbMicrosForMacro.length > 0
@@ -1141,30 +1157,46 @@ export const syllabusAnalyticsService = {
         if (byMacroId.length > 0) return byMacroId
       }
 
-      // If targetUnit is known, constrain search pool to this unit
-      if (targetUnit) {
-        const uHint = norm(targetUnit)
+      // Constrain search pool strictly to targeted unit if known
+      const rawUnitText = (targetUnit || question.unit_name || question.unit_tag || question.subject || question.papers?.subject || '').toLowerCase()
+      const uClean = clean(rawUnitText)
+
+      let targetUnitNumber = null
+      if (uClean.includes('unit1') || (uClean.includes('science') && !uClean.includes('social')) || /physics|chemistry|biology/.test(rawUnitText)) targetUnitNumber = 1
+      else if (uClean.includes('unit2') || uClean.includes('current') || /events|affairs|schemes/.test(rawUnitText)) targetUnitNumber = 2
+      else if (uClean.includes('unit3') || uClean.includes('geography') || /river|monsoon|climate|soil/.test(rawUnitText)) targetUnitNumber = 3
+      else if (uClean.includes('unit4') || (uClean.includes('history') && !uClean.includes('tamil')) || /ancient|medieval|chola|pallava|delhi|mughal/.test(rawUnitText)) targetUnitNumber = 4
+      else if (uClean.includes('unit5') || uClean.includes('polity') || /constitution|preamble|parliament|judiciary/.test(rawUnitText)) targetUnitNumber = 5
+      else if (uClean.includes('unit6') || uClean.includes('economy') || /rbi|banking|planning|gdp|fiscal/.test(rawUnitText)) targetUnitNumber = 6
+      else if (uClean.includes('unit7') || uClean.includes('movement') || /inm|congress|gandhi|freedom|revolt/.test(rawUnitText)) targetUnitNumber = 7
+      else if (uClean.includes('unit8') || uClean.includes('heritage') || /thirukkural|sangam|dravidian|self-respect/.test(rawUnitText)) targetUnitNumber = 8
+      else if (uClean.includes('unit9') || uClean.includes('administration') || /development|human development|e-governance/.test(rawUnitText)) targetUnitNumber = 9
+      else if (uClean.includes('unit10') || uClean.includes('aptitude') || /mental ability|reasoning|simplification|percentage|hcf|lcm/.test(rawUnitText)) targetUnitNumber = 10
+      else if (uClean.includes('unit11') || uClean.includes('tamil') || uClean.includes('english') || uClean.includes('language')) targetUnitNumber = 11
+
+      if (targetUnitNumber) {
         const byUnit = allMicroTopics.filter(m => {
-          const mUnitNorm = norm(m.unit_name)
-          if (mUnitNorm === uHint || mUnitNorm.includes(uHint) || uHint.includes(mUnitNorm)) return true
-          if ((uHint.includes('science') || uHint.includes('unit 1') || uHint.includes('unit i')) && mUnitNorm.includes('science')) return true
-          if ((uHint.includes('current') || uHint.includes('events') || uHint.includes('unit 2') || uHint.includes('unit ii')) && (mUnitNorm.includes('current') || mUnitNorm.includes('events'))) return true
-          if ((uHint.includes('geography') || uHint.includes('unit 3') || uHint.includes('unit iii')) && mUnitNorm.includes('geography')) return true
-          if ((uHint.includes('history') || uHint.includes('culture of india') || uHint.includes('unit 4') || uHint.includes('unit iv')) && mUnitNorm.includes('history & culture')) return true
-          if ((uHint.includes('polity') || uHint.includes('constitution') || uHint.includes('unit 5') || uHint.includes('unit v')) && mUnitNorm.includes('polity')) return true
-          if ((uHint.includes('economy') || uHint.includes('unit 6') || uHint.includes('unit vi')) && mUnitNorm.includes('economy')) return true
-          if ((uHint.includes('national movement') || uHint.includes('inm') || uHint.includes('unit 7') || uHint.includes('unit vii')) && mUnitNorm.includes('national movement')) return true
-          if ((uHint.includes('heritage') || uHint.includes('tamil nadu') || uHint.includes('thirukkural') || uHint.includes('unit 8') || uHint.includes('unit viii')) && (mUnitNorm.includes('heritage') || mUnitNorm.includes('unit 8'))) return true
-          if ((uHint.includes('administration') || uHint.includes('development') || uHint.includes('unit 9') || uHint.includes('unit ix')) && (mUnitNorm.includes('administration') || mUnitNorm.includes('unit 9'))) return true
-          if ((uHint.includes('aptitude') || uHint.includes('reasoning') || uHint.includes('mental ability') || uHint.includes('unit 10') || uHint.includes('unit x')) && mUnitNorm.includes('aptitude')) return true
-          if ((uHint.includes('tamil') || uHint.includes('english') || uHint.includes('language') || uHint.includes('unit 11')) && (mUnitNorm.includes('tamil') || mUnitNorm.includes('english') || mUnitNorm.includes('language'))) return true
+          const mNum = m.unit_number || (m.unit_name && parseInt(m.unit_name.replace(/[^0-9]/g, ''), 10))
+          if (mNum === targetUnitNumber) return true
+          const mClean = clean(m.unit_name)
+          if (targetUnitNumber === 1 && mClean.includes('science')) return true
+          if (targetUnitNumber === 2 && (mClean.includes('current') || mClean.includes('events'))) return true
+          if (targetUnitNumber === 3 && mClean.includes('geography')) return true
+          if (targetUnitNumber === 4 && mClean.includes('history')) return true
+          if (targetUnitNumber === 5 && mClean.includes('polity')) return true
+          if (targetUnitNumber === 6 && mClean.includes('economy')) return true
+          if (targetUnitNumber === 7 && mClean.includes('movement')) return true
+          if (targetUnitNumber === 8 && (mClean.includes('heritage') || mClean.includes('culture'))) return true
+          if (targetUnitNumber === 9 && mClean.includes('administration')) return true
+          if (targetUnitNumber === 10 && mClean.includes('aptitude')) return true
+          if (targetUnitNumber === 11 && (mClean.includes('tamil') || mClean.includes('english') || mClean.includes('language'))) return true
           return false
         })
 
         if (byUnit.length > 0) {
           if (targetMacro) {
-            const mHint = norm(targetMacro)
-            const byMacro = byUnit.filter(m => norm(m.macro_topic_name).includes(mHint) || mHint.includes(norm(m.macro_topic_name)))
+            const mClean = clean(targetMacro)
+            const byMacro = byUnit.filter(m => clean(m.macro_topic_name).includes(mClean) || mClean.includes(clean(m.macro_topic_name)))
             if (byMacro.length > 0) return byMacro
           }
           return byUnit
@@ -1176,7 +1208,8 @@ export const syllabusAnalyticsService = {
         const byTopicHint = allMicroTopics.filter(
           m => norm(m.macro_topic_name).includes(topicHint) ||
                topicHint.includes(norm(m.macro_topic_name)) ||
-               norm(m.unit_name).includes(topicHint)
+               clean(m.unit_name).includes(clean(topicHint)) ||
+               clean(topicHint).includes(clean(m.unit_name))
         )
         if (byTopicHint.length > 0) return byTopicHint
       }
@@ -1423,17 +1456,24 @@ export const syllabusAnalyticsService = {
       answeredEntries.forEach(([qId, userOpt]) => {
         if (!userOpt) return
         const strId = String(qId)
-        let microId = questionToMicroMap.get(strId)
+        const qMeta = qs.find(q => String(q.id) === strId)
+        let microId = qMeta?.micro_topic_id || questionToMicroMap.get(strId)
 
         if (!microId) {
-          const qMeta = qs.find(q => String(q.id) === strId)
           const fallbackMicro = this.classifyQuestionToMicroTopic(
-            { id: strId, subject: ps.subject, ...(qMeta || {}) },
+            { id: strId, subject: ps.subject, unit_name: ps.subject, ...(qMeta || {}) },
             allMicroTopics
           )
           if (fallbackMicro) {
             microId = fallbackMicro.micro_topic_id
             questionToMicroMap.set(strId, microId)
+          }
+        }
+
+        if (microId && !microBuckets.has(microId)) {
+          const found = allMicroTopics.find(m => m.micro_topic_id === microId || clean(m.micro_topic_name) === clean(microId))
+          if (found && microBuckets.has(found.micro_topic_id)) {
+            microId = found.micro_topic_id
           }
         }
 

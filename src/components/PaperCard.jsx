@@ -43,11 +43,11 @@ export function PaperCard({ paper }) {
           </div>
           <div className="flex items-center space-x-2">
             <Award className="w-4 h-4 text-primary" />
-            <span>Max Marks: <strong>{paper.maximum_marks || 200}</strong></span>
+            <span>Max Marks: <strong>{paper.maximum_marks || ((paper.total_questions || 0) * Number(paper.marks_per_question || 1.5)) || (paper.total_questions ? paper.total_questions * 1.5 : 200)}</strong></span>
           </div>
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-status-warning" />
-            <span>Negative: <strong>-{paper.negative_marking || 0.66}</strong></span>
+            <span>Negative: <strong>{(paper.negative_marking !== undefined && paper.negative_marking !== null && Number(paper.negative_marking) > 0) ? `-${paper.negative_marking}` : 'None (0)'}</strong></span>
           </div>
         </div>
       </div>

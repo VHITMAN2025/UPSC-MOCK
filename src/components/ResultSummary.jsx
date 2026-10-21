@@ -11,8 +11,12 @@ export function ResultSummary({ attempt, paper }) {
   const incorrect = attempt.incorrect_count || 0
   const unanswered = attempt.unanswered_count || 0
   const accuracy = attempt.accuracy || 0
-  const marksPerQ = Number(paper?.marks_per_question || 2)
-  const negPerQ = Number(paper?.negative_marking || 0.66)
+  const marksPerQ = (paper?.marks_per_question !== undefined && paper?.marks_per_question !== null)
+    ? Number(paper.marks_per_question)
+    : 1.5
+  const negPerQ = (paper?.negative_marking !== undefined && paper?.negative_marking !== null)
+    ? Math.abs(Number(paper.negative_marking))
+    : 0
 
   const attemptedCount = correct + incorrect
   const totalQuestions = attemptedCount + unanswered || Number(paper?.total_questions || 0) || 1
@@ -45,7 +49,9 @@ export function ResultSummary({ attempt, paper }) {
           <Percent className="w-3.5 h-3.5 shrink-0" />
           <span>
             {unanswered > 0
-              ? `Attempted Accuracy: ${accuracy}% (${correct} of ${attemptedCount} answered · ${unanswered} unanswered)`
+              ? (attemptedCount === 1
+                  ? `Attempted Accuracy: ${accuracy}% (Note: Based on only 1 answered question · ${unanswered} unattempted)`
+                  : `Attempted Accuracy: ${accuracy}% (${correct} of ${attemptedCount} answered · ${unanswered} unattempted)`)
               : `Overall Accuracy: ${accuracy}% (${correct} of ${totalQuestions} correct)`}
           </span>
         </div>
@@ -66,7 +72,7 @@ export function ResultSummary({ attempt, paper }) {
           <XCircle className="w-6 h-6 text-status-error mx-auto mb-1" />
           <div className="text-2xl font-bold text-red-950">{incorrect}</div>
           <div className="text-xs font-medium text-red-800">Incorrect Answers</div>
-          <div className="text-[10px] text-red-700 mt-1 font-semibold">-{negativeMarks} Marks</div>
+          <div className="text-[10px] text-red-700 mt-1 font-semibold">{Number(negativeMarks) > 0 ? `-${negativeMarks} Marks` : '0.00 Marks'}</div>
         </div>
 
         {/* Unanswered */}
@@ -82,10 +88,12 @@ export function ResultSummary({ attempt, paper }) {
           <Award className="w-6 h-6 text-indigo-600 mx-auto mb-1" />
           <div className="text-2xl font-bold text-indigo-950">{accuracy}%</div>
           <div className="text-xs font-medium text-indigo-800">
-            {unanswered > 0 ? 'Attempted Accuracy' : 'Overall Accuracy'}
+            {unanswered > 0 ? (attemptedCount === 1 ? 'Attempted Accuracy (1 Q)' : 'Attempted Accuracy') : 'Overall Accuracy'}
           </div>
           <div className="text-[10px] text-indigo-700 mt-1 font-semibold">
-            {attemptedCount}/{totalQuestions} Attempted
+            {attemptedCount === 1
+              ? `1 of ${totalQuestions} Attempted (${unanswered} blank)`
+              : `${attemptedCount}/${totalQuestions} Attempted`}
           </div>
         </div>
       </div>

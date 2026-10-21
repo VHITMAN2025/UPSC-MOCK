@@ -62,8 +62,9 @@ export function PaperListPage() {
       keywords = ['group 2', 'group-2', 'grp_2', 'grp_ii', 'group 2/2a', 'group 2a']
     }
 
-    // Match papers belonging to the selected group
+    // Match only published papers belonging to the selected group
     const matchedPapers = papers.filter(p => {
+      if (p.status !== 'published') return false
       const title = (p.title || '').toLowerCase()
       const examName = (p.exam_name || '').toLowerCase()
       return keywords.some(k => title.includes(k) || examName.includes(k))

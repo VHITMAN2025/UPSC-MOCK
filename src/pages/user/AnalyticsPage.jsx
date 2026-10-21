@@ -409,7 +409,22 @@ export function AnalyticsPage() {
                 onClick={() => {
                   const sorted = units.slice().sort((a, b) => Number(a.accuracy_percentage || 0) - Number(b.accuracy_percentage || 0))
                   const target = sorted[0]
-                  if (target) {
+                  // Collect actual mistake question IDs from recent attempts if available
+                  const mistakeIds = []
+                  ;(data?.allAttempts || []).forEach(att => {
+                    (att.attempt_answers || []).forEach(ans => {
+                      if (ans.is_correct === false && ans.question_id) {
+                        mistakeIds.push(ans.question_id)
+                      }
+                    })
+                  })
+                  const uniqueMistakes = Array.from(new Set(mistakeIds))
+
+                  if (uniqueMistakes.length > 0) {
+                    const idsParam = uniqueMistakes.slice(0, 25).join(',')
+                    const subj = encodeURIComponent(target?.unit_name || 'Targeted Revision')
+                    navigate(`/practice?mode=fix_test&mistakes=${idsParam}&subject=${subj}`)
+                  } else if (target) {
                     navigate(`/practice?subject=${encodeURIComponent(target.unit_name)}&unit=${encodeURIComponent(target.unit_number)}`)
                   } else {
                     navigate('/practice')
@@ -417,7 +432,7 @@ export function AnalyticsPage() {
                 }}
                 className="w-full py-2.5 rounded-xl bg-tnpsc-brand hover:bg-tnpsc-brand-dark text-white font-bold text-xs transition-colors shadow-brand"
               >
-                Generate Fix Test →
+                Target Weakness Drill →
               </button>
             </div>
           </div>
@@ -589,7 +604,7 @@ export function AnalyticsPage() {
                   }
                   className="w-full py-3 rounded-xl bg-tnpsc-brand hover:bg-tnpsc-brand-dark text-white font-bold text-xs transition-colors shadow-brand"
                 >
-                  Generate {activeUnit.unit_name} Fix Test →
+                  Start {activeUnit.unit_name} Practice →
                 </button>
               </div>
             </div>

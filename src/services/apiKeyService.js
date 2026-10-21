@@ -60,6 +60,14 @@ export const apiKeyService = {
       return _cachedAdminKey.trim()
     }
 
+    try {
+      const envKey = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY) ||
+                     (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY))
+      if (envKey && typeof envKey === 'string' && envKey.trim().length > 0 && !envKey.includes('your_gemini')) {
+        return envKey.trim()
+      }
+    } catch {}
+
     return null
   },
 

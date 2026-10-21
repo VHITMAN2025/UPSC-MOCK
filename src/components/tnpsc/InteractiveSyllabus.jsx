@@ -15,7 +15,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 1 — General Science',
     displayName: 'General Science',
     score: 78,
-    meta: 'Science basics · 18 topics',
+    meta: 'Science basics · 4 topics',
     desc: 'Physics, chemistry, biology and everyday science concepts commonly used in TNPSC preparation.',
     foundationTopics: [
       { id: 'u1-t1', name: 'Physics — Motion & Force', status: 'Mastered' },
@@ -31,7 +31,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 2 — Current Events',
     displayName: 'Current Events',
     score: 65,
-    meta: 'National & regional events · 6 topics',
+    meta: 'National & regional events · 4 topics',
     desc: 'History, national symbols, appointments, state profiles, awards, honors, sports and government welfare schemes.',
     foundationTopics: [
       { id: 'u2-t1', name: 'National & State Current Events', status: 'In Progress' },
@@ -67,7 +67,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 4 — History & Culture of India',
     displayName: 'History & Culture of India',
     score: 69,
-    meta: 'Ancient & medieval India · 8 topics',
+    meta: 'Ancient & medieval India · 4 topics',
     desc: 'Indus Valley civilization, Guptas, Delhi Sultans, Mughals and Marathas, Age of Vijayanagaram and Bahmani Kingdoms, South Indian history.',
     foundationTopics: [
       { id: 'u4-t1', name: 'Indus Valley Civilization & Vedic Period', status: 'Mastered' },
@@ -83,7 +83,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 5 — Indian Polity',
     displayName: 'Indian Polity',
     score: 46,
-    meta: 'Constitution & governance · 8 topics',
+    meta: 'Constitution & governance · 4 topics',
     desc: 'Constitution of India, Preamble to the Constitution, Salient features of the Constitution, Union, State and Union Territory, Citizenship, Fundamental Rights, Fundamental Duties.',
     foundationTopics: [
       { id: 'u5-t1', name: 'Preamble, Fundamental Rights & Duties', status: 'In Progress' },
@@ -99,7 +99,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 6 — Indian Economy',
     displayName: 'Indian Economy',
     score: 58,
-    meta: 'Economy & planning · 6 topics',
+    meta: 'Economy & planning · 4 topics',
     desc: 'Nature of Indian Economy, Five year plan models, Planning Commission and Niti Aayog, Sources of revenue, Reserve Bank of India, Fiscal Policy and Monetary Policy.',
     foundationTopics: [
       { id: 'u6-t1', name: 'Nature of Indian Economy & Planning Models', status: 'In Progress' },
@@ -115,7 +115,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 7 — Indian National Movement',
     displayName: 'Indian National Movement',
     score: 55,
-    meta: 'Freedom movement · 6 topics',
+    meta: 'Freedom movement · 4 topics',
     desc: 'National renaissance, Early uprising against British rule, Indian National Congress, Emergence of leaders, Different modes of agitations.',
     foundationTopics: [
       { id: 'u7-t1', name: 'Early Uprisings & 1857 Revolt', status: 'In Progress' },
@@ -131,7 +131,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 8 — History, Culture, Heritage of Tamil Nadu',
     displayName: 'History, Culture, Heritage of TN',
     score: 31,
-    meta: 'Tamil heritage · 6 topics',
+    meta: 'Tamil heritage · 4 topics',
     desc: 'History of Tamil Society, Archaeological discoveries, Sangam literature to contemporary literature, Thirukkural, Role of Tamil Nadu in freedom struggle.',
     foundationTopics: [
       { id: 'u8-t1', name: 'Sangam Literature & Archaeological Finds', status: 'Needs Review' },
@@ -147,7 +147,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 9 — Development Administration in Tamil Nadu',
     displayName: 'Development Administration in TN',
     score: 74,
-    meta: 'State administration · 6 topics',
+    meta: 'State administration · 4 topics',
     desc: 'Human Development Indicators in Tamil Nadu, Social Justice and Social Harmony as Cornerstones of Socio-Economic Development, Education and Health systems.',
     foundationTopics: [
       { id: 'u9-t1', name: 'Human Development Indicators & Social Justice', status: 'Mastered' },
@@ -163,7 +163,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 10 — Aptitude & Mental Ability',
     displayName: 'Aptitude & Mental Ability',
     score: 67,
-    meta: 'Aptitude & reasoning · 6 topics',
+    meta: 'Aptitude & reasoning · 4 topics',
     desc: 'Simplification, Percentage, Highest Common Factor (HCF), Lowest Common Multiple (LCM), Ratio and Proportion, Simple interest, Compound interest, Time and Work, Logical Reasoning.',
     foundationTopics: [
       { id: 'u10-t1', name: 'Percentage, Ratio & Simple/Compound Interest', status: 'Mastered' },
@@ -179,7 +179,7 @@ export const SYLLABUS_UNITS = [
     unit_name: 'Unit 11 — Language: General Tamil / General English',
     displayName: 'Language Paper (Part A)',
     score: 82,
-    meta: '100 Qs · Group 2/2A & Group 4 Only',
+    meta: 'Part A Language · 4 topics · Group 2/2A & Group 4',
     desc: 'General Tamil (இலக்கணம், இலக்கியம், தமிழ் அறிஞர்கள்) OR General English (Grammar, Prescribed Poems, Authors). Mandatory 100 questions for Group 2/2A and Group 4 (Not in Group 1).',
     foundationTopics: [
       { id: 'eng_active_passive', name: 'Active & Passive Voice / பொதுத்தமிழ் இலக்கணம்', status: 'Mastered' },
@@ -431,10 +431,10 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
 
       {/* ── 3. Split Body: Unit List & Tracker Detail ──────────────────────── */}
       <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
-        {/* Left column: 10 Syllabus Units */}
+        {/* Left column: Dynamic Syllabus Units */}
         <div className="w-full md:w-[44%] lg:w-[42%] p-5 overflow-y-auto border-r border-[#edf0f5] bg-white space-y-2.5">
           <div className="flex items-center justify-between mb-2 px-1">
-            <span className="text-xs font-bold text-[#172033]">10 Syllabus Units</span>
+            <span className="text-xs font-bold text-[#172033]">{unitData.length} Syllabus Units</span>
             <span className="text-[11px] text-[#8994a7] font-semibold">Select a unit to inspect topics</span>
           </div>
 

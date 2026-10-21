@@ -129,22 +129,153 @@ export const attemptService = {
       console.warn('[AttemptService] Edge function call bypassed or unavailable, attempting RPC fallback:', edgeErr.message)
     }
 
-    // Fallback to PostgreSQL Stored Procedure RPC
-    const { data: rpcResult, error: rpcErr } = await supabase
-      .rpc('submit_attempt_rpc', {
-        p_attempt_id: attemptId,
-        p_answers: formattedAnswers
-      })
+    // Fallback 1: PostgreSQL Stored Procedure RPC
+    try {
+      const { data: rpcResult, error: rpcErr } = await supabase
+        .rpc('submit_attempt_rpc', {
+          p_attempt_id: attemptId,
+          p_answers: formattedAnswers
+        })
 
-    if (rpcErr) {
-      console.error('RPC Submission Failed:', rpcErr)
-      throw new Error(`Submission Error: ${rpcErr.message}`)
+      if (!rpcErr && rpcResult) {
+        return {
+          success: true,
+          attempt: rpcResult,
+          comparison: rpcResult.comparison
+        }
+      }
+      if (rpcErr) {
+        console.warn('RPC Submission warning, falling back to client-side engine:', rpcErr.message)
+      }
+    } catch (rpcCatchErr) {
+      console.warn('RPC Submission exception, falling back to client-side engine:', rpcCatchErr.message)
     }
 
-    return {
-      success: true,
-      attempt: rpcResult,
-      comparison: rpcResult.comparison
+    // Fallback 2: Robust Client-Side Scoring Engine
+    try {
+      const { data: attempt, error: attErr } = await supabase
+        .from('attempts')
+        .select('*')
+        .eq('id', attemptId)
+        .single()
+      if (attErr || !attempt) throw new Error(attErr?.message || 'Attempt record not found')
+
+      const { data: paper } = await supabase
+        .from('papers')
+        .select('*')
+        .eq('id', attempt.paper_id)
+        .maybeSingle()
+
+      const { data: questions } = await supabase
+        .from('questions')
+        .select('id, correct_option')
+        .eq('paper_id', attempt.paper_id)
+
+      const marksPerQ = Number(paper?.marks_per_question || 1.5)
+      const negMarking = (paper?.negative_marking !== undefined && paper?.negative_marking !== null)
+        ? Math.abs(Number(paper.negative_marking))
+        : 0
+
+      let correctCount = 0
+      let incorrectCount = 0
+      let unansweredCount = 0
+      const ansMap = new Map()
+      formattedAnswers.forEach(a => ansMap.set(String(a.question_id), a.selected_option))
+
+      const qList = questions || []
+      const upsertRows = []
+
+      for (const q of qList) {
+        const qId = String(q.id)
+        const selected = ansMap.get(qId) || null
+        let isCorrect = null
+        let marksObtained = 0
+
+        if (!selected) {
+          unansweredCount++
+          isCorrect = null
+          marksObtained = 0
+        } else if (q.correct_option && selected.trim().toUpperCase() === q.correct_option.trim().toUpperCase()) {
+          correctCount++
+          isCorrect = true
+          marksObtained = marksPerQ
+        } else {
+          incorrectCount++
+          isCorrect = false
+          marksObtained = -negMarking
+        }
+
+        upsertRows.push({
+          attempt_id: attemptId,
+          question_id: q.id,
+          selected_option: selected,
+          is_correct: isCorrect,
+          marks_obtained: marksObtained
+        })
+      }
+
+      if (upsertRows.length > 0) {
+        await supabase
+          .from('attempt_answers')
+          .upsert(upsertRows, { onConflict: 'attempt_id,question_id' })
+      }
+
+      const attemptedCount = correctCount + incorrectCount
+      const totalScore = Math.max(0, Number(((correctCount * marksPerQ) - (incorrectCount * negMarking)).toFixed(2)))
+      const accuracy = attemptedCount > 0
+        ? Number(((correctCount / attemptedCount) * 100).toFixed(2))
+        : 0
+
+      const { data: updatedAttempt, error: updateErr } = await supabase
+        .from('attempts')
+        .update({
+          status: 'completed',
+          score: totalScore,
+          correct_count: correctCount,
+          incorrect_count: incorrectCount,
+          unanswered_count: unansweredCount,
+          accuracy,
+          submitted_at: new Date().toISOString()
+        })
+        .eq('id', attemptId)
+        .select('*, papers(*)')
+        .single()
+
+      if (updateErr) throw updateErr
+
+      // Fetch previous attempt for progress comparison
+      const { data: prevAttempts } = await supabase
+        .from('attempts')
+        .select('*')
+        .eq('user_id', attempt.user_id)
+        .eq('paper_id', attempt.paper_id)
+        .eq('status', 'completed')
+        .neq('id', attemptId)
+        .order('attempt_number', { ascending: false })
+        .limit(1)
+
+      let comparison = null
+      if (prevAttempts && prevAttempts.length > 0) {
+        const prev = prevAttempts[0]
+        comparison = {
+          prev_attempt_number: prev.attempt_number,
+          prev_score: prev.score,
+          prev_accuracy: prev.accuracy,
+          score_diff: Number((totalScore - Number(prev.score || 0)).toFixed(2)),
+          accuracy_diff: Number((accuracy - Number(prev.accuracy || 0)).toFixed(2)),
+          correct_diff: correctCount - (prev.correct_count || 0),
+          incorrect_diff: incorrectCount - (prev.incorrect_count || 0),
+        }
+      }
+
+      return {
+        success: true,
+        attempt: updatedAttempt || attempt,
+        comparison
+      }
+    } catch (clientErr) {
+      console.error('Client-side submission fallback failed:', clientErr)
+      throw new Error(`Submission Error: ${clientErr.message}`)
     }
   },
 

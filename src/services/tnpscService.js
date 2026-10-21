@@ -1915,8 +1915,22 @@ export const practiceService = {
         q = q.in('paper_id', paperIds)
       }
 
+      const targetSubject = config.subject && config.subject !== 'All Subjects' ? config.subject : null
+      const targetTopic   = config.topic || null
+      const microTopicId  = config.micro_topic_id || null
+      const targetUnit    = config.unit || null
+
+      if (targetUnit) {
+        const uNum = String(targetUnit).replace(/[^0-9]/g, '')
+        if (uNum) {
+          q = q.or(`unit_tag.eq.Unit ${uNum},unit_tag.eq.${uNum},unit_name.ilike.%Unit ${uNum}%,unit_name.ilike.%${targetSubject || ''}%`)
+        }
+      } else if (targetSubject) {
+        q = q.or(`subject.ilike.%${targetSubject}%,unit_name.ilike.%${targetSubject}%`)
+      }
+
       let { data: pool, error: poolErr } = await q.limit(400)
-      if (poolErr && (poolErr.code === '42703' || String(poolErr.message).toLowerCase().includes('column'))) {
+      if (!pool || pool.length === 0 || (poolErr && (poolErr.code === '42703' || String(poolErr.message).toLowerCase().includes('column')))) {
         let fallbackQ = supabase.from('questions').select(FALLBACK_FIELDS).not('correct_option', 'is', null)
         if (paperIds.length > 0) fallbackQ = fallbackQ.in('paper_id', paperIds)
         const fbRes = await fallbackQ.limit(400)
@@ -1924,15 +1938,11 @@ export const practiceService = {
       }
       let candidatePool = pool ? [...pool] : []
 
-      const targetSubject = config.subject && config.subject !== 'All Subjects' ? config.subject : null
-      const targetTopic   = config.topic || null
-      const microTopicId  = config.micro_topic_id || null
-
-      if (targetSubject || targetTopic || microTopicId) {
+      if (targetSubject || targetTopic || microTopicId || targetUnit) {
         const isLanguageReq = /tamil|english|language|இலக்கணம்|மொழி/i.test(targetSubject || targetTopic || '')
         const isAptitudeReq = /aptitude|mental\s*ability|math|reasoning|கணிதம்/i.test(targetSubject || targetTopic || '')
-        const isGeoReq      = /geography|புவியியல்/i.test(targetSubject || targetTopic || '')
-        const isScienceReq  = /science|அறிவியல்|physics|chemistry|biology/i.test(targetSubject || targetTopic || '')
+        const isGeoReq      = /geography|புவியியல்/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '3'
+        const isScienceReq  = /science|அறிவியல்|physics|chemistry|biology/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '1'
 
         candidatePool = candidatePool.filter(q => {
           const qText = (q.question_text || '') + ' ' + (q.explanation || '')
@@ -2023,7 +2033,8 @@ export const practiceService = {
         ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
       }
 
-      const count = Math.min(config.question_count || 10, shuffled.length)
+      const requestedCount = config.question_count || 10
+      const count = Math.min(requestedCount, shuffled.length)
       selected = shuffled.slice(0, count)
     }
 
@@ -2031,7 +2042,12 @@ export const practiceService = {
       throw new Error('No practice questions available for the selected topic. Please choose another topic or All Subjects.')
     }
 
+    const requestedCount = config.question_count || 10
     const count = selected.length
+    const isInventoryLimited = count < requestedCount
+    const inventoryNotice = isInventoryLimited
+      ? `Loaded all ${count} verified questions available in the question bank for ${config.topic || config.subject || 'this topic'} (requested ${requestedCount}).`
+      : null
 
     let session = null
     try {
@@ -2051,7 +2067,9 @@ export const practiceService = {
             subject: q.subject || config.subject,
             macro_topic_name: q.macro_topic_name || q.macro_topic || config.topic,
             micro_topic_name: q.micro_topic_name || q.micro_topic || config.topic,
+            micro_topic_id: q.micro_topic_id || config.micro_topic_id || null,
             unit_name: q.unit_name || q.unit_tag || config.subject,
+            unit_number: config.unit || null,
             question_text: q.question_text,
             question_text_tamil: q.question_text_tamil || null,
             option_a: q.option_a,
@@ -2065,7 +2083,7 @@ export const practiceService = {
             explanation: q.explanation || null,
             explanation_tamil: q.explanation_tamil || null,
             group_tag: q.group_tag || config.exam_context || null,
-            unit_tag: q.unit_tag || null,
+            unit_tag: q.unit_tag || (config.unit ? `Unit ${config.unit}` : null),
             exam_year: q.exam_year || null,
             is_pyq: Boolean(q.is_pyq),
           })),
@@ -2092,7 +2110,9 @@ export const practiceService = {
           subject: q.subject || config.subject,
           macro_topic_name: q.macro_topic_name || q.macro_topic || config.topic,
           micro_topic_name: q.micro_topic_name || q.micro_topic || config.topic,
+          micro_topic_id: q.micro_topic_id || config.micro_topic_id || null,
           unit_name: q.unit_name || q.unit_tag || config.subject,
+          unit_number: config.unit || null,
           question_text: q.question_text,
           question_text_tamil: q.question_text_tamil || null,
           option_a: q.option_a,
@@ -2106,7 +2126,7 @@ export const practiceService = {
           explanation: q.explanation || null,
           explanation_tamil: q.explanation_tamil || null,
           group_tag: q.group_tag || config.exam_context || null,
-          unit_tag: q.unit_tag || null,
+          unit_tag: q.unit_tag || (config.unit ? `Unit ${config.unit}` : null),
           exam_year: q.exam_year || null,
           is_pyq: Boolean(q.is_pyq),
         })),
@@ -2114,7 +2134,14 @@ export const practiceService = {
       }
     }
 
-    return { session, questions: selected }
+    return {
+      session,
+      questions: selected,
+      inventoryNotice,
+      isInventoryLimited,
+      requestedCount,
+      deliveredCount: count
+    }
   },
 
   async getSession(sessionId) {
@@ -2405,14 +2432,66 @@ export const analyticsService = {
 
   /** Compute analytics from completed attempts, plus Pacing & Historical Mock Test Trend. */
   async getOverview(userId, examName = null) {
-    const [attemptsRes, practiceRes, recallRes] = await Promise.allSettled([
-      supabase
+    let allCompletedAttempts = []
+    try {
+      const { data: primaryData, error: primaryErr } = await supabase
         .from('attempts')
         .select('*, papers(title, subject, exam_name, total_questions, duration_minutes), attempt_answers(*, questions(id, question_number, question_text, correct_option))')
         .eq('user_id', userId)
-        .in('status', ['completed', 'submitted'])
+        .or('status.eq.completed,status.eq.submitted,submitted_at.not.is.null')
         .order('created_at', { ascending: false })
-        .limit(50),
+        .limit(100)
+
+      if (!primaryErr && primaryData && primaryData.length > 0) {
+        allCompletedAttempts = primaryData
+      } else {
+        const { data: fallbackData } = await supabase
+          .from('attempts')
+          .select('*, papers(title, subject, exam_name, total_questions, duration_minutes), attempt_answers(*)')
+          .eq('user_id', userId)
+          .or('status.eq.completed,status.eq.submitted,submitted_at.not.is.null')
+          .order('created_at', { ascending: false })
+          .limit(100)
+
+        if (fallbackData && fallbackData.length > 0) {
+          allCompletedAttempts = fallbackData
+        } else {
+          const { data: baseData } = await supabase
+            .from('attempts')
+            .select('*')
+            .eq('user_id', userId)
+            .or('status.eq.completed,status.eq.submitted,submitted_at.not.is.null')
+            .order('created_at', { ascending: false })
+            .limit(100)
+          allCompletedAttempts = baseData || []
+        }
+      }
+    } catch (attQueryErr) {
+      console.warn('Attempts query in getOverview error, falling back:', attQueryErr)
+    }
+
+    // Populate any missing paper details
+    const missingPaperIds = allCompletedAttempts.filter(a => !a.papers && a.paper_id).map(a => a.paper_id)
+    if (missingPaperIds.length > 0) {
+      try {
+        const { data: pList } = await supabase
+          .from('papers')
+          .select('id, title, subject, exam_name, total_questions, duration_minutes')
+          .in('id', Array.from(new Set(missingPaperIds)))
+        if (pList) {
+          const pMap = new Map(pList.map(p => [p.id, p]))
+          allCompletedAttempts.forEach(a => {
+            if (!a.papers && a.paper_id && pMap.has(a.paper_id)) {
+              a.papers = pMap.get(a.paper_id)
+            }
+          })
+        }
+      } catch (pErr) {
+        console.warn('Paper population note in getOverview:', pErr)
+      }
+    }
+
+    const [practiceRes, recallRes] = await Promise.allSettled([
       supabase
         .from('practice_sessions')
         .select('*')
@@ -2429,9 +2508,8 @@ export const analyticsService = {
         .limit(30),
     ])
 
-    const allCompletedAttempts = attemptsRes.status === 'fulfilled' ? (attemptsRes.value.data ?? []) : []
-    const practiceSessions     = practiceRes.status === 'fulfilled' ? (practiceRes.value.data ?? []) : []
-    const recallSessions       = recallRes.status === 'fulfilled'   ? (recallRes.value.data ?? [])   : []
+    const practiceSessions = practiceRes.status === 'fulfilled' ? (practiceRes.value.data ?? []) : []
+    const recallSessions   = recallRes.status === 'fulfilled'   ? (recallRes.value.data ?? [])   : []
 
     // Helper to identify BYOP / Custom Upload tests
     const isCustomOrBYOP = (a) => {
