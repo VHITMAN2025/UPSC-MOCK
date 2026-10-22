@@ -936,14 +936,8 @@ export const syllabusAnalyticsService = {
         dbUnits = unitsData || []
       }
 
-      // Try fetching micro-topics if migration has been executed
-      const { data: microData, error: microErr } = await supabase
-        .from('syllabus_micro_topics')
-        .select('*')
-        .order('micro_topic_number', { ascending: true })
-      if (!microErr && microData) {
-        dbMicroTopics = microData
-      }
+      // Micro-topics are reliably sourced from canonical master hierarchy
+      dbMicroTopics = []
     } catch (e) {
       console.warn('[SyllabusAnalytics] Using fallback taxonomy merge:', e)
     }
@@ -1119,16 +1113,27 @@ export const syllabusAnalyticsService = {
   classifyQuestionToMicroTopic(question, allMicroTopics) {
     if (!allMicroTopics || allMicroTopics.length === 0) return null
 
-    // Extract taxonomy tag from explanation if present: [Taxonomy: Unit > Macro > Micro]
+    // Extract taxonomy/metadata tag from explanation if present:
+    // [Metadata: Group=Group 1 | Unit=Unit 1 | Macro=Physics | Micro=Mechanics, Force... | Year=2026 | PYQ=true]
+    // or [Taxonomy: Unit > Macro > Micro]
+    let explGroup = null
     let explUnit = null
     let explMacro = null
     let explMicro = null
     if (question.explanation && typeof question.explanation === 'string') {
-      const match = question.explanation.match(/\[Taxonomy:\s*([^>\]]+)(?:>\s*([^>\]]+))?(?:>\s*([^\]]+))?\]/i)
-      if (match) {
-        explUnit = match[1]?.trim() || null
-        explMacro = match[2]?.trim() || null
-        explMicro = match[3]?.trim() || null
+      const metaMatch = question.explanation.match(/\[Metadata:\s*(?:Group=([^|\]]+)\|\s*)?Unit=([^|\]]+)\|\s*Macro=([^|\]]+)\|\s*Micro=([^|\]]+)/i)
+      if (metaMatch) {
+        explGroup = metaMatch[1]?.trim() || null
+        explUnit = metaMatch[2]?.trim() || null
+        explMacro = metaMatch[3]?.trim() || null
+        explMicro = metaMatch[4]?.trim() || null
+      } else {
+        const match = question.explanation.match(/\[Taxonomy:\s*([^>\]]+)(?:>\s*([^>\]]+))?(?:>\s*([^\]]+))?\]/i)
+        if (match) {
+          explUnit = match[1]?.trim() || null
+          explMacro = match[2]?.trim() || null
+          explMicro = match[3]?.trim() || null
+        }
       }
     }
 
@@ -1309,19 +1314,16 @@ export const syllabusAnalyticsService = {
       userRecallSessionsRes,
       userPracticeSessionsRes,
     ] = await Promise.allSettled([
-      supabase
-        .from('questions')
-        .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, unit_name, macro_topic_name, micro_topic_name, papers(id, title, subject, exam_name, status)')
-        .limit(1000)
-        .then(res => {
-          if (res.error) {
-            return supabase
-              .from('questions')
-              .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, papers(id, title, subject, exam_name, status)')
-              .limit(1000)
-          }
-          return res
-        }),
+      Promise.all([
+        supabase
+          .from('questions')
+          .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name, status)')
+          .range(0, 999),
+        supabase
+          .from('questions')
+          .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name, status)')
+          .range(1000, 1999),
+      ]).then(([p1, p2]) => ({ data: [...(p1?.data || []), ...(p2?.data || [])], error: p1?.error || p2?.error })),
       supabase
         .from('recall_questions')
         .select('id, question_text, subject, topic, exam_context, is_active')

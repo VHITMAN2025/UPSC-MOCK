@@ -1,260 +1,206 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Search, Sparkles, BookMarked, ArrowRight } from 'lucide-react'
+import { X, Search, Sparkles, BookMarked, ArrowRight, CheckCircle2, AlertTriangle, Clock, CircleDot, HelpCircle } from 'lucide-react'
 import { useApp } from '../../contexts/AppContext'
 import { useAuth } from '../../hooks/useAuth'
-import { syllabusAnalyticsService } from '../../services/syllabusAnalyticsService'
+import {
+  syllabusAnalyticsService,
+  CANONICAL_SYLLABUS_TAXONOMY,
+  UNIT_11_GENERAL_TAMIL,
+  UNIT_11_GENERAL_ENGLISH
+} from '../../services/syllabusAnalyticsService'
 
 /**
- * Standard 10-Unit TNPSC Syllabus matching reference design (media_1791895213021_25551e0d.jpg)
- * and interactive prototype (media_1791890577135_4c9ee280.html).
+ * Builds the canonical baseline units structure for the given exam group.
+ * Group 1: Exactly Units 1 to 10 (Degree standard; strictly NO Unit 11 Language).
+ * Group 2 / 2A: Units 1 to 10 + Unit 11 Language (General Tamil or General English).
+ * Group 4: Units 1 to 10 + Unit 11 Language (General Tamil).
  */
-export const SYLLABUS_UNITS = [
-  {
-    unit_number: 1,
-    unit_name: 'Unit 1 — General Science',
-    displayName: 'General Science',
-    score: 78,
-    meta: 'Science basics · 4 topics',
-    desc: 'Physics, chemistry, biology and everyday science concepts commonly used in TNPSC preparation.',
-    foundationTopics: [
-      { id: 'u1-t1', name: 'Physics — Motion & Force', status: 'Mastered' },
-      { id: 'u1-t2', name: 'Chemistry — Acids, Bases & Salts', status: 'Mastered' },
-    ],
-    applicationTopics: [
-      { id: 'u1-t3', name: 'Biology — Human Systems', status: 'Mastered' },
-      { id: 'u1-t4', name: 'Environment — Ecology Basics', status: 'Mastered' },
-    ]
-  },
-  {
-    unit_number: 2,
-    unit_name: 'Unit 2 — Current Events',
-    displayName: 'Current Events',
-    score: 65,
-    meta: 'National & regional events · 4 topics',
-    desc: 'History, national symbols, appointments, state profiles, awards, honors, sports and government welfare schemes.',
-    foundationTopics: [
-      { id: 'u2-t1', name: 'National & State Current Events', status: 'In Progress' },
-      { id: 'u2-t2', name: 'Government Welfare Schemes & Policies', status: 'In Progress' },
-    ],
-    applicationTopics: [
-      { id: 'u2-t3', name: 'Science, Technology & Defense Milestones', status: 'In Progress' },
-      { id: 'u2-t4', name: 'Awards, Honors & Sports Profiles', status: 'In Progress' },
-    ]
-  },
-  {
-    unit_number: 3,
-    unit_name: 'Unit 3 — Geography of India',
-    displayName: 'Geography of India',
-    score: 62,
-    meta: 'Physical & human geography · 8 topics',
-    desc: 'Location & physical features, monsoon, rainfall, weather, climate, water resources and rivers of India & Tamil Nadu.',
-    foundationTopics: [
-      { id: 'geo_himalayan_mountains', name: 'Himalayan Mountains', status: 'In Progress' },
-      { id: 'geo_peninsular_plateau', name: 'Peninsular Plateau', status: 'In Progress' },
-      { id: 'geo_coastal_plains', name: 'Coastal Plains', status: 'In Progress' },
-      { id: 'geo_elnino_lanina', name: 'El-Nino & La-Nina', status: 'In Progress' },
-    ],
-    applicationTopics: [
-      { id: 'geo_monsoon_mechanism', name: 'Indian Monsoon Mechanism', status: 'In Progress' },
-      { id: 'geo_himalayan_rivers', name: 'Himalayan Rivers (Ganga, Indus)', status: 'In Progress' },
-      { id: 'geo_tn_rivers', name: 'Tamil Nadu Rivers (Cauvery, Vaigai)', status: 'In Progress' },
-      { id: 'geo_water_resources', name: 'Water Resources & Climate Patterns', status: 'In Progress' },
-    ]
-  },
-  {
-    unit_number: 4,
-    unit_name: 'Unit 4 — History & Culture of India',
-    displayName: 'History & Culture of India',
-    score: 69,
-    meta: 'Ancient & medieval India · 4 topics',
-    desc: 'Indus Valley civilization, Guptas, Delhi Sultans, Mughals and Marathas, Age of Vijayanagaram and Bahmani Kingdoms, South Indian history.',
-    foundationTopics: [
-      { id: 'u4-t1', name: 'Indus Valley Civilization & Vedic Period', status: 'Mastered' },
-      { id: 'u4-t2', name: 'Guptas, Delhi Sultanate & Mughals', status: 'In Progress' },
-    ],
-    applicationTopics: [
-      { id: 'u4-t3', name: 'South Indian History & Vijayanagar Empire', status: 'In Progress' },
-      { id: 'u4-t4', name: 'Social Harmony & Cultural Synthesis', status: 'Mastered' },
-    ]
-  },
-  {
-    unit_number: 5,
-    unit_name: 'Unit 5 — Indian Polity',
-    displayName: 'Indian Polity',
-    score: 46,
-    meta: 'Constitution & governance · 4 topics',
-    desc: 'Constitution of India, Preamble to the Constitution, Salient features of the Constitution, Union, State and Union Territory, Citizenship, Fundamental Rights, Fundamental Duties.',
-    foundationTopics: [
-      { id: 'u5-t1', name: 'Preamble, Fundamental Rights & Duties', status: 'In Progress' },
-      { id: 'u5-t2', name: 'Union Executive, Parliament & President', status: 'Needs Review' },
-    ],
-    applicationTopics: [
-      { id: 'u5-t3', name: 'State Executive & Judiciary', status: 'Needs Review' },
-      { id: 'u5-t4', name: 'Panchayati Raj & Constitutional Authorities', status: 'Needs Review' },
-    ]
-  },
-  {
-    unit_number: 6,
-    unit_name: 'Unit 6 — Indian Economy',
-    displayName: 'Indian Economy',
-    score: 58,
-    meta: 'Economy & planning · 4 topics',
-    desc: 'Nature of Indian Economy, Five year plan models, Planning Commission and Niti Aayog, Sources of revenue, Reserve Bank of India, Fiscal Policy and Monetary Policy.',
-    foundationTopics: [
-      { id: 'u6-t1', name: 'Nature of Indian Economy & Planning Models', status: 'In Progress' },
-      { id: 'u6-t2', name: 'Banking, RBI & Monetary Policy', status: 'In Progress' },
-    ],
-    applicationTopics: [
-      { id: 'u6-t3', name: 'Public Finance, GST & Budgeting', status: 'In Progress' },
-      { id: 'u6-t4', name: 'Economic Reforms & Tamil Nadu Economy', status: 'Needs Review' },
-    ]
-  },
-  {
-    unit_number: 7,
-    unit_name: 'Unit 7 — Indian National Movement',
-    displayName: 'Indian National Movement',
-    score: 55,
-    meta: 'Freedom movement · 4 topics',
-    desc: 'National renaissance, Early uprising against British rule, Indian National Congress, Emergence of leaders, Different modes of agitations.',
-    foundationTopics: [
-      { id: 'u7-t1', name: 'Early Uprisings & 1857 Revolt', status: 'In Progress' },
-      { id: 'u7-t2', name: 'Indian National Congress & Moderate Era', status: 'In Progress' },
-    ],
-    applicationTopics: [
-      { id: 'u7-t3', name: 'Gandhian Era & Mass Mobilization', status: 'Needs Review' },
-      { id: 'u7-t4', name: 'Communalism, Partition & Independence', status: 'In Progress' },
-    ]
-  },
-  {
-    unit_number: 8,
-    unit_name: 'Unit 8 — History, Culture, Heritage of Tamil Nadu',
-    displayName: 'History, Culture, Heritage of TN',
-    score: 31,
-    meta: 'Tamil heritage · 4 topics',
-    desc: 'History of Tamil Society, Archaeological discoveries, Sangam literature to contemporary literature, Thirukkural, Role of Tamil Nadu in freedom struggle.',
-    foundationTopics: [
-      { id: 'u8-t1', name: 'Sangam Literature & Archaeological Finds', status: 'Needs Review' },
-      { id: 'u8-t2', name: 'Thirukkural — Secular & Universal Ethics', status: 'Needs Review' },
-    ],
-    applicationTopics: [
-      { id: 'u8-t3', name: 'Role of TN in Freedom Struggle', status: 'Needs Review' },
-      { id: 'u8-t4', name: 'Self-Respect & Dravidian Movement', status: 'Needs Review' },
-    ]
-  },
-  {
-    unit_number: 9,
-    unit_name: 'Unit 9 — Development Administration in Tamil Nadu',
-    displayName: 'Development Administration in TN',
-    score: 74,
-    meta: 'State administration · 4 topics',
-    desc: 'Human Development Indicators in Tamil Nadu, Social Justice and Social Harmony as Cornerstones of Socio-Economic Development, Education and Health systems.',
-    foundationTopics: [
-      { id: 'u9-t1', name: 'Human Development Indicators & Social Justice', status: 'Mastered' },
-      { id: 'u9-t2', name: 'Education & Health Delivery Systems', status: 'Mastered' },
-    ],
-    applicationTopics: [
-      { id: 'u9-t3', name: 'e-Governance & Administrative Reforms in TN', status: 'Mastered' },
-      { id: 'u9-t4', name: 'Welfare Schemes & Economic Geography of TN', status: 'Mastered' },
-    ]
-  },
-  {
-    unit_number: 10,
-    unit_name: 'Unit 10 — Aptitude & Mental Ability',
-    displayName: 'Aptitude & Mental Ability',
-    score: 67,
-    meta: 'Aptitude & reasoning · 4 topics',
-    desc: 'Simplification, Percentage, Highest Common Factor (HCF), Lowest Common Multiple (LCM), Ratio and Proportion, Simple interest, Compound interest, Time and Work, Logical Reasoning.',
-    foundationTopics: [
-      { id: 'u10-t1', name: 'Percentage, Ratio & Simple/Compound Interest', status: 'Mastered' },
-      { id: 'u10-t2', name: 'Time, Work & Mensuration', status: 'In Progress' },
-    ],
-    applicationTopics: [
-      { id: 'u10-t3', name: 'Logical Reasoning, Number Series & Puzzles', status: 'In Progress' },
-      { id: 'u10-t4', name: 'Data Interpretation & Graphs', status: 'In Progress' },
-    ]
-  },
-  {
-    unit_number: 11,
-    unit_name: 'Unit 11 — Language: General Tamil / General English',
-    displayName: 'Language Paper (Part A)',
-    score: 82,
-    meta: 'Part A Language · 4 topics · Group 2/2A & Group 4',
-    desc: 'General Tamil (இலக்கணம், இலக்கியம், தமிழ் அறிஞர்கள்) OR General English (Grammar, Prescribed Poems, Authors). Mandatory 100 questions for Group 2/2A and Group 4 (Not in Group 1).',
-    foundationTopics: [
-      { id: 'eng_active_passive', name: 'Active & Passive Voice / பொதுத்தமிழ் இலக்கணம்', status: 'Mastered' },
-      { id: 'eng_question_tags', name: 'Question Tags / பிரித்தெழுதுக & சேர்த்தெழுதுக', status: 'Mastered' },
-    ],
-    applicationTopics: [
-      { id: 'eng_sea_fever', name: 'Sea Fever / திருக்குறள் தொடர்பான செய்திகள்', status: 'In Progress' },
-      { id: 'eng_the_comet', name: 'The Comet / சிலப்பதிகாரம் & மணிமேகலை', status: 'In Progress' },
-    ]
+function buildBaselineUnits(selectedExam) {
+  const normExam = String(selectedExam || '').toLowerCase()
+  const isGroup1 = normExam.includes('group 1') || normExam.includes('group1')
+  const isEnglish = normExam.includes('english')
+
+  const base = CANONICAL_SYLLABUS_TAXONOMY.map(u => ({
+    unit_number: u.unit_number,
+    unit_name: u.unit_name,
+    displayName: u.subject || u.unit_name.replace(/^Unit\s*\d+\s*[-—:]*\s*/i, ''),
+    subject: u.subject || u.unit_name,
+    desc: u.description || '',
+    score: 0,
+    coverage: 0,
+    total_questions: 0,
+    attempted_questions: 0,
+    total_attempts: 0,
+    correct_attempts: 0,
+    status: 'unattempted',
+    meta: `${u.macro_topics?.length || 0} topics · 0 attempted`,
+    macro_topics: (u.macro_topics || []).map(m => ({
+      macro_topic_id: `macro-${u.unit_number}-${m.topic_number}`,
+      macro_topic_name: m.macro_topic_name,
+      description: m.description || '',
+      accuracy_percentage: 0,
+      total_questions: 0,
+      attempted_questions: 0,
+      total_attempts: 0,
+      micro_topics: (m.micro_topics || []).map(mc => ({
+        micro_topic_id: `micro-${u.unit_number}-${m.topic_number}-${mc.micro_topic_number}`,
+        micro_topic_name: mc.micro_topic_name,
+        name: mc.micro_topic_name,
+        status: 'Unattempted',
+        accuracy_percentage: 0,
+        total_questions: 0,
+        attempted_questions: 0,
+        total_attempts: 0,
+      }))
+    }))
+  }))
+
+  if (!isGroup1) {
+    const unit11Raw = isEnglish ? UNIT_11_GENERAL_ENGLISH : UNIT_11_GENERAL_TAMIL
+    base.push({
+      unit_number: unit11Raw.unit_number || 11,
+      unit_name: unit11Raw.unit_name,
+      displayName: unit11Raw.subject || 'Language (Part A)',
+      subject: unit11Raw.subject || 'Language',
+      desc: unit11Raw.description || '',
+      score: 0,
+      coverage: 0,
+      total_questions: 0,
+      attempted_questions: 0,
+      total_attempts: 0,
+      correct_attempts: 0,
+      status: 'unattempted',
+      meta: `${unit11Raw.macro_topics?.length || 0} topics · 0 attempted`,
+      macro_topics: (unit11Raw.macro_topics || []).map(m => ({
+        macro_topic_id: `macro-11-${m.topic_number}`,
+        macro_topic_name: m.macro_topic_name,
+        description: m.description || '',
+        accuracy_percentage: 0,
+        total_questions: 0,
+        attempted_questions: 0,
+        total_attempts: 0,
+        micro_topics: (m.micro_topics || []).map(mc => ({
+          micro_topic_id: `micro-11-${m.topic_number}-${mc.micro_topic_number}`,
+          micro_topic_name: mc.micro_topic_name,
+          name: mc.micro_topic_name,
+          status: 'Unattempted',
+          accuracy_percentage: 0,
+          total_questions: 0,
+          attempted_questions: 0,
+          total_attempts: 0,
+        }))
+      }))
+    })
   }
-]
+
+  return base
+}
+
+// Export baseline units for backwards compatibility
+export const SYLLABUS_UNITS = buildBaselineUnits('TNPSC Group 4')
 
 export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { selectedExam, toast } = useApp()
-  const isGroup1 = selectedExam?.includes('Group 1')
-  
-  // Group 1 has 175 GS + 25 Aptitude (Units 1-10). Group 2/2A and Group 4 include Part A Language (Unit 11).
-  const initialUnits = useMemo(() => {
-    return SYLLABUS_UNITS.filter(u => {
-      if (u.unit_number === 11 && isGroup1) return false
-      return true
-    })
-  }, [isGroup1])
 
   const [activeUnitIdx, setActiveUnitIdx] = useState(0)
-  const [unitData, setUnitData] = useState(initialUnits)
+  const [unitData, setUnitData] = useState(() => buildBaselineUnits(selectedExam))
   const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  // Keep unitData in sync when exam context changes
+  // Keep baseline in sync when selectedExam changes
   useEffect(() => {
-    setUnitData(initialUnits)
+    setUnitData(buildBaselineUnits(selectedExam))
     setActiveUnitIdx(0)
-  }, [initialUnits])
+    setLoading(true)
+  }, [selectedExam])
 
-  // Sync with live database attempts (strictly deduplicating by unit_number)
+  // Sync with live database attempts & canonical syllabus hierarchy
   useEffect(() => {
     let isCancelled = false
+
     async function syncLiveData() {
-      if (!user?.id) return
       try {
-        const liveAnalytics = await syllabusAnalyticsService.getSyllabusWithAnalytics(user.id, selectedExam)
-        if (isCancelled || !liveAnalytics?.units?.length) return
+        const liveAnalytics = await syllabusAnalyticsService.getSyllabusWithAnalytics(user?.id, selectedExam)
+        if (isCancelled || !liveAnalytics?.units?.length) {
+          setLoading(false)
+          return
+        }
 
-        setUnitData(prevUnits => {
-          return prevUnits.map(unit => {
-            const liveMatch = liveAnalytics.units.find(lu => lu.unit_number === unit.unit_number)
-            if (!liveMatch || liveMatch.total_attempts === 0) return unit
+        const enriched = liveAnalytics.units.map(lu => {
+          const uScore = Math.round(lu.accuracy_percentage || 0)
+          const attempts = lu.total_attempts || 0
+          const attemptedQuestions = lu.attempted_questions || 0
+          const totalQuestions = lu.total_questions || 0
 
-            const liveScore = Math.round(liveMatch.accuracy_percentage || 0)
-            const fLen = unit.foundationTopics.length
+          let unitStatus = 'unattempted'
+          if (attempts > 0) {
+            unitStatus = uScore >= 70 ? 'mastered' : uScore < 50 ? 'weak_zone' : 'in_progress'
+          }
+
+          const macros = (lu.macro_topics || []).map(lm => {
+            const mAttempts = lm.total_attempts || 0
+            const mScore = Math.round(lm.accuracy_percentage || 0)
+
+            const micros = (lm.micro_topics || []).map(mc => {
+              const mcAttempts = mc.total_attempts || 0
+              const mcScore = Math.round(mc.accuracy_percentage || 0)
+              let status = 'Unattempted'
+              if (mcAttempts > 0) {
+                status = mcScore >= 70 ? 'Mastered' : mcScore < 50 ? 'Needs Review' : 'In Progress'
+              }
+
+              return {
+                micro_topic_id: mc.micro_topic_id,
+                micro_topic_name: mc.micro_topic_name,
+                name: mc.micro_topic_name,
+                status,
+                accuracy_percentage: mcScore,
+                total_questions: mc.total_questions || 0,
+                attempted_questions: mc.attempted_questions || 0,
+                total_attempts: mcAttempts,
+              }
+            })
+
             return {
-              ...unit,
-              score: liveScore,
-              meta: `${liveMatch.macro_topics?.length || unit.foundationTopics.length + unit.applicationTopics.length} topics · ${liveMatch.attempted_questions || 0}/${liveMatch.total_questions || 0} attempted`,
-              foundationTopics: unit.foundationTopics.map((t, idx) => {
-                const liveMacro = liveMatch.macro_topics?.[idx]
-                if (!liveMacro || !liveMacro.total_attempts) return t
-                const mScore = Number(liveMacro.accuracy_percentage || 0)
-                const status = mScore >= 70 ? 'Mastered' : mScore < 50 ? 'Needs Review' : 'In Progress'
-                return { ...t, status }
-              }),
-              applicationTopics: unit.applicationTopics.map((t, idx) => {
-                const liveMacro = liveMatch.macro_topics?.[fLen + idx]
-                if (!liveMacro || !liveMacro.total_attempts) return t
-                const mScore = Number(liveMacro.accuracy_percentage || 0)
-                const status = mScore >= 70 ? 'Mastered' : mScore < 50 ? 'Needs Review' : 'In Progress'
-                return { ...t, status }
-              })
+              macro_topic_id: lm.macro_topic_id || lm.id,
+              macro_topic_name: lm.macro_topic_name || lm.topic_name,
+              description: lm.description || '',
+              accuracy_percentage: mScore,
+              total_questions: lm.total_questions || 0,
+              attempted_questions: lm.attempted_questions || 0,
+              total_attempts: mAttempts,
+              micro_topics: micros,
             }
           })
+
+          return {
+            unit_number: lu.unit_number,
+            unit_name: lu.unit_name,
+            displayName: lu.subject || lu.unit_name.replace(/^Unit\s*\d+\s*[-—:]*\s*/i, ''),
+            subject: lu.subject || lu.unit_name,
+            desc: lu.description || '',
+            score: uScore,
+            coverage: Math.round(lu.coverage_percentage || 0),
+            total_questions: totalQuestions,
+            attempted_questions: attemptedQuestions,
+            total_attempts: attempts,
+            correct_attempts: lu.correct_attempts || 0,
+            status: unitStatus,
+            meta: `${macros.length} topics · ${attemptedQuestions}/${totalQuestions} attempted`,
+            macro_topics: macros,
+          }
         })
+
+        if (!isCancelled) {
+          setUnitData(enriched)
+          setLoading(false)
+        }
       } catch (err) {
-        console.warn('[InteractiveSyllabus] Live sync background note:', err)
+        console.warn('[InteractiveSyllabus] Live sync error:', err)
+        if (!isCancelled) setLoading(false)
       }
     }
 
@@ -262,15 +208,20 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
     return () => { isCancelled = true }
   }, [user?.id, selectedExam])
 
-  const activeUnit = unitData[activeUnitIdx] || unitData[0]
-  const isWeakZone = activeUnit.score < 50
-  const isMastered = activeUnit.score >= 70
+  const activeUnit = unitData[activeUnitIdx] || unitData[0] || {}
+  const hasUnitAttempts = (activeUnit.total_attempts || 0) > 0
+  const isWeakZone = hasUnitAttempts && (activeUnit.score < 50)
+  const isMastered = hasUnitAttempts && (activeUnit.score >= 70)
 
-  // Calculate dynamic roll-up summary KPIs
-  const overallMastery = Math.round(unitData.reduce((acc, u) => acc + u.score, 0) / unitData.length)
-  const strongUnits = unitData.filter(u => u.score >= 65).length
-  const needsRevision = unitData.filter(u => u.score < 50).length
-  const unitsCovered = `${unitData.length} / ${unitData.length}`
+  // Dynamic summary KPIs based on real database attempts
+  const attemptedUnits = unitData.filter(u => (u.total_attempts || 0) > 0)
+  const overallMastery = attemptedUnits.length > 0
+    ? Math.round(attemptedUnits.reduce((acc, u) => acc + u.score, 0) / attemptedUnits.length)
+    : 0
+
+  const strongUnits = unitData.filter(u => (u.total_attempts || 0) > 0 && u.score >= 65).length
+  const needsRevision = unitData.filter(u => (u.total_attempts || 0) > 0 && u.score < 50).length
+  const unitsCovered = `${attemptedUnits.length} / ${unitData.length}`
 
   // Filter units by search query
   const filteredUnits = useMemo(() => {
@@ -278,45 +229,37 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
     const q = searchQuery.toLowerCase().trim()
     return unitData.filter(u =>
       u.unit_name.toLowerCase().includes(q) ||
-      u.displayName.toLowerCase().includes(q) ||
-      u.desc.toLowerCase().includes(q) ||
-      u.foundationTopics.some(t => t.name.toLowerCase().includes(q)) ||
-      u.applicationTopics.some(t => t.name.toLowerCase().includes(q))
+      (u.displayName && u.displayName.toLowerCase().includes(q)) ||
+      (u.desc && u.desc.toLowerCase().includes(q)) ||
+      (u.macro_topics || []).some(m =>
+        m.macro_topic_name.toLowerCase().includes(q) ||
+        (m.micro_topics || []).some(t => (t.micro_topic_name || t.name).toLowerCase().includes(q))
+      )
     )
   }, [unitData, searchQuery])
 
-  // Toggle topic status between Mastered, Needs Review, In Progress
-  function toggleTopicStatus(sectionKey, topicId) {
+  // Topic status toggle for active unit
+  function toggleTopicStatus(macroId, topicId) {
     setUnitData(prev => prev.map((u, idx) => {
       if (idx !== activeUnitIdx) return u
 
-      const updateList = (list) => list.map(t => {
-        if (t.id !== topicId) return t
-        const nextStatus = t.status === 'Mastered'
-          ? 'In Progress'
-          : t.status === 'In Progress'
-          ? 'Needs Review'
-          : 'Mastered'
-        return { ...t, status: nextStatus }
+      const updatedMacros = (u.macro_topics || []).map(macro => {
+        if (macro.macro_topic_id !== macroId && macro.macro_topic_name !== macroId) return macro
+        const updatedMicros = (macro.micro_topics || []).map(t => {
+          if (t.micro_topic_id !== topicId && t.name !== topicId) return t
+          const nextStatus = t.status === 'Mastered'
+            ? 'Needs Review'
+            : t.status === 'Needs Review'
+            ? 'In Progress'
+            : 'Mastered'
+          return { ...t, status: nextStatus }
+        })
+        return { ...macro, micro_topics: updatedMicros }
       })
 
-      const newFoundation = sectionKey === 'foundation' ? updateList(u.foundationTopics) : u.foundationTopics
-      const newApplication = sectionKey === 'application' ? updateList(u.applicationTopics) : u.applicationTopics
-
-      // Recalculate unit score based on topics
-      const allTopics = [...newFoundation, ...newApplication]
-      const completedCount = allTopics.filter(t => t.status === 'Mastered').length
-      const inProgressCount = allTopics.filter(t => t.status === 'In Progress').length
-      const newScore = Math.round(((completedCount * 100) + (inProgressCount * 60)) / allTopics.length)
-
-      return {
-        ...u,
-        score: newScore,
-        foundationTopics: newFoundation,
-        applicationTopics: newApplication,
-      }
+      return { ...u, macro_topics: updatedMacros }
     }))
-    toast?.success?.('Status updated')
+    toast?.success?.('Topic status updated')
   }
 
   const getStatusBadge = (status) => {
@@ -335,12 +278,19 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
           iconBox: 'bg-[#fee2e2] text-[#ef4444]',
           icon: '!'
         }
-      default:
+      case 'In Progress':
         return {
           label: 'In Progress',
           badgeClass: 'bg-[#eff6ff] text-[#2563eb] border border-[#bfdbfe]',
           iconBox: 'bg-[#dbeafe] text-[#2563eb]',
           icon: '○'
+        }
+      default:
+        return {
+          label: 'Unattempted',
+          badgeClass: 'bg-[#f8fafc] text-[#64748b] border border-[#e2e8f0]',
+          iconBox: 'bg-[#f1f5f9] text-[#94a3b8]',
+          icon: '—'
         }
     }
   }
@@ -361,7 +311,6 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Colorful Stacked Layers Icon matching Prototype */}
             <div className="relative w-7 h-7 shrink-0">
               <div className="absolute inset-0 bg-[#06b6d4] rounded-[6px] -rotate-6 opacity-75" />
               <div className="absolute inset-0 bg-[#ec4899] rounded-[6px] rotate-6 opacity-75" />
@@ -375,7 +324,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
           </div>
 
           <p className="text-xs text-[#69758a] mt-1">
-            Explore units → inspect micro-topics → identify your preparation level.
+            Explore units → inspect micro-topics → click Practice to launch targeted tests with verified questions.
           </p>
         </div>
 
@@ -390,7 +339,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
         )}
       </div>
 
-      {/* ── 2. Top Summary KPI Row (Exactly matches Image & Prototype) ─────────────────── */}
+      {/* ── 2. Top Summary KPI Row ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 bg-[#fbfcfe] border-b border-[#edf0f5] shrink-0">
         <div className="bg-gradient-to-br from-[#f5f2ff] to-[#f0eeff] border border-[#ddd7ff] rounded-2xl p-4 shadow-2xs">
           <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
@@ -405,7 +354,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
           <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
             STRONG UNITS
           </small>
-          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#10b981]">
             {strongUnits}
           </b>
         </div>
@@ -414,7 +363,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
           <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
             NEEDS REVISION
           </small>
-          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#ef4444]">
             {needsRevision}
           </b>
         </div>
@@ -454,7 +403,8 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
             {filteredUnits.map((unit) => {
               const originalIdx = unitData.findIndex(u => u.unit_number === unit.unit_number)
               const isSelected = originalIdx === activeUnitIdx
-              const isUnitWeak = unit.score < 50
+              const hasAttempts = (unit.total_attempts || 0) > 0
+              const isUnitWeak = hasAttempts && unit.score < 50
 
               return (
                 <div
@@ -470,8 +420,14 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                     <span className="text-xs font-black text-[#172033] truncate">
                       {unit.unit_name}
                     </span>
-                    <span className={`text-xs font-black ${isUnitWeak ? 'text-[#ef4444]' : 'text-[#635bff]'}`}>
-                      {unit.score}%
+                    <span className={`text-xs font-black ${
+                      !hasAttempts
+                        ? 'text-[#94a3b8]'
+                        : isUnitWeak
+                        ? 'text-[#ef4444]'
+                        : 'text-[#635bff]'
+                    }`}>
+                      {hasAttempts ? `${unit.score}%` : '0%'}
                     </span>
                   </div>
 
@@ -482,11 +438,13 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                   <div className="w-full h-1.5 bg-[#edf0f5] rounded-full overflow-hidden mt-2.5">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
-                        isUnitWeak
+                        !hasAttempts
+                          ? 'bg-[#cbd5e1]'
+                          : isUnitWeak
                           ? 'bg-gradient-to-r from-[#f59e0b] to-[#ef4444]'
                           : 'bg-gradient-to-r from-[#635bff] to-[#8b5cf6]'
                       }`}
-                      style={{ width: `${Math.max(5, unit.score)}%` }}
+                      style={{ width: `${Math.max(hasAttempts ? 5 : 0, unit.score)}%` }}
                     />
                   </div>
                 </div>
@@ -515,7 +473,7 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
               <button
                 onClick={() =>
                   navigate(
-                    `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}`
+                    `/practice?subject=${encodeURIComponent(activeUnit.subject || activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}`
                   )
                 }
                 className="px-5 py-3 rounded-xl bg-[#635bff] text-white font-black text-xs hover:bg-[#4f46e5] transition-all shadow-[0_6px_16px_rgba(99,91,255,0.22)] shrink-0 flex items-center justify-center gap-1.5"
@@ -528,146 +486,123 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
             {/* Mastery Strip (Bold score + Progress Track + Zone Badge) */}
             <div className="flex items-center gap-4 bg-[#f8fafc] border border-[#e5e8ef] rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
               <b className="text-2xl sm:text-3xl font-black text-[#172033] min-w-[58px]">
-                {activeUnit.score}%
+                {hasUnitAttempts ? `${activeUnit.score}%` : '0%'}
               </b>
               <div className="flex-1 h-2.5 bg-[#e2e8f0] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    isWeakZone ? 'bg-[#ef4444]' : isMastered ? 'bg-[#10b981]' : 'bg-[#635bff]'
+                    !hasUnitAttempts
+                      ? 'bg-[#cbd5e1]'
+                      : isWeakZone
+                      ? 'bg-[#ef4444]'
+                      : isMastered
+                      ? 'bg-[#10b981]'
+                      : 'bg-[#635bff]'
                   }`}
-                  style={{ width: `${Math.max(6, activeUnit.score)}%` }}
+                  style={{ width: `${Math.max(hasUnitAttempts ? 6 : 0, activeUnit.score)}%` }}
                 />
               </div>
               <span
                 className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shrink-0 border ${
-                  isWeakZone
+                  !hasUnitAttempts
+                    ? 'bg-[#f1f5f9] text-[#64748b] border-[#cbd5e1]'
+                    : isWeakZone
                     ? 'bg-[#fff0f0] text-[#ef4444] border-[#fecdd3]'
                     : isMastered
                     ? 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0]'
                     : 'bg-[#eef2ff] text-[#4f46e5] border-[#c7d2fe]'
                 }`}
               >
-                {isWeakZone ? 'WEAK ZONE' : isMastered ? 'MASTERED' : 'IN PROGRESS'}
+                {!hasUnitAttempts ? 'UNATTEMPTED' : isWeakZone ? 'WEAK ZONE' : isMastered ? 'MASTERED' : 'IN PROGRESS'}
               </span>
             </div>
 
-            {/* Structured Topic Breakdown */}
+            {/* Structured Topic Breakdown Grouped by Macro-Topics */}
             <div className="space-y-6">
-              {/* Section 1: FOUNDATION & CORE CONCEPTS */}
-              <div>
-                <h4 className="text-xs font-black text-[#334155] uppercase tracking-wider pb-2 border-b border-[#e5e8ef] mb-3">
-                  FOUNDATION &amp; CORE CONCEPTS
-                </h4>
-                <div className="space-y-2.5">
-                  {activeUnit.foundationTopics.map((topic) => {
-                    const badge = getStatusBadge(topic.status)
-                    return (
-                      <div
-                        key={topic.id}
-                        className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
-                      >
-                        <div
-                          onClick={() =>
-                            navigate(
-                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
-                            )
-                          }
-                          className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
-                          title={`Click to practice ${topic.name}`}
-                        >
-                          <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
-                            {badge.icon}
-                          </span>
-                          <span className="text-xs font-bold text-[#172033] group-hover/item:text-[#635bff] transition-colors truncate">
-                            {topic.name}
-                          </span>
-                        </div>
+              {(activeUnit.macro_topics || []).map((macro) => (
+                <div key={macro.macro_topic_id || macro.macro_topic_name} className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#e5e8ef]">
+                    <div>
+                      <h4 className="text-xs font-black text-[#334155] uppercase tracking-wider">
+                        {macro.macro_topic_name}
+                      </h4>
+                      {macro.description && (
+                        <p className="text-[11px] text-[#64748b] mt-0.5">{macro.description}</p>
+                      )}
+                    </div>
+                    {macro.total_attempts > 0 && (
+                      <span className="text-[11px] font-bold text-[#635bff] bg-[#f0eeff] px-2.5 py-0.5 rounded-md border border-[#ddd7ff]">
+                        {macro.accuracy_percentage}% Accuracy
+                      </span>
+                    )}
+                  </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
+                  <div className="space-y-2.5">
+                    {(macro.micro_topics || []).map((topic) => {
+                      const badge = getStatusBadge(topic.status)
+                      const targetSubj = activeUnit.subject || activeUnit.displayName || activeUnit.unit_name
+                      const targetUnit = activeUnit.unit_number
+                      const topicName = topic.micro_topic_name || topic.name
+                      const microId = topic.micro_topic_id
+
+                      return (
+                        <div
+                          key={topic.micro_topic_id || topic.name}
+                          className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
+                        >
+                          <div
                             onClick={() =>
                               navigate(
-                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
+                                `/practice?subject=${encodeURIComponent(targetSubj)}&unit=${encodeURIComponent(targetUnit)}&topic=${encodeURIComponent(topicName)}&micro_topic_id=${encodeURIComponent(microId)}`
                               )
                             }
-                            className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"
-                            title={`Practice this topic: ${topic.name}`}
+                            className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
+                            title={`Click to practice ${topicName}`}
                           >
-                            <span>🎯</span>
-                            <span>Practice</span>
-                          </button>
+                            <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
+                              {badge.icon}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="text-xs font-bold text-[#172033] group-hover/item:text-[#635bff] transition-colors truncate block">
+                                {topicName}
+                              </span>
+                              {topic.total_questions > 0 && (
+                                <span className="text-[10px] text-[#8994a7] block mt-0.5">
+                                  {topic.total_questions} verified questions in bank
+                                  {topic.total_attempts > 0 ? ` · ${topic.accuracy_percentage}% accuracy` : ''}
+                                </span>
+                              )}
+                            </div>
+                          </div>
 
-                          <button
-                            onClick={() => toggleTopicStatus('foundation', topic.id)}
-                            className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
-                            title="Click to toggle status"
-                          >
-                            {badge.label}
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() =>
+                                navigate(
+                                  `/practice?subject=${encodeURIComponent(targetSubj)}&unit=${encodeURIComponent(targetUnit)}&topic=${encodeURIComponent(topicName)}&micro_topic_id=${encodeURIComponent(microId)}`
+                                )
+                              }
+                              className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"
+                              title={`Practice this topic: ${topicName}`}
+                            >
+                              <span>🎯</span>
+                              <span>Practice</span>
+                            </button>
+
+                            <button
+                              onClick={() => toggleTopicStatus(macro.macro_topic_id, topic.micro_topic_id)}
+                              className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
+                              title="Click to toggle status"
+                            >
+                              {badge.label}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-
-              {/* Section 2: APPLICATION & REVISION */}
-              <div>
-                <h4 className="text-xs font-black text-[#334155] uppercase tracking-wider pb-2 border-b border-[#e5e8ef] mb-3">
-                  APPLICATION &amp; REVISION
-                </h4>
-                <div className="space-y-2.5">
-                  {activeUnit.applicationTopics.map((topic) => {
-                    const badge = getStatusBadge(topic.status)
-                    return (
-                      <div
-                        key={topic.id}
-                        className="border border-[#dfe5ee] rounded-xl px-4 py-3 flex items-center justify-between gap-3 bg-white hover:border-[#c7d2fe] hover:shadow-subtle transition-all"
-                      >
-                        <div
-                          onClick={() =>
-                            navigate(
-                              `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
-                            )
-                          }
-                          className="flex items-center gap-3 min-w-0 cursor-pointer group/item flex-1"
-                          title={`Click to practice ${topic.name}`}
-                        >
-                          <span className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${badge.iconBox}`}>
-                            {badge.icon}
-                          </span>
-                          <span className="text-xs font-bold text-[#172033] group-hover/item:text-[#635bff] transition-colors truncate">
-                            {topic.name}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            onClick={() =>
-                              navigate(
-                                `/practice?subject=${encodeURIComponent(activeUnit.displayName || activeUnit.unit_name)}&unit=${encodeURIComponent(activeUnit.unit_number)}&topic=${encodeURIComponent(topic.name)}&micro_topic_id=${encodeURIComponent(topic.id)}`
-                              )
-                            }
-                            className="px-2.5 py-1 rounded-lg bg-[#f0eeff] hover:bg-[#635bff] text-[#635bff] hover:text-white text-xs font-black border border-[#ddd7ff] hover:border-[#635bff] transition-all flex items-center gap-1 shadow-2xs"
-                            title={`Practice this topic: ${topic.name}`}
-                          >
-                            <span>🎯</span>
-                            <span>Practice</span>
-                          </button>
-
-                          <button
-                            onClick={() => toggleTopicStatus('application', topic.id)}
-                            className={`text-xs font-black px-3 py-1 rounded-lg shrink-0 transition-transform hover:scale-105 active:scale-95 ${badge.badgeClass}`}
-                            title="Click to toggle status"
-                          >
-                            {badge.label}
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -676,7 +611,9 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
             <Sparkles className="w-4 h-4 text-[#635bff] shrink-0 mt-0.5" />
             <div>
               <b>Vina insight:</b>{' '}
-              {isWeakZone
+              {!hasUnitAttempts
+                ? 'You have not attempted questions in this unit yet. Click "Generate Practice Set" or pick a specific micro-topic to begin.'
+                : isWeakZone
                 ? 'This unit is a weak zone. Start with the topics marked Needs Review, then complete a focused practice set.'
                 : 'Keep progressing through the pending topics and revisit any area marked Needs Review.'}
             </div>

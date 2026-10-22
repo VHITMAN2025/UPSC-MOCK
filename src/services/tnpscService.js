@@ -1757,87 +1757,165 @@ export const quickRecallService = {
 }
 
 // ─── Practice Sessions ────────────────────────────────────────────────────────
+function parseQuestionMetadata(explanation) {
+  if (!explanation || typeof explanation !== 'string') return {}
+  const m = explanation.match(/\[Metadata:\s*(?:Group=([^|\]]+)\|\s*)?Unit=([^|\]]+)\|\s*Macro=([^|\]]+)\|\s*Micro=([^|\]]+)(?:\|\s*Year=([^|\]]+))?(?:\|\s*PYQ=([^|\]]+))?/i)
+  if (m) {
+    return {
+      group: m[1]?.trim() || null,
+      unit: m[2]?.trim() || null,
+      macro: m[3]?.trim() || null,
+      micro: m[4]?.trim() || null,
+      year: m[5]?.trim() || null,
+      is_pyq: m[6]?.trim() === 'true'
+    }
+  }
+  const tax = explanation.match(/\[Taxonomy:\s*([^>\]]+)(?:>\s*([^>\]]+))?(?:>\s*([^\]]+))?\]/i)
+  if (tax) {
+    return {
+      unit: tax[1]?.trim() || null,
+      macro: tax[2]?.trim() || null,
+      micro: tax[3]?.trim() || null
+    }
+  }
+  return {}
+}
+
+const VALID_PRACTICE_FIELDS = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name)'
+
+async function fetchVerifiedQuestionsPool(examContext = null) {
+  let paperIds = []
+  if (examContext) {
+    const { data: examPapers } = await supabase
+      .from('papers')
+      .select('id')
+      .eq('status', 'published')
+      .eq('exam_name', examContext)
+    if (examPapers && examPapers.length > 0) {
+      paperIds = examPapers.map(p => p.id)
+    }
+  }
+
+  let p1Query = supabase.from('questions').select(VALID_PRACTICE_FIELDS).not('correct_option', 'is', null).range(0, 999)
+  let p2Query = supabase.from('questions').select(VALID_PRACTICE_FIELDS).not('correct_option', 'is', null).range(1000, 1999)
+
+  if (paperIds.length > 0) {
+    p1Query = p1Query.in('paper_id', paperIds)
+    p2Query = p2Query.in('paper_id', paperIds)
+  }
+
+  const [res1, res2] = await Promise.all([p1Query, p2Query])
+  return [...(res1.data || []), ...(res2.data || [])]
+}
+
+function matchesPracticeCriteria(q, { targetSubject, targetTopic, microTopicId, targetUnit }) {
+  const meta = parseQuestionMetadata(q.explanation)
+  const qText = (q.question_text || '') + ' ' + (q.explanation || '')
+  const qSubj = (q.papers?.subject || meta.unit || '') + ' ' + (meta.macro || '') + ' ' + (meta.micro || '')
+  const combined = (qSubj + ' ' + qText).toLowerCase()
+
+  const isLanguageReq = /tamil|english|language|இலக்கணம்|மொழி/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '11'
+  const isAptitudeReq = /aptitude|mental\s*ability|math|reasoning|கணிதம்/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '10'
+  const isGeoReq      = /geography|புவியியல்/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '3'
+  const isScienceReq  = /science|அறிவியல்|physics|chemistry|biology/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '1'
+
+  // Strict cross-contamination guards
+  if (!isLanguageReq) {
+    if (/பகுதி\s*அ|இலக்கணம்|பொருத்துக|பிரித்தெழுதுக|சந்தேகம்|நூல்\s*ஆசிரியர்|அகரவரிசை/i.test(qText)) return false
+    if (/general\s*tamil|general\s*english|பொதுத்\s*தமிழ்/i.test(qSubj)) return false
+  }
+  if (!isAptitudeReq) {
+    if (/probability|dice|cards|simple\s*interest|compound\s*interest|ratio|time\s*and\s*work|நிகழ்தகவு|வட்டி|விகிதம்/i.test(qText)) return false
+    if (/aptitude|mental\s*ability/i.test(qSubj)) return false
+  }
+
+  // Micro-topic precision matching
+  if (targetTopic || microTopicId) {
+    if (meta.micro) {
+      const metaClean = meta.micro.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (microTopicId && metaClean.includes(microTopicId.toLowerCase().replace(/[^a-z0-9]/g, ''))) return true
+      if (targetTopic) {
+        const targetClean = targetTopic.toLowerCase().replace(/[^a-z0-9]/g, '')
+        if (metaClean.includes(targetClean) || targetClean.includes(metaClean)) return true
+      }
+    }
+
+    if (microTopicId === 'geo_tn_rivers' || /tamil\s*nadu\s*rivers|cauvery|vaigai|thamirabarani/i.test(targetTopic || '')) {
+      if (/everest|himalaya|mountain|monsoon|climate|rainfall|el-nino/i.test(combined)) return false
+      return /cauvery|vaigai|thamirabarani|bhavani|mettur|river|reservoir|dam|காவிரி|வைகை|தாமிரபரணி|ஆறு/i.test(combined)
+    }
+    if (microTopicId === 'geo_himalayan_rivers' || /himalayan\s*rivers|ganga|indus/i.test(targetTopic || '')) {
+      return /ganga|indus|brahmaputra|gangotri|bhagirathi|alakananda|mansarovar|யமுனை|கங்கை|சிந்து/i.test(combined)
+    }
+    if (microTopicId === 'geo_himalayan_mountains' || /himalayan\s*mountains/i.test(targetTopic || '')) {
+      if (/river|cauvery|vaigai|monsoon|rainfall/i.test(combined)) return false
+      return /himalaya|everest|k2|siachen|peak|shivalik|mountain|சிகரம்|இமயமலை/i.test(combined)
+    }
+    if (microTopicId === 'geo_peninsular_plateau' || /peninsular\s*plateau/i.test(targetTopic || '')) {
+      return /plateau|deccan|anamudi|doddabetta|western ghats|eastern ghats|பீடபூமி|தொடர்ச்சி மலை/i.test(combined)
+    }
+    if (microTopicId === 'geo_coastal_plains' || /coastal\s*plains/i.test(targetTopic || '')) {
+      return /coast|coromandel|malabar|pichavaram|pulicat|chilika|mangrove|கடற்கரை/i.test(combined)
+    }
+    if (microTopicId === 'geo_monsoon_mechanism' || microTopicId === 'geo_elnino_lanina' || /monsoon|climate|el-nino/i.test(targetTopic || '')) {
+      if (/river|cauvery|vaigai|mountain|everest/i.test(combined)) return false
+      return /monsoon|climate|rainfall|el-nino|la-nina|itcz|பருவமழை|மழை/i.test(combined)
+    }
+    if (microTopicId === 'eng_active_passive' || /active\s*&\s*passive/i.test(targetTopic || '')) {
+      return /active voice|passive voice|voice|transitive/i.test(combined)
+    }
+    if (microTopicId === 'eng_question_tags' || /question\s*tag/i.test(targetTopic || '')) {
+      return /question tag|tag/i.test(combined)
+    }
+    if (microTopicId === 'eng_sea_fever' || /sea\s*fever/i.test(targetTopic || '')) {
+      return /sea fever|masefield|tall ship/i.test(combined)
+    }
+    if (microTopicId === 'eng_the_comet' || /the\s*comet/i.test(targetTopic || '')) {
+      return /the comet|littleford|heavens/i.test(combined)
+    }
+
+    if (targetTopic) {
+      const targetNorm = targetTopic.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
+      if (combined.includes(targetNorm)) return true
+    }
+    return false
+  }
+
+  if (targetUnit) {
+    const uNum = String(targetUnit).replace(/[^0-9]/g, '')
+    if (meta.unit && meta.unit.includes(uNum)) return true
+    if (uNum === '3' && isGeoReq) return true
+    if (uNum === '1' && isScienceReq) return true
+    if (uNum === '10' && isAptitudeReq) return true
+    if (uNum === '11' && isLanguageReq) return true
+    return false
+  }
+
+  if (targetSubject && targetSubject !== 'All Subjects') {
+    if (meta.macro && meta.macro.toLowerCase().includes(targetSubject.toLowerCase())) return true
+    if (q.papers?.subject && q.papers.subject.toLowerCase().includes(targetSubject.toLowerCase())) return true
+    const targetNorm = targetSubject.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
+    return combined.includes(targetNorm)
+  }
+
+  return true
+}
+
 export const practiceService = {
   async getAvailableQuestionCount({ exam_context, subject, unit, topic, micro_topic_id }) {
     try {
-      const targetTopic = topic || null
-      const targetSubj = subject && subject !== 'All Subjects' ? subject : null
+      const targetTopic   = topic || null
+      const targetSubj    = subject && subject !== 'All Subjects' ? subject : null
+      const targetUnit    = unit || null
+      const microTopicId  = micro_topic_id || null
 
-      let q = supabase
-        .from('questions')
-        .select('id, question_text, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name', { count: 'exact' })
-        .not('correct_option', 'is', null)
+      const questions = await fetchVerifiedQuestionsPool(exam_context)
+      const matched = questions.filter(q =>
+        matchesPracticeCriteria(q, { targetSubject: targetSubj, targetTopic, microTopicId, targetUnit })
+      )
 
-      if (exam_context) {
-        const { data: examPapers } = await supabase
-          .from('papers')
-          .select('id')
-          .eq('status', 'published')
-          .eq('exam_name', exam_context)
-
-        if (examPapers && examPapers.length > 0) {
-          q = q.in('paper_id', examPapers.map(p => p.id))
-        }
-      }
-
-      const { data: dbQuestions } = await q.limit(300)
-
-      let matchCount = 0
-      if (dbQuestions && dbQuestions.length > 0) {
-        const filtered = dbQuestions.filter(q => {
-          const qText = (q.question_text || '') + ' ' + (q.explanation || '')
-          const qSubj = (q.subject || '') + ' ' + (q.unit_name || '') + ' ' + (q.macro_topic_name || '') + ' ' + (q.micro_topic_name || '')
-          const combined = (qSubj + ' ' + qText).toLowerCase()
-
-          if (micro_topic_id === 'geo_tn_rivers' || /tamil\s*nadu\s*rivers|cauvery|vaigai|thamirabarani/i.test(targetTopic || '')) {
-            if (/everest|himalaya|mountain|monsoon|climate|rainfall|el-nino/i.test(combined)) return false
-            return /cauvery|vaigai|thamirabarani|bhavani|mettur|river|reservoir|dam|காவிரி|வைகை|தாமிரபரணி|ஆறு/i.test(combined)
-          }
-          if (micro_topic_id === 'geo_himalayan_rivers' || /himalayan\s*rivers|ganga|indus/i.test(targetTopic || '')) {
-            return /ganga|indus|brahmaputra|gangotri|bhagirathi|alakananda|mansarovar|யமுனை|கங்கை|சிந்து/i.test(combined)
-          }
-          if (micro_topic_id === 'geo_himalayan_mountains' || /himalayan\s*mountains/i.test(targetTopic || '')) {
-            if (/river|cauvery|vaigai|monsoon|rainfall/i.test(combined)) return false
-            return /himalaya|everest|k2|siachen|peak|shivalik|mountain|சிகரம்|இமயமலை/i.test(combined)
-          }
-          if (micro_topic_id === 'geo_peninsular_plateau' || /peninsular\s*plateau/i.test(targetTopic || '')) {
-            return /plateau|deccan|anamudi|doddabetta|western ghats|eastern ghats|பீடபூமி|தொடர்ச்சி மலை/i.test(combined)
-          }
-          if (micro_topic_id === 'geo_coastal_plains' || /coastal\s*plains/i.test(targetTopic || '')) {
-            return /coast|coromandel|malabar|pichavaram|pulicat|chilika|mangrove|கடற்கரை/i.test(combined)
-          }
-          if (micro_topic_id === 'geo_monsoon_mechanism' || micro_topic_id === 'geo_elnino_lanina' || /monsoon|climate|el-nino/i.test(targetTopic || '')) {
-            if (/river|cauvery|vaigai|mountain|everest/i.test(combined)) return false
-            return /monsoon|climate|rainfall|el-nino|la-nina|itcz|பருவமழை|மழை/i.test(combined)
-          }
-          if (micro_topic_id === 'eng_active_passive' || /active\s*&\s*passive/i.test(targetTopic || '')) {
-            return /active voice|passive voice|voice|transitive/i.test(combined)
-          }
-          if (micro_topic_id === 'eng_question_tags' || /question\s*tag/i.test(targetTopic || '')) {
-            return /question tag|tag/i.test(combined)
-          }
-          if (micro_topic_id === 'eng_sea_fever' || /sea\s*fever/i.test(targetTopic || '')) {
-            return /sea fever|masefield|tall ship/i.test(combined)
-          }
-          if (micro_topic_id === 'eng_the_comet' || /the\s*comet/i.test(targetTopic || '')) {
-            return /the comet|littleford|heavens/i.test(combined)
-          }
-
-          if (targetTopic) {
-            const targetNorm = targetTopic.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
-            return combined.includes(targetNorm)
-          }
-          if (targetSubj) {
-            const targetNorm = targetSubj.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
-            return combined.includes(targetNorm)
-          }
-          return true
-        })
-        matchCount = filtered.length
-      }
-
-      const curated = getCuratedSubjectQuestions(targetSubj || 'General', targetTopic, micro_topic_id)
-      return Math.max(matchCount + curated.length, curated.length)
+      const curated = getCuratedSubjectQuestions(targetSubj || 'General', targetTopic, microTopicId)
+      return Math.max(matched.length, curated.length)
     } catch (err) {
       console.warn('Error counting available questions:', err)
       const curated = getCuratedSubjectQuestions(subject || 'General', topic, micro_topic_id)
@@ -1852,23 +1930,28 @@ export const practiceService = {
     const mistakeIds = config.mistake_ids || config.mistakes || []
     const isFixTest = config.mode === 'fix_test' || (Array.isArray(mistakeIds) && mistakeIds.length > 0)
 
-    const SELECT_FIELDS = 'id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, macro_topic, micro_topic, micro_topic_id, exam_year, is_pyq'
-    const FALLBACK_FIELDS = 'id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject, tags, unit_name, macro_topic_name, micro_topic_name, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil'
-
     if (isFixTest && mistakeIds.length > 0) {
       try {
-        let { data: mistakeQuestions, error: mErr } = await supabase
+        const { data: mistakeQuestions } = await supabase
           .from('questions')
-          .select(SELECT_FIELDS)
+          .select(VALID_PRACTICE_FIELDS)
           .in('id', mistakeIds)
 
-        if (mErr && (mErr.code === '42703' || String(mErr.message).toLowerCase().includes('column'))) {
-          const fb = await supabase.from('questions').select(FALLBACK_FIELDS).in('id', mistakeIds)
-          mistakeQuestions = fb.data
-        }
-
         if (mistakeQuestions && mistakeQuestions.length > 0) {
-          selected = [...mistakeQuestions]
+          selected = mistakeQuestions.map(q => {
+            const meta = parseQuestionMetadata(q.explanation)
+            return {
+              ...q,
+              subject: q.papers?.subject || meta.unit || 'General Studies',
+              unit_name: meta.unit || 'Targeted Review',
+              macro_topic_name: meta.macro || 'Missed Questions Drill',
+              micro_topic_name: meta.micro || 'Targeted Error Drill',
+              micro_topic_id: null,
+              group_tag: meta.group || config.exam_context || null,
+              exam_year: meta.year || null,
+              is_pyq: Boolean(meta.is_pyq)
+            }
+          })
         }
       } catch (err) {
         console.warn('Error fetching mistake questions for fix test:', err)
@@ -1895,127 +1978,33 @@ export const practiceService = {
 
     // 2. Targeted Unit / Subject / Micro-Topic Practice Mode
     if (selected.length === 0) {
-      let paperIds = []
-      if (config.exam_context) {
-        const { data: examPapers } = await supabase
-          .from('papers')
-          .select('id, subject')
-          .eq('status', 'published')
-          .eq('exam_name', config.exam_context)
-
-        paperIds = (examPapers ?? []).map(p => p.id)
-      }
-
-      let q = supabase
-        .from('questions')
-        .select(SELECT_FIELDS)
-        .not('correct_option', 'is', null)
-
-      if (paperIds.length > 0) {
-        q = q.in('paper_id', paperIds)
-      }
-
       const targetSubject = config.subject && config.subject !== 'All Subjects' ? config.subject : null
       const targetTopic   = config.topic || null
       const microTopicId  = config.micro_topic_id || null
       const targetUnit    = config.unit || null
 
-      if (targetUnit) {
-        const uNum = String(targetUnit).replace(/[^0-9]/g, '')
-        if (uNum) {
-          q = q.or(`unit_tag.eq.Unit ${uNum},unit_tag.eq.${uNum},unit_name.ilike.%Unit ${uNum}%,unit_name.ilike.%${targetSubject || ''}%`)
+      const questions = await fetchVerifiedQuestionsPool(config.exam_context)
+      let candidatePool = questions.filter(q =>
+        matchesPracticeCriteria(q, { targetSubject, targetTopic, microTopicId, targetUnit })
+      ).map(q => {
+        const meta = parseQuestionMetadata(q.explanation)
+        return {
+          ...q,
+          subject: q.papers?.subject || meta.unit || targetSubject || 'General Studies',
+          unit_name: meta.unit || (targetUnit ? `Unit ${targetUnit}` : 'Unit Practice'),
+          unit_tag: meta.unit || (targetUnit ? `Unit ${targetUnit}` : null),
+          macro_topic_name: meta.macro || targetTopic || 'Core Subject',
+          micro_topic_name: meta.micro || targetTopic || 'General Topic',
+          micro_topic_id: microTopicId || null,
+          group_tag: meta.group || config.exam_context || null,
+          exam_year: meta.year || null,
+          is_pyq: Boolean(meta.is_pyq)
         }
-      } else if (targetSubject) {
-        q = q.or(`subject.ilike.%${targetSubject}%,unit_name.ilike.%${targetSubject}%`)
-      }
+      })
 
-      let { data: pool, error: poolErr } = await q.limit(400)
-      if (!pool || pool.length === 0 || (poolErr && (poolErr.code === '42703' || String(poolErr.message).toLowerCase().includes('column')))) {
-        let fallbackQ = supabase.from('questions').select(FALLBACK_FIELDS).not('correct_option', 'is', null)
-        if (paperIds.length > 0) fallbackQ = fallbackQ.in('paper_id', paperIds)
-        const fbRes = await fallbackQ.limit(400)
-        pool = fbRes.data
-      }
-      let candidatePool = pool ? [...pool] : []
-
-      if (targetSubject || targetTopic || microTopicId || targetUnit) {
-        const isLanguageReq = /tamil|english|language|இலக்கணம்|மொழி/i.test(targetSubject || targetTopic || '')
-        const isAptitudeReq = /aptitude|mental\s*ability|math|reasoning|கணிதம்/i.test(targetSubject || targetTopic || '')
-        const isGeoReq      = /geography|புவியியல்/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '3'
-        const isScienceReq  = /science|அறிவியல்|physics|chemistry|biology/i.test(targetSubject || targetTopic || '') || String(targetUnit) === '1'
-
-        candidatePool = candidatePool.filter(q => {
-          const qText = (q.question_text || '') + ' ' + (q.explanation || '')
-          const qSubj = (q.subject || '') + ' ' + (q.unit_name || '') + ' ' + (q.macro_topic_name || '') + ' ' + (q.micro_topic_name || '')
-
-          // STRICTLY filter out Tamil language questions from non-language subjects
-          if (!isLanguageReq) {
-            if (/பகுதி\s*அ|இலக்கணம்|பொருத்துக|பிரித்தெழுதுக|சந்தேகம்|நூல்\s*ஆசிரியர்|அகரவரிசை/i.test(qText)) return false
-            if (/general\s*tamil|general\s*english|பொதுத்\s*தமிழ்/i.test(qSubj)) return false
-          }
-
-          // STRICTLY filter out aptitude/probability questions from non-aptitude subjects
-          if (!isAptitudeReq) {
-            if (/probability|dice|cards|simple\s*interest|compound\s*interest|ratio|time\s*and\s*work|நிகழ்தகவு|வட்டி|விகிதம்/i.test(qText)) return false
-            if (/aptitude|mental\s*ability/i.test(qSubj)) return false
-          }
-
-          // If a specific micro-topic is targeted (e.g. Tamil Nadu Rivers):
-          if (targetTopic || microTopicId) {
-            const combined = (qSubj + ' ' + qText).toLowerCase()
-
-            if (microTopicId === 'geo_tn_rivers' || /tamil\s*nadu\s*rivers|cauvery|vaigai|thamirabarani/i.test(targetTopic)) {
-              if (/everest|himalaya|mountain|monsoon|climate|rainfall|el-nino/i.test(combined)) return false
-              return /cauvery|vaigai|thamirabarani|bhavani|mettur|river|reservoir|dam|காவிரி|வைகை|தாமிரபரணி|ஆறு/i.test(combined)
-            }
-            if (microTopicId === 'geo_himalayan_rivers' || /himalayan\s*rivers|ganga|indus/i.test(targetTopic)) {
-              return /ganga|indus|brahmaputra|gangotri|bhagirathi|alakananda|mansarovar|யமுனை|கங்கை|சிந்து/i.test(combined)
-            }
-            if (microTopicId === 'geo_himalayan_mountains' || /himalayan\s*mountains/i.test(targetTopic)) {
-              if (/river|cauvery|vaigai|monsoon|rainfall/i.test(combined)) return false
-              return /himalaya|everest|k2|siachen|peak|shivalik|mountain|சிகரம்|இமயமலை/i.test(combined)
-            }
-            if (microTopicId === 'geo_peninsular_plateau' || /peninsular\s*plateau/i.test(targetTopic)) {
-              return /plateau|deccan|anamudi|doddabetta|western ghats|eastern ghats|பீடபூமி|தொடர்ச்சி மலை/i.test(combined)
-            }
-            if (microTopicId === 'geo_coastal_plains' || /coastal\s*plains/i.test(targetTopic)) {
-              return /coast|coromandel|malabar|pichavaram|pulicat|chilika|mangrove|கடற்கரை/i.test(combined)
-            }
-            if (microTopicId === 'geo_monsoon_mechanism' || microTopicId === 'geo_elnino_lanina' || /monsoon|climate|el-nino/i.test(targetTopic)) {
-              if (/river|cauvery|vaigai|mountain|everest/i.test(combined)) return false
-              return /monsoon|climate|rainfall|el-nino|la-nina|itcz|பருவமழை|மழை/i.test(combined)
-            }
-            if (microTopicId === 'eng_active_passive' || /active\s*&\s*passive/i.test(targetTopic)) {
-              return /active voice|passive voice|voice|transitive/i.test(combined)
-            }
-            if (microTopicId === 'eng_question_tags' || /question\s*tag/i.test(targetTopic)) {
-              return /question tag|tag/i.test(combined)
-            }
-            if (microTopicId === 'eng_sea_fever' || /sea\s*fever/i.test(targetTopic)) {
-              return /sea fever|masefield|tall ship/i.test(combined)
-            }
-            if (microTopicId === 'eng_the_comet' || /the\s*comet/i.test(targetTopic)) {
-              return /the comet|littleford|heavens/i.test(combined)
-            }
-
-            const targetNorm = targetTopic.toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
-            return combined.includes(targetNorm)
-          }
-
-          if (isGeoReq) {
-            return /geography|புவியியல்|river|climate|soil|monsoon|mountain|forest|latitude|plateau|tropic/i.test(qSubj + ' ' + qText)
-          }
-
-          if (isScienceReq) {
-            return /science|அறிவியல்|physics|chemistry|biology|planet|cell|element|vitamin|acid|force|energy/i.test(qSubj + ' ' + qText)
-          }
-
-          const targetNorm = (targetSubject || '').toLowerCase().replace(/unit\s*\d+\s*[-—:]*\s*/i, '').trim()
-          return (qSubj + ' ' + qText).toLowerCase().includes(targetNorm)
-        })
-
-        // Supplement candidate pool with high-yield curated questions for the exact topic
-        const curated = getCuratedSubjectQuestions(targetSubject, targetTopic, microTopicId)
+      // Supplement candidate pool with high-yield curated questions for the exact topic
+      if (candidatePool.length === 0) {
+        const curated = getCuratedSubjectQuestions(targetSubject || 'General', targetTopic, microTopicId)
         curated.forEach(cq => {
           if (!candidatePool.some(p => p.id === cq.id || p.question_text === cq.question_text)) {
             candidatePool.push(cq)
