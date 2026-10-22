@@ -1,19 +1,36 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   HelpCircle, FileText, Sparkles, Filter, Search, Layers,
   RefreshCw, Download, Plus, CheckCircle2, AlertCircle, ChevronDown,
   ChevronRight, Eye, Edit2, Trash2, BookOpen, ExternalLink,
-  Loader2, X, Check, BookMarked, Upload, Database, Tag, ShieldCheck
+  Loader2, X, Check, BookMarked, Upload, Database, Tag, ShieldCheck,
+  Table, AlertTriangle, ArrowRight, Save
 } from 'lucide-react'
 import { questionService } from '../../services/questionService'
 import { paperService } from '../../services/paperService'
 import { supabase } from '../../lib/supabase'
 import { useApp } from '../../contexts/AppContext'
-import { OFFICIAL_SYLLABUS_UNITS, normalizeUnitName } from '../../components/admin/TopicSeparationSummary'
-import { CANONICAL_SYLLABUS_TAXONOMY } from '../../services/syllabusAnalyticsService'
+import {
+  GROUP1_MASTER_TAXONOMY,
+  GROUP2_MASTER_TAXONOMY,
+  GROUP4_MASTER_TAXONOMY,
+  OFFICIAL_200Q_BLUEPRINTS,
+  validateQuestionAgainstMasterTaxonomy,
+  computeQuestionContentHash,
+  normalizeTo29Columns,
+  generateMasterTaxonomyCsv,
+  generate29ColumnTemplateCsv,
+  normalizeExamTag,
+} from '../../services/masterTaxonomyService'
 import AiPdfTab from '../../components/admin/AiPdfTab'
 import { TextPdfTab } from '../../components/admin/TextPdfTab'
+
+const GROUP_CONFIGS = [
+  { id: 'TNPSC_GROUP_1', label: 'TNPSC Group 1', tag: 'Group 1', blueprintKey: 'TNPSC_GROUP_1', totalMocksQuota: 200 },
+  { id: 'TNPSC_GROUP_2', label: 'TNPSC Group 2 & 2A', tag: 'Group 2', blueprintKey: 'TNPSC_GROUP_2_TAMIL', totalMocksQuota: 200 },
+  { id: 'TNPSC_GROUP_4', label: 'TNPSC Group 4', tag: 'Group 4', blueprintKey: 'TNPSC_GROUP_4', totalMocksQuota: 200 },
+]
 
 export function AdminExtractedQuestionsPage() {
   const { toast } = useApp()
@@ -22,755 +39,792 @@ export function AdminExtractedQuestionsPage() {
   const [questions, setQuestions] = useState([])
   const [papers, setPapers] = useState([])
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedUnit, setSelectedUnit] = useState('all')
-  const [selectedPaperId, setSelectedPaperId] = useState('all')
-  const [selectedLanguage, setSelectedLanguage] = useState('all') // 'all' | 'tamil' | 'english'
-  const [viewMode, setViewMode] = useState('table') // 'table' | 'separated'
+  // Top Three-Way Group Switcher: 'TNPSC_GROUP_1' | 'TNPSC_GROUP_2' | 'TNPSC_GROUP_4'
+  const [selectedGroupTag, setSelectedGroupTag] = useState('TNPSC_GROUP_1')
 
-  // Pagination
+  // Sub-filter pills: 'all' | 'vina' | 'pyq'
+  const [sourceFilter, setSourceFilter] = useState('all')
+
+  // Search & Pagination
+  const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
+  const [pageSize, setPageSize] = useState(20)
+
+  // Layout view mode: 'grid29' | 'hierarchy'
+  const [layoutView, setLayoutView] = useState('grid29')
+
+  // Inline Cell Editing State: { qId, field, value }
+  const [editingCell, setEditingCell] = useState(null)
+  const [cellSaving, setCellSaving] = useState(false)
 
   // Modals state
   const [viewingQuestion, setViewingQuestion] = useState(null)
-  const [editingTopicQ, setEditingTopicQ] = useState(null)
-  const [savingTopic, setSavingTopic] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showBulkCsvModal, setShowBulkCsvModal] = useState(false)
   const [uploadTab, setUploadTab] = useState('ai') // 'ai' | 'text'
   const [selectedTargetPaperId, setSelectedTargetPaperId] = useState('')
-  const [isCreatingNewPaper, setIsCreatingNewPaper] = useState(false)
-  const [newPaperTitle, setNewPaperTitle] = useState('')
-  const [creatingPaper, setCreatingPaper] = useState(false)
 
-  // Batch auto-categorize state
-  const [batchSaving, setBatchSaving] = useState(false)
-  const [batchProgress, setBatchProgress] = useState(null)
+  // Bulk CSV Validation State
+  const [csvFile, setCsvFile] = useState(null)
+  const [csvParsing, setCsvParsing] = useState(false)
+  const [csvValidationResults, setCsvValidationResults] = useState(null)
+  const [csvImporting, setCsvImporting] = useState(false)
 
-  // Load all questions from database
+  // Load questions and papers
   useEffect(() => {
     loadData()
-
-    // ── Supabase Realtime Listener ──────────────────────────────────────
-    let channel = null
-    try {
-      channel = supabase
-        .channel('admin-questions-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'questions' },
-          (payload) => {
-            console.log('[Realtime] Questions table updated:', payload.eventType)
-            loadData()
-          }
-        )
-        .subscribe()
-    } catch (e) {
-      console.warn('Realtime subscription note:', e)
-    }
-
-    return () => {
-      if (channel) supabase.removeChannel(channel)
-    }
   }, [])
 
   async function loadData() {
     setLoading(true)
     try {
       const res = await questionService.getAllExtractedQuestionsForAdmin({ limit: 4000 })
-      setQuestions(res.questions || [])
+      const rawList = res.questions || []
+      const normalizedList = rawList.map((q, idx) => normalizeTo29Columns(q, idx + 1))
+      setQuestions(normalizedList)
       setPapers(res.papers || [])
       if (res.papers?.length > 0 && !selectedTargetPaperId) {
         setSelectedTargetPaperId(res.papers[0].id)
       }
     } catch (err) {
       console.error('[AdminExtractedQuestionsPage] Load error:', err)
-      toast.error('Failed to load extracted questions: ' + err.message)
+      toast.error('Failed to load questions: ' + err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  // Unit breakdown stats
-  const unitStats = useMemo(() => {
-    const map = {}
-    OFFICIAL_SYLLABUS_UNITS.forEach(u => {
-      map[u.unit_name] = { ...u, count: 0 }
-    })
+  // Active Master Taxonomy for the currently selected group
+  const activeMasterTaxonomy = useMemo(() => {
+    if (selectedGroupTag === 'TNPSC_GROUP_1') return GROUP1_MASTER_TAXONOMY
+    if (selectedGroupTag === 'TNPSC_GROUP_2') return GROUP2_MASTER_TAXONOMY
+    return GROUP4_MASTER_TAXONOMY
+  }, [selectedGroupTag])
 
-    questions.forEach(q => {
-      const canonical = normalizeUnitName(q.unit_name)
-      if (map[canonical]) {
-        map[canonical].count++
-      } else {
-        if (!map['Other / General']) {
-          map['Other / General'] = {
-            id: 'other',
-            unit_name: 'Other / General',
-            shortName: 'Other',
-            count: 0,
-            badgeColor: 'bg-slate-100 text-slate-700 border-slate-200',
-            dotColor: 'bg-slate-400',
-          }
-        }
-        map['Other / General'].count++
+  // Active Blueprint for the health monitor
+  const activeBlueprint = useMemo(() => {
+    return OFFICIAL_200Q_BLUEPRINTS[selectedGroupTag] || OFFICIAL_200Q_BLUEPRINTS.TNPSC_GROUP_1
+  }, [selectedGroupTag])
+
+  // Filter questions belonging to selected exam group and source type
+  const groupFilteredQuestions = useMemo(() => {
+    return questions.filter(q => {
+      const qTag = normalizeExamTag(q.exam_tag || q.group_tag)
+      if (qTag !== selectedGroupTag) return false
+
+      if (sourceFilter === 'vina') {
+        if (q.source_type !== 'VINA') return false
+      } else if (sourceFilter === 'pyq') {
+        if (q.source_type !== 'PYQ') return false
       }
-    })
-
-    return Object.values(map)
-  }, [questions])
-
-  // Filtered Questions List
-  const filteredQuestions = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim()
-
-    return questions.filter(item => {
-      // Unit filter
-      if (selectedUnit !== 'all') {
-        const canonical = normalizeUnitName(item.unit_name)
-        if (canonical !== selectedUnit) return false
-      }
-
-      // Paper filter
-      if (selectedPaperId !== 'all') {
-        if (item.paper_id !== selectedPaperId) return false
-      }
-
-      // Language filter
-      if (selectedLanguage === 'tamil') {
-        if (!item.question_text_tamil && !item.option_a_tamil) return false
-      } else if (selectedLanguage === 'english') {
-        if (!item.question_text) return false
-      }
-
-      // Search query
-      if (q) {
-        const textEn = (item.question_text || '').toLowerCase()
-        const textTa = (item.question_text_tamil || '').toLowerCase()
-        const optA = (item.option_a || '').toLowerCase()
-        const optB = (item.option_b || '').toLowerCase()
-        const optC = (item.option_c || '').toLowerCase()
-        const optD = (item.option_d || '').toLowerCase()
-        const expl = (item.explanation || '').toLowerCase()
-        const unit = (item.unit_name || '').toLowerCase()
-        const macro = (item.macro_topic_name || '').toLowerCase()
-        const micro = (item.micro_topic_name || '').toLowerCase()
-        const paper = (item.paper_title || '').toLowerCase()
-        const sourcePdf = (item.source_pdf || '').toLowerCase()
-
-        const match =
-          textEn.includes(q) ||
-          textTa.includes(q) ||
-          optA.includes(q) ||
-          optB.includes(q) ||
-          optC.includes(q) ||
-          optD.includes(q) ||
-          expl.includes(q) ||
-          unit.includes(q) ||
-          macro.includes(q) ||
-          micro.includes(q) ||
-          paper.includes(q) ||
-          sourcePdf.includes(q)
-
-        if (!match) return false
-      }
-
       return true
     })
-  }, [questions, searchQuery, selectedUnit, selectedPaperId, selectedLanguage])
+  }, [questions, selectedGroupTag, sourceFilter])
 
-  // Paginated Questions
+  // Filter by search query
+  const searchFilteredQuestions = useMemo(() => {
+    if (!searchQuery.trim()) return groupFilteredQuestions
+    const q = searchQuery.toLowerCase().trim()
+
+    return groupFilteredQuestions.filter(item => {
+      const textEn = (item.en_question_text || '').toLowerCase()
+      const textTa = (item.ta_question_text || '').toLowerCase()
+      const qId = (item.question_id || '').toLowerCase()
+      const uCode = (item.unit_code || '').toLowerCase()
+      const macro = (item.macro_topic || '').toLowerCase()
+      const micro = (item.micro_topic || '').toLowerCase()
+
+      return (
+        textEn.includes(q) ||
+        textTa.includes(q) ||
+        qId.includes(q) ||
+        uCode.includes(q) ||
+        macro.includes(q) ||
+        micro.includes(q)
+      )
+    })
+  }, [groupFilteredQuestions, searchQuery])
+
+  // Paginated questions for grid
   const paginatedQuestions = useMemo(() => {
     const start = (currentPage - 1) * pageSize
-    return filteredQuestions.slice(start, start + pageSize)
-  }, [filteredQuestions, currentPage, pageSize])
+    return searchFilteredQuestions.slice(start, start + pageSize)
+  }, [searchFilteredQuestions, currentPage, pageSize])
 
-  const totalPages = Math.ceil(filteredQuestions.length / pageSize) || 1
+  const totalPages = Math.ceil(searchFilteredQuestions.length / pageSize) || 1
 
-  // Handle Page Change
-  const handlePageChange = (p) => {
-    if (p >= 1 && p <= totalPages) {
-      setCurrentPage(p)
-      window.scrollTo({ top: 300, behavior: 'smooth' })
-    }
-  }
-
-  // Grouped questions by topic for the "Separated by Topic" view
-  const groupedByTopic = useMemo(() => {
-    const groups = {}
-    filteredQuestions.forEach((q) => {
-      const canonical = normalizeUnitName(q.unit_name)
-      if (!groups[canonical]) groups[canonical] = []
-      groups[canonical].push(q)
+  // ── Inventory & Blueprint Health Monitor Calculations ───────────────────────
+  const healthMonitor = useMemo(() => {
+    const pool = groupFilteredQuestions
+    const unitCounts = {}
+    activeBlueprint.forEach(b => {
+      unitCounts[b.unit_code] = 0
     })
-    return groups
-  }, [filteredQuestions])
 
-  // Save updated topic & 5 metadata identifiers
-  async function handleSaveTopic(e) {
-    e.preventDefault()
-    if (!editingTopicQ) return
-    setSavingTopic(true)
+    pool.forEach(q => {
+      const uc = (q.unit_code || '').toUpperCase()
+      if (unitCounts[uc] !== undefined) {
+        unitCounts[uc]++
+      }
+    })
+
+    let minFullMocksPossible = 9999
+    const unitBreakdown = activeBlueprint.map(b => {
+      const available = unitCounts[b.unit_code] || 0
+      const quota = b.quota || 1
+      const mocksPossible = Math.floor(available / quota)
+      if (mocksPossible < minFullMocksPossible) {
+        minFullMocksPossible = mocksPossible
+      }
+      return {
+        unit_code: b.unit_code,
+        title: b.title,
+        quota,
+        available,
+        mocksPossible,
+        isDeficit: available < quota,
+      }
+    })
+
+    if (minFullMocksPossible === 9999) minFullMocksPossible = 0
+
+    return {
+      totalQuestions: pool.length,
+      vinaCount: pool.filter(q => q.source_type === 'VINA').length,
+      pyqCount: pool.filter(q => q.source_type === 'PYQ').length,
+      minFullMocksPossible,
+      unitBreakdown,
+    }
+  }, [groupFilteredQuestions, activeBlueprint])
+
+  // ── Inline Cell Editing Handler ─────────────────────────────────────────────
+  async function handleCellSave(q, field, newValue) {
+    if (q[field] === newValue) {
+      setEditingCell(null)
+      return
+    }
+
+    setCellSaving(true)
     try {
-      await questionService.updateQuestionTopic(editingTopicQ.id, {
-        unitName: editingTopicQ.unit_name,
-        macroTopicName: editingTopicQ.macro_topic_name,
-        microTopicName: editingTopicQ.micro_topic_name,
-        groupTag: editingTopicQ.group_tag || 'Group 4',
-        examYear: editingTopicQ.exam_year || '2024',
-        isPyq: Boolean(editingTopicQ.is_pyq),
-      })
+      const updates = { [field]: newValue }
+
+      // Also compute content_hash if question text changed
+      if (field === 'en_question_text' || field === 'ta_question_text') {
+        const en = field === 'en_question_text' ? newValue : q.en_question_text
+        const ta = field === 'ta_question_text' ? newValue : q.ta_question_text
+        updates.content_hash = await computeQuestionContentHash(en, ta)
+      }
+
+      // Map to DB column names
+      const dbUpdates = {}
+      if (field === 'en_question_text') dbUpdates.question_text = newValue
+      else if (field === 'ta_question_text') dbUpdates.question_text_tamil = newValue
+      else if (field === 'en_option_a') dbUpdates.option_a = newValue
+      else if (field === 'en_option_b') dbUpdates.option_b = newValue
+      else if (field === 'en_option_c') dbUpdates.option_c = newValue
+      else if (field === 'en_option_d') dbUpdates.option_d = newValue
+      else if (field === 'ta_option_a') dbUpdates.option_a_tamil = newValue
+      else if (field === 'ta_option_b') dbUpdates.option_b_tamil = newValue
+      else if (field === 'ta_option_c') dbUpdates.option_c_tamil = newValue
+      else if (field === 'ta_option_d') dbUpdates.option_d_tamil = newValue
+      else if (field === 'answer_key') dbUpdates.correct_option = newValue
+      else if (field === 'en_explanation') dbUpdates.explanation = newValue
+      else if (field === 'ta_explanation') dbUpdates.explanation_tamil = newValue
+      else if (field === 'unit_code') {
+        dbUpdates.unit_code = newValue
+        dbUpdates.unit_tag = newValue
+      } else if (field === 'macro_topic') {
+        dbUpdates.macro_topic = newValue
+        dbUpdates.macro_topic_name = newValue
+      } else if (field === 'micro_topic') {
+        dbUpdates.micro_topic = newValue
+        dbUpdates.micro_topic_name = newValue
+      } else if (field === 'difficulty_level') dbUpdates.difficulty_level = newValue
+      else if (field === 'source_type') {
+        dbUpdates.source_type = newValue
+        dbUpdates.is_pyq = newValue === 'PYQ'
+      }
+
+      // Save to Supabase
+      if (q.id) {
+        await questionService.updateQuestion(q.id, dbUpdates)
+      }
 
       // Update local state
-      setQuestions(prev =>
-        prev.map(q =>
-          q.id === editingTopicQ.id
-            ? {
-                ...q,
-                unit_name: editingTopicQ.unit_name,
-                macro_topic_name: editingTopicQ.macro_topic_name,
-                micro_topic_name: editingTopicQ.micro_topic_name,
-                group_tag: editingTopicQ.group_tag,
-                exam_year: editingTopicQ.exam_year,
-                is_pyq: editingTopicQ.is_pyq,
-                has_db_taxonomy: true,
-              }
-            : q
-        )
+      setQuestions(prev => prev.map(item => {
+        if (item.question_id === q.question_id) {
+          return { ...item, ...updates }
+        }
+        return item
+      }))
+
+      toast.success(`Saved ${field} successfully!`)
+    } catch (err) {
+      console.error('Cell save error:', err)
+      toast.error('Failed to save update: ' + err.message)
+    } finally {
+      setCellSaving(false)
+      setEditingCell(null)
+    }
+  }
+
+  // ── Bulk CSV Upload with Strict Taxonomy Validation & Deduplication ─────────
+  async function handleCsvFileSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCsvFile(file)
+    setCsvParsing(true)
+    setCsvValidationResults(null)
+
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0)
+      if (lines.length <= 1) throw new Error('CSV file is empty or missing data rows.')
+
+      // Parse headers
+      const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase())
+
+      // Existing PYQ hashes to enforce Deduplication Gate
+      const existingPyqHashes = new Set(
+        questions.filter(q => q.source_type === 'PYQ' && q.content_hash).map(q => q.content_hash)
       )
 
-      toast.success('Question topic & metadata updated and saved to database successfully!')
-      setEditingTopicQ(null)
-    } catch (err) {
-      toast.error('Failed to update topic: ' + err.message)
-    } finally {
-      setSavingTopic(false)
-    }
-  }
+      const parsedRows = []
+      const validationErrors = []
+      let validCount = 0
+      let duplicateCount = 0
 
-  // Delete question
-  async function handleDeleteQuestion(qId, paperId) {
-    if (!confirm('Are you sure you want to delete this extracted question from the database?')) return
-    try {
-      await questionService.deleteQuestion(qId, paperId)
-      setQuestions(prev => prev.filter(q => q.id !== qId))
-      toast.success('Question deleted from database.')
-    } catch (err) {
-      toast.error('Failed to delete question: ' + err.message)
-    }
-  }
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i]
+        // Basic CSV split with quote handling
+        const cells = []
+        let current = ''
+        let inQuotes = false
+        for (let c = 0; c < line.length; c++) {
+          const char = line[c]
+          if (char === '"' || char === "'") inQuotes = !inQuotes
+          else if (char === ',' && !inQuotes) {
+            cells.push(current.trim().replace(/^["']|["']$/g, ''))
+            current = ''
+          } else {
+            current += char
+          }
+        }
+        cells.push(current.trim().replace(/^["']|["']$/g, ''))
 
-  // Batch auto-classify and save topics into Supabase
-  async function handleBatchSaveTopics() {
-    setBatchSaving(true)
-    setBatchProgress('Analyzing questions & saving topics to database...')
-    try {
-      const res = await questionService.batchClassifyAndSaveTopics(p => {
-        setBatchProgress(`Saved ${p.updatedCount} of ${p.total} questions to database...`)
+        const rowObj = {}
+        rawHeaders.forEach((h, idx) => {
+          rowObj[h] = cells[idx] || ''
+        })
+
+        const normalized = normalizeTo29Columns(rowObj, i)
+        const hash = await computeQuestionContentHash(normalized.en_question_text, normalized.ta_question_text)
+        normalized.content_hash = hash
+
+        // 1. Strict Foreign-Key & Taxonomy Validation
+        const valRes = validateQuestionAgainstMasterTaxonomy(normalized, selectedGroupTag)
+
+        // 2. Deduplication Gate: VINA question cannot match PYQ hash
+        let isDuplicate = false
+        if (normalized.source_type === 'VINA' && existingPyqHashes.has(hash)) {
+          isDuplicate = true
+          duplicateCount++
+          valRes.errors.push('Deduplication Gate: This VINA synthetic question matches an official PYQ question text.')
+          valRes.isValid = false
+        }
+
+        if (valRes.isValid) {
+          validCount++
+        } else {
+          validationErrors.push({ rowNumber: i + 1, errors: valRes.errors, row: normalized })
+        }
+
+        parsedRows.push({
+          rowNumber: i + 1,
+          data: normalized,
+          isValid: valRes.isValid,
+          errors: valRes.errors,
+          isDuplicate,
+        })
+      }
+
+      setCsvValidationResults({
+        totalRows: lines.length - 1,
+        validCount,
+        errorCount: validationErrors.length,
+        duplicateCount,
+        rows: parsedRows,
+        errors: validationErrors,
       })
-      toast.success(`Successfully saved syllabus topics for ${res.updatedCount} questions into database!`)
+    } catch (err) {
+      console.error('CSV parse error:', err)
+      toast.error('Failed to parse CSV: ' + err.message)
+    } finally {
+      setCsvParsing(false)
+    }
+  }
+
+  async function handleConfirmImportValidRows() {
+    if (!csvValidationResults || csvValidationResults.validCount === 0) {
+      toast.error('No valid rows available to import.')
+      return
+    }
+
+    setCsvImporting(true)
+    try {
+      const validQuestions = csvValidationResults.rows
+        .filter(r => r.isValid)
+        .map(r => r.data)
+
+      // Use target paper or create batch paper
+      const targetPaper = selectedTargetPaperId || papers[0]?.id
+      if (!targetPaper) {
+        throw new Error('Please select or create a question paper to link these questions.')
+      }
+
+      await questionService.saveQuestionsToSupabase(targetPaper, validQuestions, false)
+
+      toast.success(`Successfully imported ${validQuestions.length} verified questions into the database!`)
+      setShowBulkCsvModal(false)
+      setCsvFile(null)
+      setCsvValidationResults(null)
       await loadData()
     } catch (err) {
-      toast.error('Batch save error: ' + err.message)
+      console.error('Import error:', err)
+      toast.error('Failed to import questions: ' + err.message)
     } finally {
-      setBatchSaving(false)
-      setBatchProgress(null)
+      setCsvImporting(false)
     }
   }
 
-  // Export to CSV
-  function handleExportCSV() {
-    if (filteredQuestions.length === 0) {
-      toast.error('No questions to export.')
+  // ── CSV Download Handlers ───────────────────────────────────────────────────
+  function handleDownloadTaxonomyCsv(groupKey) {
+    let list = GROUP4_MASTER_TAXONOMY
+    let filename = 'Group4_Master_Taxonomy.csv'
+    if (groupKey === 'TNPSC_GROUP_1') {
+      list = GROUP1_MASTER_TAXONOMY
+      filename = 'Group1_Master_Taxonomy.csv'
+    } else if (groupKey === 'TNPSC_GROUP_2') {
+      list = GROUP2_MASTER_TAXONOMY
+      filename = 'Group2_Master_Taxonomy.csv'
+    }
+
+    const csvContent = generateMasterTaxonomyCsv(list)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Downloaded ${filename}`)
+  }
+
+  function handleDownloadTemplateCsv() {
+    const csvContent = generate29ColumnTemplateCsv()
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '29_Column_Question_Template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Downloaded 29-Column CSV Template')
+  }
+
+  function handleExportQuestionsCsv() {
+    if (searchFilteredQuestions.length === 0) {
+      toast.error('No questions available to export.')
       return
     }
 
     const headers = [
-      'ID', 'Paper Title', 'Source PDF', 'Question Number',
-      'Syllabus Unit', 'Macro Topic', 'Micro Topic',
-      'Question Text (English)', 'Question Text (Tamil)',
-      'Option A', 'Option B', 'Option C', 'Option D',
-      'Correct Option', 'Explanation'
+      'question_id', 'content_hash', 'exam_tag', 'source_type', 'year',
+      'subject_name', 'unit_code', 'macro_topic', 'micro_topic', 'sub_topic',
+      'difficulty_level', 'question_type', 'cognitive_skill', 'ideal_time_seconds',
+      'en_question_text', 'en_option_a', 'en_option_b', 'en_option_c', 'en_option_d', 'en_option_e',
+      'ta_question_text', 'ta_option_a', 'ta_option_b', 'ta_option_c', 'ta_option_d', 'ta_option_e',
+      'answer_key', 'en_explanation', 'ta_explanation'
     ]
 
-    const escapeCsv = (str) => {
-      if (!str) return '""'
-      const clean = String(str).replace(/"/g, '""')
-      return `"${clean}"`
-    }
+    const escapeCell = (v) => `"${String(v || '').replace(/"/g, '""')}"`
+    const rows = searchFilteredQuestions.map(q => headers.map(h => escapeCell(q[h])).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
 
-    const rows = filteredQuestions.map(q => [
-      q.id,
-      escapeCsv(q.paper_title),
-      escapeCsv(q.source_pdf_display),
-      q.question_number,
-      escapeCsv(q.unit_name),
-      escapeCsv(q.macro_topic_name),
-      escapeCsv(q.micro_topic_name),
-      escapeCsv(q.question_text),
-      escapeCsv(q.question_text_tamil),
-      escapeCsv(q.option_a),
-      escapeCsv(q.option_b),
-      escapeCsv(q.option_c),
-      escapeCsv(q.option_d),
-      q.correct_option,
-      escapeCsv(q.explanation)
-    ].join(','))
-
-    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\n')
-    const encodedUri = encodeURI(csvContent)
-    const link = document.createElement('a')
-    link.setAttribute('href', encodedUri)
-    link.setAttribute('download', `extracted_questions_${new Date().toISOString().slice(0, 10)}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    toast.success(`Exported ${filteredQuestions.length} questions to CSV!`)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${selectedGroupTag}_Questions_Export.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${searchFilteredQuestions.length} questions to CSV`)
   }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
-      {/* ── Top Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* ── 1. Header & Top Controls ────────────────────────────────────────── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-subtle shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#635bff] to-[#8b5cf6] text-white flex items-center justify-center shadow-subtle">
               <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-body-text">
-                Extracted Questions Repository
-              </h1>
-              <p className="text-xs text-body-secondary mt-0.5">
-                Total questions extracted across all uploaded PDFs &amp; papers, categorized by subject and syllabus topics
-              </p>
-            </div>
+            </span>
+            <h1 className="text-2xl font-black text-body-text tracking-tight">
+              Admin Question Bank &amp; Taxonomy Control
+            </h1>
           </div>
+          <p className="text-xs text-body-secondary mt-1 max-w-3xl">
+            29-Column interactive spreadsheet with strict master taxonomy validation, SHA-256 deduplication gate, and live 200-question blueprint health monitor.
+          </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={loadData}
-            disabled={loading}
-            className="p-2 bg-white hover:bg-slate-50 text-body-text border border-surface-border rounded-xl text-xs font-bold transition-colors shadow-subtle"
-            title="Refresh question bank"
+            onClick={() => setShowBulkCsvModal(true)}
+            className="px-3.5 py-2 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle transition-all"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-tnpsc-brand' : ''}`} />
-          </button>
-
-          <button
-            onClick={handleBatchSaveTopics}
-            disabled={batchSaving || loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all shadow-subtle disabled:opacity-50"
-            title="Auto-classifies untagged questions and writes syllabus taxonomy tags permanently into the database"
-          >
-            {batchSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-            <span>{batchSaving ? (batchProgress || 'Saving to DB…') : 'Save Topics in DB'}</span>
-          </button>
-
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-body-text border border-surface-border rounded-xl text-xs font-bold transition-colors shadow-subtle"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-500" />
-            <span>Export CSV</span>
+            <Upload className="w-3.5 h-3.5" />
+            <span>Bulk Upload CSV (Strict Validation)</span>
           </button>
 
           <button
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white rounded-xl text-xs font-bold shadow-brand transition-all"
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle transition-all"
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Extract New PDF</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>AI / PDF Text Ingestion</span>
+          </button>
+
+          <button
+            onClick={handleExportQuestionsCsv}
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-surface-border text-body-text rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      {/* ── KPI Stat Cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        <div className="bg-white rounded-2xl border border-surface-border p-4 shadow-subtle">
-          <p className="text-[11px] font-bold text-body-secondary uppercase tracking-wider">Total Questions Extracted</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-body-text">{questions.length}</span>
-            <span className="text-[11px] font-semibold text-emerald-600">in database</span>
-          </div>
-          <p className="text-[10px] text-body-secondary mt-1">From all admin uploaded PDFs</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-surface-border p-4 shadow-subtle">
-          <p className="text-[11px] font-bold text-body-secondary uppercase tracking-wider">Source Papers / PDFs</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-body-text">{papers.length}</span>
-            <span className="text-[11px] font-semibold text-indigo-600">papers linked</span>
-          </div>
-          <p className="text-[10px] text-body-secondary mt-1">Active question papers</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-surface-border p-4 shadow-subtle">
-          <p className="text-[11px] font-bold text-body-secondary uppercase tracking-wider">Syllabus Units Covered</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-body-text">
-              {unitStats.filter(u => u.count > 0).length} / {OFFICIAL_SYLLABUS_UNITS.length}
-            </span>
-            <span className="text-[11px] font-semibold text-purple-600">units</span>
-          </div>
-          <p className="text-[10px] text-body-secondary mt-1">Separated by canonical subject</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-surface-border p-4 shadow-subtle">
-          <p className="text-[11px] font-bold text-body-secondary uppercase tracking-wider">Filtered View Count</p>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-black text-tnpsc-brand">{filteredQuestions.length}</span>
-            <span className="text-[11px] font-semibold text-body-secondary">questions</span>
-          </div>
-          <p className="text-[10px] text-body-secondary mt-1">
-            {selectedUnit === 'all' ? 'All topics shown' : selectedUnit.split(':')[0]}
-          </p>
-        </div>
-      </div>
-
-      {/* ── Subject / Topic Separation Cards (Horizontal Grid) ─────────────── */}
-      <div className="bg-white rounded-2xl border border-surface-border p-4 sm:p-5 shadow-subtle space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-tnpsc-brand" />
-            <h2 className="text-xs sm:text-sm font-bold text-body-text">
-              Questions Separated by Subject &amp; Syllabus Topic
-            </h2>
-          </div>
-          {selectedUnit !== 'all' && (
-            <button
-              onClick={() => setSelectedUnit('all')}
-              className="text-[11px] font-bold text-tnpsc-brand hover:underline flex items-center gap-1"
-            >
-              <X className="w-3 h-3" />
-              Show All Subjects
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 pt-1">
-          {unitStats.map((u) => {
-            const isSelected = selectedUnit === u.unit_name
-            const pct = questions.length > 0 ? Math.round((u.count / questions.length) * 100) : 0
-
+      {/* ── 2. Top Three-Way Group Switcher Tabs ─────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-surface-border p-2 shadow-subtle flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-2 p-1 bg-slate-100/80 rounded-xl w-full sm:w-auto">
+          {GROUP_CONFIGS.map(grp => {
+            const isSelected = selectedGroupTag === grp.id
             return (
               <button
-                key={u.id}
+                key={grp.id}
                 onClick={() => {
-                  setSelectedUnit(isSelected ? 'all' : u.unit_name)
+                  setSelectedGroupTag(grp.id)
                   setCurrentPage(1)
                 }}
-                className={`p-3 rounded-xl border text-left transition-all relative overflow-hidden group ${
+                className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-xs font-black transition-all ${
                   isSelected
-                    ? 'border-indigo-600 bg-indigo-50/60 ring-2 ring-indigo-500/20 shadow-sm'
-                    : 'border-surface-border hover:border-slate-300 bg-white hover:bg-slate-50/50'
+                    ? 'bg-white text-tnpsc-brand shadow-subtle'
+                    : 'text-body-secondary hover:text-body-text'
                 }`}
               >
-                <div className="flex items-center justify-between gap-1 mb-1.5">
-                  <span className={`w-2 h-2 rounded-full ${u.dotColor || 'bg-slate-400'}`} />
-                  <span className="text-[10px] font-black font-mono text-body-secondary">{pct}%</span>
-                </div>
-                <p className="text-xs font-bold text-body-text leading-tight truncate" title={u.unit_name}>
-                  {u.shortName || u.unit_name}
-                </p>
-                <div className="flex items-baseline justify-between mt-2 pt-1 border-t border-slate-100">
-                  <span className="text-sm font-black text-body-text">{u.count}</span>
-                  <span className="text-[10px] font-semibold text-body-secondary">Qs</span>
-                </div>
+                {grp.label}
               </button>
             )
           })}
         </div>
+
+        {/* Sub-Filter Pills: All | VINA | PYQ */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-body-secondary uppercase tracking-wider mr-1">
+            Source:
+          </span>
+          {[
+            { id: 'all',  label: 'All Questions' },
+            { id: 'vina', label: 'VINA Synthetic Only' },
+            { id: 'pyq',  label: 'Official PYQs Only' },
+          ].map(pill => (
+            <button
+              key={pill.id}
+              onClick={() => {
+                setSourceFilter(pill.id)
+                setCurrentPage(1)
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                sourceFilter === pill.id
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  : 'bg-white text-body-secondary border-slate-200 hover:border-slate-300'
+              }`}
+            >
+              {pill.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── Filters & View Controls Bar ────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-surface-border p-4 shadow-subtle space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value)
-                setCurrentPage(1)
-              }}
-              placeholder="Search by question stem, option text, explanation, topic, or PDF name…"
-              className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-surface-border rounded-xl text-xs outline-none focus:ring-2 focus:ring-tnpsc-brand focus:bg-white transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+      {/* ── 3. Inventory & Blueprint Health Monitor Bar ──────────────────────── */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-card border border-indigo-950/60 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-white/10 text-amber-300">
+              <ShieldCheck className="w-5 h-5" />
+            </span>
+            <div>
+              <h3 className="text-sm font-black tracking-wide text-white">
+                {selectedGroupTag.replace(/_/g, ' ')} — 200-Question Mock Test Blueprint Health Monitor
+              </h3>
+              <p className="text-[11px] text-slate-300">
+                Verifies exact syllabus unit quotas and shows readiness for generating balanced, zero-repeat full mocks.
+              </p>
+            </div>
           </div>
 
-          {/* Filter Dropdowns */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Subject Dropdown */}
-            <select
-              value={selectedUnit}
-              onChange={e => {
-                setSelectedUnit(e.target.value)
-                setCurrentPage(1)
-              }}
-              className="text-xs bg-slate-50 border border-surface-border rounded-xl px-2.5 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand cursor-pointer"
-            >
-              <option value="all">All Subjects ({questions.length})</option>
-              {OFFICIAL_SYLLABUS_UNITS.map(u => (
-                <option key={u.id} value={u.unit_name}>
-                  {u.shortName}
-                </option>
-              ))}
-            </select>
-
-            {/* Paper / PDF Dropdown */}
-            <select
-              value={selectedPaperId}
-              onChange={e => {
-                setSelectedPaperId(e.target.value)
-                setCurrentPage(1)
-              }}
-              className="text-xs bg-slate-50 border border-surface-border rounded-xl px-2.5 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand cursor-pointer max-w-[180px] truncate"
-            >
-              <option value="all">All Uploaded Papers ({papers.length})</option>
-              {papers.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-
-            {/* Language Toggle */}
-            <select
-              value={selectedLanguage}
-              onChange={e => {
-                setSelectedLanguage(e.target.value)
-                setCurrentPage(1)
-              }}
-              className="text-xs bg-slate-50 border border-surface-border rounded-xl px-2.5 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand cursor-pointer"
-            >
-              <option value="all">All Languages</option>
-              <option value="tamil">Tamil / Bilingual</option>
-              <option value="english">English Only</option>
-            </select>
-
-            {/* View Mode Switcher */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  viewMode === 'table'
-                    ? 'bg-white text-body-text shadow-sm'
-                    : 'text-body-secondary hover:text-body-text'
-                }`}
-              >
-                Tabular
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('separated')}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  viewMode === 'separated'
-                    ? 'bg-white text-body-text shadow-sm'
-                    : 'text-body-secondary hover:text-body-text'
-                }`}
-              >
-                By Topic
-              </button>
+          <div className="flex items-center gap-3">
+            <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/15 text-center">
+              <span className="text-[10px] uppercase font-bold text-slate-300 block">Total Pool</span>
+              <b className="text-base font-black text-white">{healthMonitor.totalQuestions} Qs</b>
+            </div>
+            <div className="bg-emerald-500/20 px-3.5 py-1.5 rounded-xl border border-emerald-400/30 text-center">
+              <span className="text-[10px] uppercase font-bold text-emerald-300 block">Unique 200Q Mocks Ready</span>
+              <b className="text-base font-black text-emerald-300">{healthMonitor.minFullMocksPossible} Full Mocks</b>
             </div>
           </div>
         </div>
+
+        {/* Blueprint Unit Chips */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5">
+          {healthMonitor.unitBreakdown.map(item => (
+            <div
+              key={item.unit_code}
+              className={`p-2.5 rounded-xl border text-center transition-all ${
+                item.isDeficit
+                  ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                  : 'bg-white/5 border-white/10 text-slate-200'
+              }`}
+            >
+              <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">
+                {item.unit_code}
+              </span>
+              <div className="flex items-baseline justify-center gap-1 mt-1">
+                <b className={`text-sm font-black ${item.isDeficit ? 'text-red-400' : 'text-white'}`}>
+                  {item.available}
+                </b>
+                <span className="text-[10px] text-slate-400">/ {item.quota} req</span>
+              </div>
+              <span className={`block text-[9px] font-semibold mt-0.5 ${item.isDeficit ? 'text-red-300' : 'text-emerald-400'}`}>
+                {item.isDeficit ? `Deficit: -${item.quota - item.available}` : `Ready: ${item.mocksPossible}x`}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* ── Main View Content ──────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="py-20 text-center bg-white rounded-2xl border border-surface-border">
-          <Loader2 className="w-8 h-8 text-tnpsc-brand animate-spin mx-auto mb-3" />
-          <p className="text-xs font-bold text-body-text">Loading extracted questions from database…</p>
-          <p className="text-[11px] text-body-secondary mt-1">Querying question bank and joining syllabus taxonomy…</p>
-        </div>
-      ) : filteredQuestions.length === 0 ? (
-        <div className="py-16 text-center bg-white rounded-2xl border border-surface-border p-6 space-y-3">
-          <HelpCircle className="w-10 h-10 text-slate-300 mx-auto" />
-          <p className="text-sm font-bold text-body-text">No extracted questions match your filter</p>
-          <p className="text-xs text-body-secondary max-w-md mx-auto">
-            Try adjusting your search query, selecting another syllabus unit, or resetting filters.
-          </p>
-          <button
-            onClick={() => {
-              setSearchQuery('')
-              setSelectedUnit('all')
-              setSelectedPaperId('all')
-              setSelectedLanguage('all')
+      {/* ── 4. Search & Controls Bar ────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-surface-border shadow-subtle">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value)
+              setCurrentPage(1)
             }}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-body-text rounded-xl text-xs font-bold transition-colors"
+            placeholder="Search by question text, unit, macro or micro..."
+            className="w-full pl-9 pr-3 py-2 text-xs border border-surface-border rounded-xl outline-none focus:border-tnpsc-brand focus:ring-1 focus:ring-tnpsc-brand/20 transition-all"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button
+            onClick={() => handleDownloadTaxonomyCsv(selectedGroupTag)}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1 border border-indigo-200 transition-colors"
           >
-            Reset Filters
+            <Download className="w-3.5 h-3.5" />
+            <span>Download {selectedGroupTag.replace(/_/g, ' ')} Master Taxonomy CSV</span>
+          </button>
+
+          <button
+            onClick={handleDownloadTemplateCsv}
+            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 border border-slate-200 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Download 29-Col Template</span>
           </button>
         </div>
-      ) : viewMode === 'table' ? (
-        /* ── Tabular Format (Main Feature) ─────────────────────────────────── */
-        <div className="bg-white rounded-2xl border border-surface-border shadow-subtle overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-surface-border text-left text-body-secondary uppercase tracking-wider font-bold">
-                  <th className="py-3 px-3.5 w-12 text-center">#</th>
-                  <th className="py-3 px-3.5 min-w-[280px]">Question Text (EN / TA)</th>
-                  <th className="py-3 px-3.5 min-w-[170px]">Syllabus Unit</th>
-                  <th className="py-3 px-3.5 min-w-[140px]">Micro-Topic</th>
-                  <th className="py-3 px-3.5 min-w-[220px]">Options &amp; Correct Answer</th>
-                  <th className="py-3 px-3.5 min-w-[160px]">Source PDF / Paper</th>
-                  <th className="py-3 px-3.5 w-24 text-center">Actions</th>
+      </div>
+
+      {/* ── 5. The 29-Column Spreadsheet Grid ───────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-surface-border shadow-subtle overflow-hidden">
+        <div className="p-4 border-b border-surface-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-black text-body-text uppercase tracking-wider">
+              29-Column Master Spreadsheet Grid ({searchFilteredQuestions.length} Questions)
+            </span>
+            <span className="text-[11px] text-body-secondary font-medium">
+              Double-click any cell to edit inline · Press Enter to save automatically
+            </span>
+          </div>
+
+          <div className="text-xs text-body-secondary font-semibold">
+            Page {currentPage} of {totalPages}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-16 text-center">
+            <Loader2 className="w-8 h-8 text-tnpsc-brand animate-spin mx-auto mb-3" />
+            <p className="text-xs text-body-secondary font-medium">Loading 29-column question spreadsheet...</p>
+          </div>
+        ) : searchFilteredQuestions.length === 0 ? (
+          <div className="p-16 text-center text-body-secondary text-xs">
+            No questions found matching your filter criteria. Click "Bulk Upload CSV" to import questions.
+          </div>
+        ) : (
+          <div className="overflow-x-auto max-h-[640px]">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="sticky top-0 z-20 bg-slate-100 text-body-secondary uppercase font-bold text-[10px] border-b border-surface-border shadow-2xs">
+                <tr>
+                  <th className="py-2.5 px-3 border-r border-slate-200 sticky left-0 z-30 bg-slate-100 min-w-[90px]"># / ID</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[70px]">Source</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[60px]">Year</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[90px]">Unit Code</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Macro Topic</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[160px]">Micro Topic</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[60px]">Key</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[70px]">Diff</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[70px]">Ideal Sec</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[260px]">English Question Stem</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">En Option A</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">En Option B</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">En Option C</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">En Option D</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[120px]">En Option E</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[260px]">Tamil Question Stem</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Ta Option A</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Ta Option B</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Ta Option C</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Ta Option D</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[120px]">Ta Option E</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[220px]">English Explanation</th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[220px]">Tamil Explanation</th>
+                  <th className="py-2.5 px-3 text-center min-w-[80px]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-border">
+
+              <tbody className="divide-y divide-slate-200">
                 {paginatedQuestions.map((q, idx) => {
-                  const globalIdx = (currentPage - 1) * pageSize + idx + 1
-                  const canonicalUnit = normalizeUnitName(q.unit_name)
-                  const unitConfig = OFFICIAL_SYLLABUS_UNITS.find(u => u.unit_name === canonicalUnit)
-
+                  const isPyq = q.source_type === 'PYQ'
                   return (
-                    <tr
-                      key={q.id}
-                      className="hover:bg-slate-50/60 transition-colors group"
-                    >
-                      {/* # Index */}
-                      <td className="py-3 px-3.5 text-center font-bold text-body-secondary">
-                        {globalIdx}
+                    <tr key={q.question_id || idx} className="hover:bg-slate-50/70 transition-colors">
+                      {/* 1. ID (Sticky Left) */}
+                      <td className="py-2 px-3 border-r border-slate-200 sticky left-0 z-10 bg-white font-mono font-bold text-[11px] text-slate-800">
+                        {q.question_id}
                       </td>
 
-                      {/* Question Text */}
-                      <td className="py-3 px-3.5">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-body-text leading-relaxed line-clamp-2">
-                            {q.question_text || q.question_text_tamil || 'No question text provided'}
-                          </p>
-                          {q.question_text_tamil && q.question_text && (
-                            <p className="text-[11px] text-body-secondary font-tamil line-clamp-1">
-                              {q.question_text_tamil}
-                            </p>
-                          )}
-                        </div>
+                      {/* 2. Source Type */}
+                      <td className="py-2 px-3 border-r border-slate-200">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                          isPyq ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
+                        }`}>
+                          {q.source_type}
+                        </span>
                       </td>
 
-                      {/* Syllabus Unit */}
-                      <td className="py-3 px-3.5">
-                        <div className="space-y-1">
-                          <span
-                            className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold border ${
-                              unitConfig?.badgeColor || 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                            }`}
-                          >
-                            {unitConfig?.shortName || canonicalUnit}
-                          </span>
-                          <div className="flex items-center gap-1">
-                            {(q.group_tag || q.group_name) && (
-                              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                                {q.group_tag || q.group_name}
-                              </span>
-                            )}
-                            {(q.is_pyq || q.exam_year) && (
-                              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-50 text-amber-900 border border-amber-300">
-                                PYQ {q.exam_year || ''}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                      {/* 3. Year */}
+                      <td className="py-2 px-3 border-r border-slate-200 font-semibold text-slate-700">
+                        {q.year}
                       </td>
 
-                      {/* Micro-Topic */}
-                      <td className="py-3 px-3.5">
-                        <div className="space-y-0.5">
-                          <p className="font-bold text-indigo-900 text-[11px] truncate" title={q.micro_topic_name}>
-                            {q.micro_topic_name || q.macro_topic_name || 'General Concept'}
-                          </p>
-                          {q.macro_topic_name && q.macro_topic_name !== q.micro_topic_name && (
-                            <p className="text-[10px] text-body-secondary truncate" title={q.macro_topic_name}>
-                              {q.macro_topic_name}
-                            </p>
-                          )}
-                        </div>
+                      {/* 4. Unit Code (Dropdown Constraint) */}
+                      <td className="py-2 px-3 border-r border-slate-200 font-mono font-bold text-slate-800">
+                        <select
+                          value={q.unit_code}
+                          onChange={e => handleCellSave(q, 'unit_code', e.target.value)}
+                          className="bg-transparent border-0 text-[11px] font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-tnpsc-brand rounded"
+                        >
+                          {Array.from(new Set(activeMasterTaxonomy.map(m => m.unit_code))).map(uc => (
+                            <option key={uc} value={uc}>{uc}</option>
+                          ))}
+                        </select>
                       </td>
 
-                      {/* Options & Correct Answer */}
-                      <td className="py-3 px-3.5">
-                        <div className="grid grid-cols-2 gap-1 text-[11px]">
-                          {['A', 'B', 'C', 'D'].map(letter => {
-                            const optKey = `option_${letter.toLowerCase()}`
-                            const optText = q[optKey]
-                            const isCorrect = String(q.correct_option).toUpperCase() === letter
-
-                            return (
-                              <div
-                                key={letter}
-                                className={`px-2 py-0.5 rounded border truncate ${
-                                  isCorrect
-                                    ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-800'
-                                    : 'bg-slate-50 border-slate-200 text-body-secondary'
-                                }`}
-                                title={`(${letter}) ${optText || '-'}`}
-                              >
-                                <span className={isCorrect ? 'text-emerald-700 font-black mr-1' : 'text-slate-400 mr-1'}>
-                                  {letter}:
-                                </span>
-                                <span>{optText || '-'}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
+                      {/* 5. Macro Topic */}
+                      <td className="py-2 px-3 border-r border-slate-200 font-medium text-slate-800 truncate max-w-[160px]" title={q.macro_topic}>
+                        {q.macro_topic}
                       </td>
 
-                      {/* Source PDF / Paper */}
-                      <td className="py-3 px-3.5">
-                        <div className="space-y-0.5">
-                          <p className="font-bold text-body-text text-[11px] truncate" title={q.paper_title}>
-                            {q.paper_title}
-                          </p>
-                          <div className="flex items-center gap-1 text-[10px] text-body-secondary truncate">
-                            <FileText className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span className="truncate">{q.source_pdf_display}</span>
-                            {q.page_number && (
-                              <span className="bg-slate-100 text-slate-600 px-1 rounded font-mono">
-                                p.{q.page_number}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                      {/* 6. Micro Topic */}
+                      <td className="py-2 px-3 border-r border-slate-200 font-medium text-slate-800 truncate max-w-[180px]" title={q.micro_topic}>
+                        {q.micro_topic}
+                      </td>
+
+                      {/* 7. Answer Key (Dropdown A/B/C/D) */}
+                      <td className="py-2 px-3 border-r border-slate-200 text-center">
+                        <select
+                          value={q.answer_key}
+                          onChange={e => handleCellSave(q, 'answer_key', e.target.value)}
+                          className="w-8 h-7 text-center rounded font-black text-xs bg-emerald-100 text-emerald-800 border-0 focus:ring-2 focus:ring-emerald-500"
+                        >
+                          {['A', 'B', 'C', 'D'].map(k => (
+                            <option key={k} value={k}>{k}</option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* 8. Difficulty Level */}
+                      <td className="py-2 px-3 border-r border-slate-200">
+                        <select
+                          value={q.difficulty_level}
+                          onChange={e => handleCellSave(q, 'difficulty_level', e.target.value)}
+                          className="bg-transparent border-0 text-[10px] font-bold text-slate-700 focus:bg-white rounded"
+                        >
+                          {['EASY', 'MEDIUM', 'HARD'].map(d => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </select>
+                      </td>
+
+                      {/* 9. Ideal Time */}
+                      <td className="py-2 px-3 border-r border-slate-200 text-center font-bold text-slate-600">
+                        {q.ideal_time_seconds}s
+                      </td>
+
+                      {/* 10. English Question Stem */}
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-xs truncate" title={q.en_question_text}>
+                        {q.en_question_text}
+                      </td>
+
+                      {/* 11-14. Options A-D */}
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate" title={q.en_option_a}>{q.en_option_a}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate" title={q.en_option_b}>{q.en_option_b}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate" title={q.en_option_c}>{q.en_option_c}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate" title={q.en_option_d}>{q.en_option_d}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 text-slate-400 font-italic text-[10px]">Answer not known</td>
+
+                      {/* 15. Tamil Stem & Options */}
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-xs truncate font-tamil" title={q.ta_question_text}>
+                        {q.ta_question_text || '—'}
+                      </td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil" title={q.ta_option_a}>{q.ta_option_a || '—'}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil" title={q.ta_option_b}>{q.ta_option_b || '—'}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil" title={q.ta_option_c}>{q.ta_option_c || '—'}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil" title={q.ta_option_d}>{q.ta_option_d || '—'}</td>
+                      <td className="py-2 px-3 border-r border-slate-200 text-slate-400 font-tamil text-[10px]">விடை தெரியவில்லை</td>
+
+                      {/* 16. Explanations */}
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[220px] truncate" title={q.en_explanation}>
+                        {q.en_explanation || '—'}
+                      </td>
+                      <td className="py-2 px-3 border-r border-slate-200 max-w-[220px] truncate font-tamil" title={q.ta_explanation}>
+                        {q.ta_explanation || '—'}
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-3.5 text-center">
+                      <td className="py-2 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => setViewingQuestion(q)}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="View Question Details"
+                            className="p-1 hover:bg-slate-200 rounded text-slate-600 transition-colors"
+                            title="Inspect Details"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setEditingTopicQ({ ...q })}
-                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                            title="Edit Subject / Topic"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteQuestion(q.id, q.paper_id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete from Database"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -780,505 +834,283 @@ export function AdminExtractedQuestionsPage() {
               </tbody>
             </table>
           </div>
+        )}
 
-          {/* ── Pagination Bar ────────────────────────────────────────────── */}
-          <div className="p-4 border-t border-surface-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
-            <div className="flex items-center gap-2 text-xs text-body-secondary">
-              <span>Showing</span>
-              <select
-                value={pageSize}
-                onChange={e => {
-                  setPageSize(Number(e.target.value))
-                  setCurrentPage(1)
-                }}
-                className="bg-white border border-surface-border rounded-lg px-2 py-1 font-semibold text-body-text outline-none"
-              >
-                <option value={15}>15</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span>of {filteredQuestions.length} questions</span>
-            </div>
+        {/* ── Pagination Footer ────────────────────────────────────────────── */}
+        <div className="p-4 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50/50">
+          <div className="flex items-center gap-2 text-xs text-body-secondary font-medium">
+            <span>Showing</span>
+            <select
+              value={pageSize}
+              onChange={e => {
+                setPageSize(Number(e.target.value))
+                setCurrentPage(1)
+              }}
+              className="px-2 py-1 bg-white border border-surface-border rounded-lg text-xs font-bold"
+            >
+              {[20, 50, 100].map(s => (
+                <option key={s} value={s}>{s} rows</option>
+              ))}
+            </select>
+            <span>of {searchFilteredQuestions.length} questions</span>
+          </div>
 
-            <div className="flex items-center gap-1.5 self-center sm:self-auto">
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1.5 bg-white border border-surface-border rounded-xl text-xs font-bold text-body-text hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              <span className="text-xs font-bold text-body-text px-2">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 bg-white border border-surface-border rounded-xl text-xs font-bold text-body-text hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="px-3 py-1.5 bg-white border border-surface-border rounded-lg text-xs font-bold disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-xs font-bold px-2 text-body-text">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1.5 bg-white border border-surface-border rounded-lg text-xs font-bold disabled:opacity-40"
+            >
+              Next
+            </button>
           </div>
         </div>
-      ) : (
-        /* ── Separated by Topic (Accordion View) ───────────────────────────── */
-        <div className="space-y-4">
-          {Object.entries(groupedByTopic).map(([unitName, qList]) => {
-            const unitConfig = OFFICIAL_SYLLABUS_UNITS.find(u => u.unit_name === unitName)
+      </div>
 
-            return (
-              <div
-                key={unitName}
-                className="bg-white rounded-2xl border border-surface-border overflow-hidden shadow-subtle"
+      {/* ── 6. Bulk CSV Upload & Validation Modal ────────────────────────────── */}
+      {showBulkCsvModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[88vh] flex flex-col shadow-2xl border border-surface-border overflow-hidden">
+            <div className="p-6 border-b border-surface-border flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-body-text">
+                  Bulk Upload CSV — Strict Foreign-Key &amp; Taxonomy Validation
+                </h3>
+                <p className="text-xs text-body-secondary mt-0.5">
+                  Target Exam Group: <b className="text-tnpsc-brand">{selectedGroupTag.replace(/_/g, ' ')}</b>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowBulkCsvModal(false)
+                  setCsvValidationResults(null)
+                  setCsvFile(null)
+                }}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
               >
-                {/* Topic Group Header */}
-                <div className="p-4 bg-slate-50/80 border-b border-surface-border flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className={`w-3 h-3 rounded-full ${unitConfig?.dotColor || 'bg-indigo-600'}`} />
-                    <h3 className="text-sm font-bold text-body-text">
-                      {unitConfig?.shortName || unitName}
-                    </h3>
-                    <span className="px-2 py-0.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-full">
-                      {qList.length} Questions
-                    </span>
-                  </div>
-                </div>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-                {/* Questions List */}
-                <div className="divide-y divide-surface-border">
-                  {qList.slice(0, 15).map((q, qIdx) => (
-                    <div key={q.id} className="p-4 hover:bg-slate-50/50 transition-colors space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded font-bold text-[10px]">
-                            {q.micro_topic_name || 'General Concept'}
-                          </span>
-                          <span className="text-[11px] text-body-secondary">
-                            from {q.paper_title}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setViewingQuestion(q)}
-                            className="text-[11px] text-indigo-600 hover:underline font-bold"
-                          >
-                            Details
-                          </button>
-                          <button
-                            onClick={() => setEditingTopicQ({ ...q })}
-                            className="text-[11px] text-amber-600 hover:underline font-bold"
-                          >
-                            Edit Topic
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs font-semibold text-body-text">
-                        {q.question_text || q.question_text_tamil}
-                      </p>
+            <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              {/* File Input */}
+              <div className="border-2 border-dashed border-slate-300 hover:border-tnpsc-brand rounded-2xl p-6 text-center transition-colors">
+                <input
+                  type="file"
+                  id="bulk-csv-input"
+                  accept=".csv,.txt"
+                  onChange={handleCsvFileSelect}
+                  className="hidden"
+                />
+                <label htmlFor="bulk-csv-input" className="cursor-pointer block space-y-2">
+                  <Upload className="w-8 h-8 text-tnpsc-brand mx-auto" />
+                  <span className="block text-xs font-bold text-body-text">
+                    {csvFile ? csvFile.name : 'Click to select CSV file for validation'}
+                  </span>
+                  <span className="block text-[11px] text-body-secondary">
+                    Supports 29-column schema with unit_code, macro_topic, micro_topic, and answer_key
+                  </span>
+                </label>
+              </div>
+
+              {csvParsing && (
+                <div className="p-8 text-center">
+                  <Loader2 className="w-6 h-6 text-tnpsc-brand animate-spin mx-auto mb-2" />
+                  <p className="text-xs text-body-secondary font-medium">Validating rows against locked master taxonomy...</p>
+                </div>
+              )}
+
+              {/* Validation Summary Card */}
+              {csvValidationResults && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Rows</span>
+                      <b className="text-lg font-black text-slate-800">{csvValidationResults.totalRows}</b>
                     </div>
-                  ))}
-                  {qList.length > 15 && (
-                    <div className="p-3 text-center bg-slate-50 text-xs font-semibold text-body-secondary">
-                      + {qList.length - 15} more questions in this topic. Switch to Tabular view to browse all.
+                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-emerald-700 block">Valid Rows</span>
+                      <b className="text-lg font-black text-emerald-700">{csvValidationResults.validCount}</b>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 p-3 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-red-700 block">Errors / Rejections</span>
+                      <b className="text-lg font-black text-red-700">{csvValidationResults.errorCount}</b>
+                    </div>
+                  </div>
+
+                  {/* Errors Breakdown */}
+                  {csvValidationResults.errors.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
+                      <h4 className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                        <span>Taxonomy Validation Violations Detected:</span>
+                      </h4>
+                      <div className="max-h-40 overflow-y-auto space-y-1.5 text-xs text-red-800 pr-1">
+                        {csvValidationResults.errors.map((err, i) => (
+                          <div key={i} className="bg-white/80 p-2 rounded border border-red-200">
+                            <b>Row {err.rowNumber}:</b> {err.errors.join('; ')}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )}
+            </div>
 
-      {/* ── View Question Modal ────────────────────────────────────────────── */}
-      {viewingQuestion && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-surface-border pb-3">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-tnpsc-brand" />
-                <h3 className="text-sm font-bold text-body-text">Question Details &amp; Taxonomy</h3>
-              </div>
+            <div className="p-4 border-t border-surface-border bg-slate-50 flex items-center justify-between">
               <button
-                onClick={() => setViewingQuestion(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                onClick={() => {
+                  setShowBulkCsvModal(false)
+                  setCsvValidationResults(null)
+                  setCsvFile(null)
+                }}
+                className="px-4 py-2 bg-white border border-surface-border rounded-xl text-xs font-bold text-slate-700"
               >
-                <X className="w-5 h-5" />
+                Cancel
               </button>
-            </div>
 
-            {/* Taxonomy Path */}
-            <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl space-y-1 text-xs">
-              <p className="font-bold text-indigo-900 text-[10px] uppercase tracking-wider">Syllabus Taxonomy Path</p>
-              <p className="font-semibold text-indigo-800">
-                {viewingQuestion.unit_name} &rsaquo; {viewingQuestion.macro_topic_name || 'General'} &rsaquo; {viewingQuestion.micro_topic_name || 'Concepts'}
-              </p>
-            </div>
-
-            {/* Question Text */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-body-secondary">Question Text (English)</label>
-              <div className="p-3.5 bg-slate-50 border border-surface-border rounded-xl text-xs font-semibold text-body-text leading-relaxed whitespace-pre-line">
-                {viewingQuestion.question_text || 'None'}
-              </div>
-            </div>
-
-            {viewingQuestion.question_text_tamil && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-body-secondary">Question Text (Tamil)</label>
-                <div className="p-3.5 bg-slate-50 border border-surface-border rounded-xl text-xs font-semibold text-body-text font-tamil leading-relaxed whitespace-pre-line">
-                  {viewingQuestion.question_text_tamil}
-                </div>
-              </div>
-            )}
-
-            {/* Options */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-body-secondary">Answer Options</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {['A', 'B', 'C', 'D'].map(letter => {
-                  const optKey = `option_${letter.toLowerCase()}`
-                  const optText = viewingQuestion[optKey]
-                  const isCorrect = String(viewingQuestion.correct_option).toUpperCase() === letter
-
-                  return (
-                    <div
-                      key={letter}
-                      className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
-                        isCorrect
-                          ? 'bg-emerald-50 border-emerald-300 font-bold text-emerald-900'
-                          : 'bg-white border-surface-border text-body-text'
-                      }`}
-                    >
-                      <div>
-                        <span className={`font-bold mr-2 ${isCorrect ? 'text-emerald-700' : 'text-slate-400'}`}>
-                          ({letter})
-                        </span>
-                        <span>{optText || '-'}</span>
-                      </div>
-                      {isCorrect && (
-                        <span className="text-[10px] font-black uppercase text-emerald-700 shrink-0">
-                          ✓ Correct
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Explanation */}
-            {viewingQuestion.explanation && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-body-secondary">Detailed Explanation</label>
-                <div className="p-3.5 bg-slate-50 border border-surface-border rounded-xl text-xs text-body-secondary leading-relaxed whitespace-pre-line">
-                  {viewingQuestion.explanation}
-                </div>
-              </div>
-            )}
-
-            {/* Source Meta */}
-            <div className="p-3 bg-slate-100 rounded-xl flex items-center justify-between text-[11px] text-body-secondary">
-              <span>Source: <strong>{viewingQuestion.paper_title}</strong></span>
-              <span>PDF: <strong>{viewingQuestion.source_pdf_display}</strong></span>
-              <span>ID: <code className="font-mono text-[10px]">{viewingQuestion.id.slice(0, 8)}</code></span>
-            </div>
-
-            <div className="flex justify-end pt-2">
               <button
-                onClick={() => setViewingQuestion(null)}
-                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-body-text rounded-xl text-xs font-bold transition-colors"
+                onClick={handleConfirmImportValidRows}
+                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting}
+                className="px-5 py-2.5 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle disabled:opacity-40"
               >
-                Close
+                {csvImporting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Importing to Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Import {csvValidationResults?.validCount || 0} Valid Rows</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Edit Subject / Topic Modal ────────────────────────────────────── */}
-      {editingTopicQ && (
+      {/* ── 7. Question Detail Modal ────────────────────────────────────────── */}
+      {viewingQuestion && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <form
-            onSubmit={handleSaveTopic}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4"
-          >
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[88vh] overflow-y-auto p-6 shadow-2xl border border-surface-border space-y-4">
             <div className="flex items-center justify-between border-b border-surface-border pb-3">
-              <div className="flex items-center gap-2">
-                <Edit2 className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-body-text">Assign Subject &amp; Topic to Question</h3>
-              </div>
+              <h3 className="text-base font-black text-body-text">
+                Question Details — {viewingQuestion.question_id}
+              </h3>
               <button
-                type="button"
-                onClick={() => setEditingTopicQ(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                onClick={() => setViewingQuestion(null)}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-body-secondary line-clamp-2 italic bg-slate-50 p-2.5 rounded-lg border border-slate-100">
-              "{editingTopicQ.question_text || editingTopicQ.question_text_tamil}"
-            </p>
-
-            {/* Unit Dropdown */}
-            <div>
-              <label className="block text-xs font-bold text-body-secondary mb-1">
-                Level 1: Syllabus Unit (Broad Subject)
-              </label>
-              <select
-                value={editingTopicQ.unit_name}
-                onChange={e => setEditingTopicQ(prev => ({ ...prev, unit_name: e.target.value }))}
-                className="w-full text-xs border border-surface-border rounded-xl px-3 py-2.5 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand bg-white"
-              >
-                {OFFICIAL_SYLLABUS_UNITS.map(u => (
-                  <option key={u.id} value={u.unit_name}>
-                    {u.unit_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Macro-Topic Input */}
-            <div>
-              <label className="block text-xs font-bold text-body-secondary mb-1">
-                Level 2: Macro-Topic (Sub-Category)
-              </label>
-              <input
-                type="text"
-                value={editingTopicQ.macro_topic_name || ''}
-                onChange={e => setEditingTopicQ(prev => ({ ...prev, macro_topic_name: e.target.value }))}
-                placeholder="e.g. Physics, Indian Polity, Ancient History"
-                className="w-full text-xs border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand"
-              />
-            </div>
-
-            {/* Micro-Topic Input */}
-            <div>
-              <label className="block text-xs font-bold text-body-secondary mb-1">
-                Level 3: Micro-Topic (Exact Chapter / Concept)
-              </label>
-              <input
-                type="text"
-                value={editingTopicQ.micro_topic_name || ''}
-                onChange={e => setEditingTopicQ(prev => ({ ...prev, micro_topic_name: e.target.value }))}
-                placeholder="e.g. Mechanics & Properties of Matter, Preamble & Rights"
-                className="w-full text-xs border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand"
-              />
-            </div>
-
-            {/* Exam Group & Year Grid */}
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="block text-xs font-bold text-body-secondary mb-1">
-                  Exam Group Tag
-                </label>
-                <select
-                  value={editingTopicQ.group_tag || 'Group 4'}
-                  onChange={e => setEditingTopicQ(prev => ({ ...prev, group_tag: e.target.value }))}
-                  className="w-full text-xs border border-surface-border rounded-xl px-3 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand bg-white"
-                >
-                  <option value="Group 4">TNPSC Group 4</option>
-                  <option value="Group 1">TNPSC Group 1</option>
-                  <option value="Group 2/2A">TNPSC Group 2/2A</option>
-                  <option value="General">General TNPSC</option>
-                </select>
+            <div className="space-y-3 text-xs">
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                  {viewingQuestion.exam_tag}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  {viewingQuestion.source_type} ({viewingQuestion.year})
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                  {viewingQuestion.unit_code}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  Key: {viewingQuestion.answer_key}
+                </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-body-secondary mb-1">
-                  Exam Year &amp; PYQ
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={editingTopicQ.exam_year || ''}
-                    onChange={e => setEditingTopicQ(prev => ({ ...prev, exam_year: e.target.value }))}
-                    placeholder="e.g. 2024"
-                    className="w-20 text-xs border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand font-bold"
-                  />
-                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(editingTopicQ.is_pyq)}
-                      onChange={e => setEditingTopicQ(prev => ({ ...prev, is_pyq: e.target.checked }))}
-                      className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
-                    />
-                    <span>Official PYQ</span>
-                  </label>
+              <div className="p-3 bg-slate-50 rounded-xl space-y-2">
+                <b>English Question Stem:</b>
+                <p className="text-body-text whitespace-pre-wrap">{viewingQuestion.en_question_text}</p>
+              </div>
+
+              {viewingQuestion.ta_question_text && (
+                <div className="p-3 bg-slate-50 rounded-xl space-y-2 font-tamil">
+                  <b>Tamil Question Stem:</b>
+                  <p className="text-body-text whitespace-pre-wrap">{viewingQuestion.ta_question_text}</p>
                 </div>
-              </div>
-            </div>
+              )}
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-surface-border">
-              <button
-                type="button"
-                onClick={() => setEditingTopicQ(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-body-text rounded-xl text-xs font-bold transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={savingTopic}
-                className="flex items-center gap-2 px-5 py-2 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white rounded-xl text-xs font-bold transition-colors shadow-brand disabled:opacity-50"
-              >
-                {savingTopic ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                <span>{savingTopic ? 'Saving Topic to DB…' : 'Save Topic to Database'}</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 border rounded-lg">A: {viewingQuestion.en_option_a}</div>
+                <div className="p-2 border rounded-lg">B: {viewingQuestion.en_option_b}</div>
+                <div className="p-2 border rounded-lg">C: {viewingQuestion.en_option_c}</div>
+                <div className="p-2 border rounded-lg">D: {viewingQuestion.en_option_d}</div>
+              </div>
+
+              {viewingQuestion.en_explanation && (
+                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                  <b className="text-blue-900 block mb-1">Explanation:</b>
+                  <p className="text-body-text leading-relaxed whitespace-pre-wrap">{viewingQuestion.en_explanation}</p>
+                </div>
+              )}
             </div>
-          </form>
+          </div>
         </div>
       )}
 
-      {/* ── Direct PDF Upload & Extract Modal ──────────────────────────────── */}
+      {/* ── 8. AI/Text PDF Ingestion Modal ──────────────────────────────────── */}
       {showUploadModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-surface-border space-y-4">
             <div className="flex items-center justify-between border-b border-surface-border pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
-                  <Upload className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-body-text">Extract Questions from Admin PDF</h3>
-                  <p className="text-xs text-body-secondary mt-0.5">
-                    Upload any question paper PDF to extract questions with AI/Text detection and save them with their related topics.
-                  </p>
-                </div>
-              </div>
+              <h3 className="text-base font-black text-body-text">
+                Import Questions from PDF / Vision Pipeline
+              </h3>
               <button
                 onClick={() => setShowUploadModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Target Paper Selection */}
-            <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-surface-border">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-body-secondary">
-                  Destination Question Paper:
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingNewPaper(!isCreatingNewPaper)}
-                  className="text-[11px] font-bold text-tnpsc-brand hover:underline"
-                >
-                  {isCreatingNewPaper ? 'Choose Existing Paper' : '+ Create New Paper for this PDF'}
-                </button>
-              </div>
-
-              {isCreatingNewPaper ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newPaperTitle}
-                    onChange={e => setNewPaperTitle(e.target.value)}
-                    placeholder="Enter new paper title (e.g. TNPSC Group 4 2026 Sample Test)…"
-                    className="flex-1 text-xs bg-white border border-surface-border rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-tnpsc-brand"
-                  />
-                  <button
-                    type="button"
-                    disabled={creatingPaper || !newPaperTitle.trim()}
-                    onClick={async () => {
-                      if (!newPaperTitle.trim()) return
-                      setCreatingPaper(true)
-                      try {
-                        const created = await paperService.createPaper({
-                          title: newPaperTitle.trim(),
-                          exam_type: 'prelims',
-                          exam_name: 'TNPSC Group 4',
-                          year: new Date().getFullYear(),
-                          duration_minutes: 180,
-                          maximum_marks: 200,
-                          status: 'draft',
-                        })
-                        setPapers(prev => [created, ...prev])
-                        setSelectedTargetPaperId(created.id)
-                        setIsCreatingNewPaper(false)
-                        setNewPaperTitle('')
-                        toast.success(`Created paper "${created.title}". Ready to extract!`)
-                      } catch (err) {
-                        toast.error('Failed to create paper: ' + err.message)
-                      } finally {
-                        setCreatingPaper(false)
-                      }
-                    }}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-                  >
-                    {creatingPaper ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    Create Paper
-                  </button>
-                </div>
-              ) : (
-                <select
-                  value={selectedTargetPaperId}
-                  onChange={e => setSelectedTargetPaperId(e.target.value)}
-                  className="w-full text-xs bg-white border border-surface-border rounded-xl px-3 py-2 font-semibold text-body-text outline-none focus:ring-2 focus:ring-tnpsc-brand cursor-pointer"
-                >
-                  {papers.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.title} ({p.total_questions || 0} questions currently)
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            {/* Tab switch between AI and Local PDF */}
-            <div className="flex items-center gap-2 border-b border-surface-border pb-2">
+            <div className="flex gap-2 border-b border-surface-border pb-2">
               <button
                 onClick={() => setUploadTab('ai')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  uploadTab === 'ai'
-                    ? 'bg-blue-600 text-white shadow-subtle'
-                    : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
-                }`}
+                className={`px-4 py-2 text-xs font-bold rounded-lg ${uploadTab === 'ai' ? 'bg-tnpsc-brand text-white' : 'text-slate-600'}`}
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>AI Vision PDF (Tamil &amp; English)</span>
+                AI Vision Ingestion
               </button>
               <button
                 onClick={() => setUploadTab('text')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  uploadTab === 'text'
-                    ? 'bg-purple-600 text-white shadow-subtle'
-                    : 'bg-slate-100 text-body-secondary hover:bg-slate-200'
-                }`}
+                className={`px-4 py-2 text-xs font-bold rounded-lg ${uploadTab === 'text' ? 'bg-tnpsc-brand text-white' : 'text-slate-600'}`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Text PDF (Local Fast Parser)</span>
+                Direct Text Extraction
               </button>
             </div>
 
-            {/* Extractor Tab Content */}
-            {selectedTargetPaperId ? (
-              uploadTab === 'ai' ? (
-                <AiPdfTab
-                  paperId={selectedTargetPaperId}
-                  paperTitle={papers.find(p => p.id === selectedTargetPaperId)?.title}
-                  onImportSuccess={() => {
-                    toast.success('Questions successfully extracted and saved!')
-                    setShowUploadModal(false)
-                    loadData()
-                  }}
-                />
-              ) : (
-                <TextPdfTab
-                  paperId={selectedTargetPaperId}
-                  paperTitle={papers.find(p => p.id === selectedTargetPaperId)?.title}
-                  onImportSuccess={() => {
-                    toast.success('Questions successfully extracted and saved!')
-                    setShowUploadModal(false)
-                    loadData()
-                  }}
-                />
-              )
+            {uploadTab === 'ai' ? (
+              <AiPdfTab
+                onQuestionsExtracted={async (qs) => {
+                  toast.success(`Extracted ${qs.length} questions! Refreshing spreadsheet...`)
+                  setShowUploadModal(false)
+                  await loadData()
+                }}
+              />
             ) : (
-              <p className="text-xs text-amber-600">Please select a destination paper first.</p>
+              <TextPdfTab
+                onQuestionsExtracted={async (qs) => {
+                  toast.success(`Extracted ${qs.length} questions! Refreshing spreadsheet...`)
+                  setShowUploadModal(false)
+                  await loadData()
+                }}
+              />
             )}
           </div>
         </div>

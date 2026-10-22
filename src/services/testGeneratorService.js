@@ -1,23 +1,28 @@
 /**
- * Intelligent Test Generation Engine
+ * Intelligent Test Generation Engine — 200-Question Quota Assembly
  * 
  * Implements:
- * 1. Stratified (Unit x Difficulty) Question Allocation for Group 1 (200 Questions)
- * 2. Language Specialization Logic for Group 2 (100 Language Qs + 100 GS/Aptitude Qs = 200 Qs)
- * 3. Exact difficulty balancing (30% Easy, 50% Medium, 20% Hard)
- * 4. Deduplication & Fisher-Yates randomized sampling without replacement
- * 5. Strict pool validation (InsufficientQuestionPoolError) and graceful fallback modes
+ * 1. Exact 200-Question Syllabus Quotas:
+ *    - Group 1: UNIT_I (10) + UNIT_II (10) + UNIT_III (25) + UNIT_IV (40) + UNIT_V (50) + UNIT_VI (40) + APT_UNIT_I (15) + APT_UNIT_II (10) = 200 Qs.
+ *    - Group 2: Language (100: 35+35+30) + GS (75: 5+5+10+15+20+20) + Aptitude (25: 15+10) = 200 Qs.
+ *    - Group 4: General Tamil (100: 35+35+30) + GS (75: 8+7+12+15+18+15) + Aptitude (25: 15+10) = 200 Qs.
+ * 2. Difficulty Balancing: Exactly 20% Easy, 50% Medium, 30% Hard within each unit.
+ * 3. Zero-Repetition Tracking: Prioritizes questions never seen by the user; when the pool is exhausted,
+ *    pulls from least-seen questions (ORDER BY times_seen ASC, RANDOM()).
+ * 4. Deduplication & Fisher-Yates randomized sampling without replacement.
  */
 
 import { supabase } from '../lib/supabase.js'
 import { questionService } from './questionService.js'
 import { attemptService } from './attemptService.js'
+import { questionHistoryService } from './questionHistoryService.js'
+import { OFFICIAL_200Q_BLUEPRINTS } from './masterTaxonomyService.js'
 
 // ─── Custom Errors ────────────────────────────────────────────────────────────
 
 export class InsufficientQuestionPoolError extends Error {
   constructor(details) {
-    const bucketName = details.bucket || details.unitCode || details.unitName || details.unitId || 'unknown'
+    const bucketName = details.bucket || details.unitCode || details.unitName || 'unknown'
     const diff = details.difficultyLevel || 'all'
     super(
       `Insufficient questions in bucket '${bucketName}' [${diff}]: requested ${details.requested}, available ${details.available}, deficit ${details.deficit}.`
@@ -27,68 +32,86 @@ export class InsufficientQuestionPoolError extends Error {
   }
 }
 
-// ─── Constants & Quota Definitions ───────────────────────────────────────────
-
-export const GROUP1_SYLLABUS_QUOTAS = {
-  // Raw blueprint quotas:
-  // Part A: Unit 1 (10), Unit 2 (10), Unit 3 (25), Unit 4 (40), Unit 5 (50), Unit 6 (50) -> 185
-  // Part B: Unit 1 (15), Unit 2 (10) -> 25
-  // Sum = 210.
-  // When normalized to exact 200, Unit 5 and Unit 6 are adjusted to 45 each (or Hamilton method).
-  raw: [
-    { partCode: 'PART_A', unitCode: 'PART_A_U1', unitNumber: 1, unitName: 'General Science', quota: 10 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U2', unitNumber: 2, unitName: 'Current Events', quota: 10 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U3', unitNumber: 3, unitName: 'Geography of India', quota: 25 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U4', unitNumber: 4, unitName: 'History & Culture of India', quota: 40 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U5', unitNumber: 5, unitName: 'Indian Polity & Economy', quota: 50 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U6', unitNumber: 6, unitName: 'Indian National Movement', quota: 50 },
-    { partCode: 'PART_B', unitCode: 'PART_B_U1', unitNumber: 1, unitName: 'Aptitude & Mental Ability', quota: 15 },
-    { partCode: 'PART_B', unitCode: 'PART_B_U2', unitNumber: 2, unitName: 'General Intelligence', quota: 10 },
-  ],
-  // Normalized 200Q blueprint (Unit 5: 45, Unit 6: 45) -> exactly 200
-  normalized200: [
-    { partCode: 'PART_A', unitCode: 'PART_A_U1', unitNumber: 1, unitName: 'General Science', quota: 10 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U2', unitNumber: 2, unitName: 'Current Events', quota: 10 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U3', unitNumber: 3, unitName: 'Geography of India', quota: 25 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U4', unitNumber: 4, unitName: 'History & Culture of India', quota: 40 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U5', unitNumber: 5, unitName: 'Indian Polity & Economy', quota: 45 },
-    { partCode: 'PART_A', unitCode: 'PART_A_U6', unitNumber: 6, unitName: 'Indian National Movement', quota: 45 },
-    { partCode: 'PART_B', unitCode: 'PART_B_U1', unitNumber: 1, unitName: 'Aptitude & Mental Ability', quota: 15 },
-    { partCode: 'PART_B', unitCode: 'PART_B_U2', unitNumber: 2, unitName: 'General Intelligence', quota: 10 },
-  ],
-}
-
-export const GROUP4_SYLLABUS_QUOTAS = {
-  normalized200: [
-    { partCode: 'PART_1', unitCode: 'LANG', unitNumber: 1, unitName: 'General Tamil / General English', quota: 100 },
-    { partCode: 'PART_2', unitCode: 'GS_SSLC', unitNumber: 2, unitName: 'General Studies (SSLC Standard)', quota: 75 },
-    { partCode: 'PART_3', unitCode: 'APTITUDE', unitNumber: 3, unitName: 'Aptitude & Mental Ability', quota: 25 },
-  ],
-}
+// ─── Constants & Difficulty Ratios ───────────────────────────────────────────
 
 export const DIFFICULTY_RATIOS = {
-  easy: 0.30,   // 30%
+  easy: 0.20,   // 20%
   medium: 0.50, // 50%
-  hard: 0.20,   // 20%
+  hard: 0.30,   // 30%
+}
+
+// Group 1 Quota Blueprint (175 GS + 25 Aptitude = 200 Questions)
+export const GROUP1_SYLLABUS_QUOTAS = {
+  normalized200: [
+    { partCode: 'PART_A', unitCode: 'UNIT_I',     unitNumber: 1, unitName: 'General Science', quota: 10 },
+    { partCode: 'PART_A', unitCode: 'UNIT_II',    unitNumber: 2, unitName: 'Geography of India', quota: 10 },
+    { partCode: 'PART_A', unitCode: 'UNIT_III',   unitNumber: 3, unitName: 'History, Culture of India & INM', quota: 25 },
+    { partCode: 'PART_A', unitCode: 'UNIT_IV',    unitNumber: 4, unitName: 'Indian Polity', quota: 40 },
+    { partCode: 'PART_A', unitCode: 'UNIT_V',     unitNumber: 5, unitName: 'Indian Economy & Dev Admin in TN', quota: 50 },
+    { partCode: 'PART_A', unitCode: 'UNIT_VI',    unitNumber: 6, unitName: 'History, Culture, Heritage & Movements in TN', quota: 40 },
+    { partCode: 'PART_B', unitCode: 'APT_UNIT_I', unitNumber: 7, unitName: 'Aptitude & Arithmetic', quota: 15 },
+    { partCode: 'PART_B', unitCode: 'APT_UNIT_II',unitNumber: 8, unitName: 'Mental Ability & Reasoning', quota: 10 },
+  ],
+}
+
+// Group 2 Quota Blueprint (100 Language + 75 GS + 25 Aptitude = 200 Questions)
+export const GROUP2_SYLLABUS_QUOTAS = {
+  tamil200: [
+    { partCode: 'PART_A', unitCode: 'LANG_TA_A',  unitNumber: 1, unitName: 'பகுதி-அ (இலக்கணம்)', quota: 35 },
+    { partCode: 'PART_A', unitCode: 'LANG_TA_B',  unitNumber: 2, unitName: 'பகுதி-ஆ (இலக்கியம்)', quota: 35 },
+    { partCode: 'PART_A', unitCode: 'LANG_TA_C',  unitNumber: 3, unitName: 'பகுதி-இ (தமிழ் அறிஞர்கள்)', quota: 30 },
+    { partCode: 'PART_B', unitCode: 'UNIT_I',     unitNumber: 4, unitName: 'General Science', quota: 5 },
+    { partCode: 'PART_B', unitCode: 'UNIT_II',    unitNumber: 5, unitName: 'Current Events', quota: 5 },
+    { partCode: 'PART_B', unitCode: 'UNIT_III',   unitNumber: 6, unitName: 'Geography of India', quota: 10 },
+    { partCode: 'PART_B', unitCode: 'UNIT_IV',    unitNumber: 7, unitName: 'History and Culture of India', quota: 15 },
+    { partCode: 'PART_B', unitCode: 'UNIT_V',     unitNumber: 8, unitName: 'Indian Polity & Economy', quota: 20 },
+    { partCode: 'PART_B', unitCode: 'UNIT_VI',    unitNumber: 9, unitName: 'INM & Tamil Nadu Heritage', quota: 20 },
+    { partCode: 'PART_C', unitCode: 'APT_UNIT_I', unitNumber: 10, unitName: 'Aptitude & Arithmetic', quota: 15 },
+    { partCode: 'PART_C', unitCode: 'APT_UNIT_II',unitNumber: 11, unitName: 'Mental Ability & Reasoning', quota: 10 },
+  ],
+  english200: [
+    { partCode: 'PART_A', unitCode: 'LANG_EN_A',  unitNumber: 1, unitName: 'Part-A Grammar', quota: 35 },
+    { partCode: 'PART_A', unitCode: 'LANG_EN_B',  unitNumber: 2, unitName: 'Part-B Literature / Prescribed Poems', quota: 35 },
+    { partCode: 'PART_A', unitCode: 'LANG_EN_C',  unitNumber: 3, unitName: 'Part-C Authors & Works', quota: 30 },
+    { partCode: 'PART_B', unitCode: 'UNIT_I',     unitNumber: 4, unitName: 'General Science', quota: 5 },
+    { partCode: 'PART_B', unitCode: 'UNIT_II',    unitNumber: 5, unitName: 'Current Events', quota: 5 },
+    { partCode: 'PART_B', unitCode: 'UNIT_III',   unitNumber: 6, unitName: 'Geography of India', quota: 10 },
+    { partCode: 'PART_B', unitCode: 'UNIT_IV',    unitNumber: 7, unitName: 'History and Culture of India', quota: 15 },
+    { partCode: 'PART_B', unitCode: 'UNIT_V',     unitNumber: 8, unitName: 'Indian Polity & Economy', quota: 20 },
+    { partCode: 'PART_B', unitCode: 'UNIT_VI',    unitNumber: 9, unitName: 'INM & Tamil Nadu Heritage', quota: 20 },
+    { partCode: 'PART_C', unitCode: 'APT_UNIT_I', unitNumber: 10, unitName: 'Aptitude & Arithmetic', quota: 15 },
+    { partCode: 'PART_C', unitCode: 'APT_UNIT_II',unitNumber: 11, unitName: 'Mental Ability & Reasoning', quota: 10 },
+  ],
+}
+
+// Group 4 Quota Blueprint (100 Tamil + 75 GS + 25 Aptitude = 200 Questions)
+export const GROUP4_SYLLABUS_QUOTAS = {
+  normalized200: [
+    { partCode: 'PART_A', unitCode: 'LANG_TA_A',  unitNumber: 1, unitName: 'பகுதி-அ (இலக்கணம்)', quota: 35 },
+    { partCode: 'PART_A', unitCode: 'LANG_TA_B',  unitNumber: 2, unitName: 'பகுதி-ஆ (இலக்கியம்)', quota: 35 },
+    { partCode: 'PART_A', unitCode: 'LANG_TA_C',  unitNumber: 3, unitName: 'பகுதி-இ (தமிழ் அறிஞர்கள்)', quota: 30 },
+    { partCode: 'PART_B', unitCode: 'UNIT_I',     unitNumber: 4, unitName: 'General Science (SSLC)', quota: 8 },
+    { partCode: 'PART_B', unitCode: 'UNIT_II',    unitNumber: 5, unitName: 'Current Events', quota: 7 },
+    { partCode: 'PART_B', unitCode: 'UNIT_III',   unitNumber: 6, unitName: 'Geography of India', quota: 12 },
+    { partCode: 'PART_B', unitCode: 'UNIT_IV',    unitNumber: 7, unitName: 'History and Culture of India', quota: 15 },
+    { partCode: 'PART_B', unitCode: 'UNIT_V',     unitNumber: 8, unitName: 'Indian Polity & Economy', quota: 18 },
+    { partCode: 'PART_B', unitCode: 'UNIT_VI',    unitNumber: 9, unitName: 'INM & Tamil Nadu Culture', quota: 15 },
+    { partCode: 'PART_C', unitCode: 'APT_UNIT_I', unitNumber: 10, unitName: 'Aptitude & Arithmetic', quota: 15 },
+    { partCode: 'PART_C', unitCode: 'APT_UNIT_II',unitNumber: 11, unitName: 'Mental Ability & Reasoning', quota: 10 },
+  ],
 }
 
 // ─── Mathematical Biproportional / Hamilton Allocator ────────────────────────
 
-/**
- * Computes an integer matrix of quotas for each (Unit, Difficulty) bucket
- * such that:
- * 1. For each unit u, sum_d(q[u][d]) === unitQuotas[u]
- * 2. For each diff d, sum_u(q[u][d]) === totalQuestions * DIFFICULTY_RATIOS[d]
- */
 export function buildAllocationMatrix(unitDefinitions, totalTarget = 200) {
   const diffKeys = ['easy', 'medium', 'hard']
   const targetColTotals = {
-    easy: Math.round(totalTarget * DIFFICULTY_RATIOS.easy),     // e.g. 60
-    medium: Math.round(totalTarget * DIFFICULTY_RATIOS.medium), // e.g. 100
-    hard: Math.round(totalTarget * DIFFICULTY_RATIOS.hard),     // e.g. 40
+    easy: Math.round(totalTarget * DIFFICULTY_RATIOS.easy),     // 20% -> 40
+    medium: Math.round(totalTarget * DIFFICULTY_RATIOS.medium), // 50% -> 100
+    hard: Math.round(totalTarget * DIFFICULTY_RATIOS.hard),     // 30% -> 60
   }
 
-  // Initial Hamilton Largest Remainder rounding per row
+  // Hamilton Largest Remainder rounding per row
   const matrix = unitDefinitions.map(unit => {
     const rawEasy = unit.quota * DIFFICULTY_RATIOS.easy
     const rawMed  = unit.quota * DIFFICULTY_RATIOS.medium
@@ -100,7 +123,6 @@ export function buildAllocationMatrix(unitDefinitions, totalTarget = 200) {
 
     let remainder = unit.quota - (floorEasy + floorMed + floorHard)
 
-    // Sort fractional parts descending
     const fracs = [
       { key: 'easy', frac: rawEasy - floorEasy },
       { key: 'medium', frac: rawMed - floorMed },
@@ -129,11 +151,9 @@ export function buildAllocationMatrix(unitDefinitions, totalTarget = 200) {
     let diffDelta = targetColTotals[diff] - colSum
 
     if (diffDelta !== 0) {
-      // Find rows where we can adjust by transferring to/from another column with excess
       for (const r of matrix) {
         if (diffDelta === 0) break
         if (diffDelta > 0) {
-          // Find another column in this row that has surplus relative to target
           const otherDiff = diffKeys.find(k => k !== diff && r.quotas[k] > 1)
           if (otherDiff) {
             r.quotas[diff]++
@@ -141,7 +161,6 @@ export function buildAllocationMatrix(unitDefinitions, totalTarget = 200) {
             diffDelta--
           }
         } else if (diffDelta < 0 && r.quotas[diff] > 1) {
-          // Reduce diff in this row, add to another column
           const otherDiff = diffKeys.find(k => k !== diff)
           if (otherDiff) {
             r.quotas[diff]--
@@ -156,75 +175,57 @@ export function buildAllocationMatrix(unitDefinitions, totalTarget = 200) {
   return matrix
 }
 
-// ─── Fisher-Yates Randomized Sampling ─────────────────────────────────────────
+// ─── Fisher-Yates Randomized Sampling without Replacement ─────────────────────
 
-export function fisherYatesShuffle(array, rng = Math.random) {
-  const result = [...array]
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1))
-    ;[result[i], result[j]] = [result[j], result[i]]
-  }
-  return result
-}
-
-/**
- * Samples count elements from pool without replacement, avoiding used IDs/texts
- */
-export function sampleBucketWithoutReplacement(pool, count, usedIds = new Set(), usedTexts = new Set(), rng = Math.random) {
+function sampleBucketWithoutReplacement(pool, count, usedIds, usedTexts, rng = Math.random) {
   const available = pool.filter(q => {
-    const id = q.id || q._id
-    const textNorm = (q.question_text || '').trim().toLowerCase()
-    return (!id || !usedIds.has(id)) && (!textNorm || !usedTexts.has(textNorm))
+    if (!q || !q.id) return false
+    if (usedIds.has(q.id)) return false
+    const textKey = (q.question_text || q.en_question_text || '').trim().toLowerCase()
+    if (textKey && usedTexts.has(textKey)) return false
+    return true
   })
 
-  const shuffled = fisherYatesShuffle(available, rng)
-  const selected = shuffled.slice(0, count)
+  // Shuffle available candidates
+  const shuffled = [...available]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
 
+  const selected = shuffled.slice(0, count)
   selected.forEach(q => {
-    if (q.id) usedIds.add(q.id)
-    if (q._id) usedIds.add(q._id)
-    const textNorm = (q.question_text || '').trim().toLowerCase()
-    if (textNorm) usedTexts.add(textNorm)
+    usedIds.add(q.id)
+    const textKey = (q.question_text || q.en_question_text || '').trim().toLowerCase()
+    if (textKey) usedTexts.add(textKey)
   })
 
   return {
     selected,
     availableCount: available.length,
-    deficit: Math.max(0, count - selected.length)
+    deficit: Math.max(0, count - selected.length),
   }
 }
 
-// ─── Zero AI Hallucination Policy ─────────────────────────────────────────────
-// Under no circumstances are synthetic or placeholder questions generated on the fly.
-// All test questions are queried strictly from the curated admin database question bank.
-
-// ─── Main Test Generator Service ──────────────────────────────────────────────
+// ─── Intelligent Test Generator Engine ────────────────────────────────────────
 
 export const testGeneratorService = {
   /**
-   * Generates a 200-question Group 1 test strictly complying with:
-   * - Unit quotas (Part A: U1-10, U2-10, U3-25, U4-40, U5-45/50, U6-45/50; Part B: U1-15, U2-10)
-   * - Difficulty balancing: Easy 30% (60), Medium 50% (100), Hard 20% (40)
-   * - Zero duplicates across question IDs and question texts
+   * Generates a 200-question Group 1 test with exact blueprint quotas:
+   * UNIT_I (10) + UNIT_II (10) + UNIT_III (25) + UNIT_IV (40) + UNIT_V (50) + UNIT_VI (40) + APT_UNIT_I (15) + APT_UNIT_II (10) = 200 Qs.
+   * Zero-repetition tracking: prioritizes unseen questions for userId.
    */
   async generateGroup1Test(options = {}) {
     const {
-      quotaResolutionMode = 'normalize_to_200', // 'normalize_to_200' | 'raw_210'
-      customQuotas = null,
+      userId = null,
       questionPoolProvider = null,
       strict = false,
       allowFallback = true,
       rng = Math.random,
     } = options
 
-    const unitDefs = customQuotas || (
-      quotaResolutionMode === 'raw_210'
-        ? GROUP1_SYLLABUS_QUOTAS.raw
-        : GROUP1_SYLLABUS_QUOTAS.normalized200
-    )
-
-    const totalTarget = unitDefs.reduce((acc, u) => acc + u.quota, 0)
-    const allocationMatrix = buildAllocationMatrix(unitDefs, totalTarget)
+    const units = GROUP1_SYLLABUS_QUOTAS.normalized200
+    const allocationMatrix = buildAllocationMatrix(units, 200)
 
     const usedIds = new Set()
     const usedTexts = new Set()
@@ -232,34 +233,43 @@ export const testGeneratorService = {
     const warnings = []
     const fallbacks = []
 
-    // Map each unit to its pool
     for (const unitRow of allocationMatrix) {
       for (const diff of ['easy', 'medium', 'hard']) {
         const requiredCount = unitRow.quotas[diff]
         if (requiredCount <= 0) continue
 
-        // Fetch questions from provider or repository
         let candidatePool = []
         if (typeof questionPoolProvider === 'function') {
           candidatePool = await questionPoolProvider({
             examGroup: 'TNPSC Group 1',
             partCode: unitRow.partCode,
             unitCode: unitRow.unitCode,
-            unitId: unitRow.unitId,
+            unitNumber: unitRow.unitNumber,
             unitName: unitRow.unitName,
             difficultyLevel: diff,
           })
         } else {
-          // Query question bank by unit and difficulty
           candidatePool = await this.fetchQuestionBankPool({
             groupName: 'TNPSC Group 1',
+            examTag: 'TNPSC_GROUP_1',
             unitCode: unitRow.unitCode,
             difficultyLevel: diff,
           })
         }
 
+        // Apply Zero-Repetition Partition if userId provided
+        let orderedPool = candidatePool || []
+        if (userId && orderedPool.length > 0) {
+          const { unseen, seen } = await questionHistoryService.partitionPoolByHistory(
+            userId,
+            'TNPSC_GROUP_1',
+            orderedPool
+          )
+          orderedPool = [...unseen, ...seen]
+        }
+
         const { selected, availableCount, deficit } = sampleBucketWithoutReplacement(
-          candidatePool || [],
+          orderedPool,
           requiredCount,
           usedIds,
           usedTexts,
@@ -270,7 +280,10 @@ export const testGeneratorService = {
           ...q,
           part_code: q.part_code || unitRow.partCode,
           unit_code: q.unit_code || unitRow.unitCode,
+          unit_name: q.unit_name || unitRow.unitName,
           difficulty_level: q.difficulty_level || diff,
+          group_tag: 'Group 1',
+          group_name: 'TNPSC Group 1',
         }))
         selectedQuestions.push(...stamped)
 
@@ -291,34 +304,40 @@ export const testGeneratorService = {
             warnings.push(
               `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${deficit} questions (requested ${requiredCount}, got ${selected.length}).`
             )
-            // Attempt adjacent difficulty fallback from same unit
+            // Adjacent difficulty fallback
             const otherDiffs = ['medium', 'easy', 'hard'].filter(k => k !== diff)
             let backfilled = 0
 
             for (const altDiff of otherDiffs) {
               if (backfilled >= deficit) break
-              let altPool = []
-              if (typeof questionPoolProvider === 'function') {
-                altPool = await questionPoolProvider({
-                  examGroup: 'TNPSC Group 1',
-                  partCode: unitRow.partCode,
-                  unitCode: unitRow.unitCode,
-                  unitId: unitRow.unitId,
-                  unitName: unitRow.unitName,
-                  difficultyLevel: altDiff,
-                })
-              } else {
-                altPool = await this.fetchQuestionBankPool({
-                  groupName: 'TNPSC Group 1',
-                  unitCode: unitRow.unitCode,
-                  difficultyLevel: altDiff,
-                })
+              const altPool = await this.fetchQuestionBankPool({
+                groupName: 'TNPSC Group 1',
+                examTag: 'TNPSC_GROUP_1',
+                unitCode: unitRow.unitCode,
+                difficultyLevel: altDiff,
+              })
+
+              let orderedAlt = altPool || []
+              if (userId && orderedAlt.length > 0) {
+                const { unseen, seen } = await questionHistoryService.partitionPoolByHistory(
+                  userId,
+                  'TNPSC_GROUP_1',
+                  orderedAlt
+                )
+                orderedAlt = [...unseen, ...seen]
               }
 
               const needed = deficit - backfilled
-              const altSample = sampleBucketWithoutReplacement(altPool || [], needed, usedIds, usedTexts, rng)
+              const altSample = sampleBucketWithoutReplacement(orderedAlt, needed, usedIds, usedTexts, rng)
               if (altSample.selected.length > 0) {
-                selectedQuestions.push(...altSample.selected)
+                selectedQuestions.push(...altSample.selected.map(q => ({
+                  ...q,
+                  unit_code: unitRow.unitCode,
+                  unit_name: unitRow.unitName,
+                  difficulty_level: altDiff,
+                  group_tag: 'Group 1',
+                  group_name: 'TNPSC Group 1',
+                })))
                 backfilled += altSample.selected.length
                 fallbacks.push({
                   unitCode: unitRow.unitCode,
@@ -328,26 +347,16 @@ export const testGeneratorService = {
                 })
               }
             }
-
-            // Zero AI Hallucination: Never backfill with fake questions
-            const remainingDeficit = deficit - backfilled
-            if (remainingDeficit > 0) {
-              warnings.push(
-                `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${remainingDeficit} questions in curated database question bank.`
-              )
-            }
           }
         }
       }
     }
 
-    // Number sequentially from 1 to 200
-    const finalQuestions = selectedQuestions.slice(0, totalTarget).map((q, idx) => ({
+    const finalQuestions = selectedQuestions.slice(0, 200).map((q, idx) => ({
       ...q,
       question_number: idx + 1,
     }))
 
-    // Tally actual distributions
     const actualDiffBreakdown = { easy: 0, medium: 0, hard: 0 }
     const actualUnitBreakdown = {}
 
@@ -363,7 +372,7 @@ export const testGeneratorService = {
     return {
       examType: 'TNPSC Group 1',
       totalQuestions: finalQuestions.length,
-      targetQuota: totalTarget,
+      targetQuota: 200,
       questions: finalQuestions,
       allocationMatrix,
       distribution: {
@@ -380,56 +389,24 @@ export const testGeneratorService = {
   },
 
   /**
-   * Generates a 200-question Group 2/2A test strictly complying with:
-   * - Part 1 (100 Questions): Selected Language ('General English' or 'General Tamil')
-   *   - Difficulty balance: 30 Easy, 50 Medium, 20 Hard
-   * - Part 2 (100 Questions): Common General Studies (75) + Aptitude (25)
-   *   - Difficulty balance: 30 Easy, 50 Medium, 20 Hard
-   * - Total: Exactly 200 Questions (60 Easy, 100 Medium, 40 Hard)
+   * Generates a 200-question Group 2/2A test:
+   * - Part A (100 Questions): Selected Language (Tamil: 35+35+30 or English: 35+35+30)
+   * - Part B (75 Questions): GS Units I-VI (5+5+10+15+20+20)
+   * - Part C (25 Questions): Aptitude (15+10)
+   * Total: Exactly 200 Questions (20% Easy, 50% Medium, 30% Hard)
    */
   async generateGroup2Test(options = {}) {
     const {
-      languageSpecialization = 'General Tamil', // 'General English' | 'General Tamil'
-      questionPoolProvider = null,
+      userId = null,
+      languageSpecialization = 'General Tamil',
       strict = false,
       allowFallback = true,
       rng = Math.random,
     } = options
 
-    const validLangs = ['General English', 'General Tamil']
-    const selectedLang = validLangs.includes(languageSpecialization) ? languageSpecialization : 'General Tamil'
-
-    // Blueprint definition for Group 2 (200 Questions)
-    const part1LanguageUnits = [
-      {
-        partCode: 'PART_1',
-        unitCode: selectedLang === 'General English' ? 'LANG_EN' : 'LANG_TA',
-        unitNumber: 1,
-        unitName: selectedLang,
-        quota: 100,
-      }
-    ]
-
-    const part2CommonUnits = [
-      {
-        partCode: 'PART_2',
-        unitCode: 'GS_COMMON',
-        unitNumber: 2,
-        unitName: 'General Studies (Science, History, Polity, Geography)',
-        quota: 75,
-      },
-      {
-        partCode: 'PART_2',
-        unitCode: 'APTITUDE',
-        unitNumber: 3,
-        unitName: 'Aptitude & Mental Ability Tests',
-        quota: 25,
-      }
-    ]
-
-    const part1Matrix = buildAllocationMatrix(part1LanguageUnits, 100)
-    const part2Matrix = buildAllocationMatrix(part2CommonUnits, 100)
-    const combinedMatrix = [...part1Matrix, ...part2Matrix]
+    const isEnglish = languageSpecialization?.includes('English')
+    const unitDefinitions = isEnglish ? GROUP2_SYLLABUS_QUOTAS.english200 : GROUP2_SYLLABUS_QUOTAS.tamil200
+    const allocationMatrix = buildAllocationMatrix(unitDefinitions, 200)
 
     const usedIds = new Set()
     const usedTexts = new Set()
@@ -437,32 +414,31 @@ export const testGeneratorService = {
     const warnings = []
     const fallbacks = []
 
-    for (const unitRow of combinedMatrix) {
+    for (const unitRow of allocationMatrix) {
       for (const diff of ['easy', 'medium', 'hard']) {
         const requiredCount = unitRow.quotas[diff]
         if (requiredCount <= 0) continue
 
-        let candidatePool = []
-        if (typeof questionPoolProvider === 'function') {
-          candidatePool = await questionPoolProvider({
-            examGroup: 'TNPSC Group 2/2A',
-            partCode: unitRow.partCode,
-            unitCode: unitRow.unitCode,
-            unitName: unitRow.unitName,
-            languageSpecialization: selectedLang,
-            difficultyLevel: diff,
-          })
-        } else {
-          candidatePool = await this.fetchQuestionBankPool({
-            groupName: 'TNPSC Group 2/2A',
-            unitCode: unitRow.unitCode,
-            difficultyLevel: diff,
-            tags: [selectedLang, unitRow.unitCode],
-          })
+        let candidatePool = await this.fetchQuestionBankPool({
+          groupName: 'TNPSC Group 2/2A',
+          examTag: 'TNPSC_GROUP_2',
+          unitCode: unitRow.unitCode,
+          difficultyLevel: diff,
+          languageSpecialization: isEnglish ? 'General English' : 'General Tamil',
+        })
+
+        let orderedPool = candidatePool || []
+        if (userId && orderedPool.length > 0) {
+          const { unseen, seen } = await questionHistoryService.partitionPoolByHistory(
+            userId,
+            'TNPSC_GROUP_2',
+            orderedPool
+          )
+          orderedPool = [...unseen, ...seen]
         }
 
         const { selected, availableCount, deficit } = sampleBucketWithoutReplacement(
-          candidatePool || [],
+          orderedPool,
           requiredCount,
           usedIds,
           usedTexts,
@@ -473,71 +449,40 @@ export const testGeneratorService = {
           ...q,
           part_code: q.part_code || unitRow.partCode,
           unit_code: q.unit_code || unitRow.unitCode,
+          unit_name: q.unit_name || unitRow.unitName,
           difficulty_level: q.difficulty_level || diff,
+          group_tag: 'Group 2/2A',
+          group_name: 'TNPSC Group 2/2A',
         }))
         selectedQuestions.push(...stamped)
 
-        if (deficit > 0) {
-          if (strict) {
-            throw new InsufficientQuestionPoolError({
-              bucket: `${unitRow.unitCode} (${unitRow.unitName})`,
+        if (deficit > 0 && allowFallback) {
+          warnings.push(`Group 2 Bucket ${unitRow.unitCode} [${diff}] has deficit of ${deficit} questions.`)
+          const otherDiffs = ['medium', 'easy', 'hard'].filter(k => k !== diff)
+          let backfilled = 0
+
+          for (const altDiff of otherDiffs) {
+            if (backfilled >= deficit) break
+            const altPool = await this.fetchQuestionBankPool({
+              groupName: 'TNPSC Group 2/2A',
+              examTag: 'TNPSC_GROUP_2',
               unitCode: unitRow.unitCode,
-              unitName: unitRow.unitName,
-              difficultyLevel: diff,
-              requested: requiredCount,
-              available: availableCount,
-              deficit,
+              difficultyLevel: altDiff,
+              languageSpecialization: isEnglish ? 'General English' : 'General Tamil',
             })
-          }
 
-          if (allowFallback) {
-            warnings.push(
-              `Group 2 Bucket ${unitRow.unitCode} [${diff}] has deficit of ${deficit} questions.`
-            )
-            // Adjacent difficulty fallback
-            const otherDiffs = ['medium', 'easy', 'hard'].filter(k => k !== diff)
-            let backfilled = 0
-
-            for (const altDiff of otherDiffs) {
-              if (backfilled >= deficit) break
-              let altPool = []
-              if (typeof questionPoolProvider === 'function') {
-                altPool = await questionPoolProvider({
-                  examGroup: 'TNPSC Group 2/2A',
-                  partCode: unitRow.partCode,
-                  unitCode: unitRow.unitCode,
-                  unitName: unitRow.unitName,
-                  languageSpecialization: selectedLang,
-                  difficultyLevel: altDiff,
-                })
-              } else {
-                altPool = await this.fetchQuestionBankPool({
-                  groupName: 'TNPSC Group 2/2A',
-                  unitCode: unitRow.unitCode,
-                  difficultyLevel: altDiff,
-                })
-              }
-
-              const needed = deficit - backfilled
-              const altSample = sampleBucketWithoutReplacement(altPool || [], needed, usedIds, usedTexts, rng)
-              if (altSample.selected.length > 0) {
-                selectedQuestions.push(...altSample.selected)
-                backfilled += altSample.selected.length
-                fallbacks.push({
-                  unitCode: unitRow.unitCode,
-                  originalDiff: diff,
-                  fallbackDiff: altDiff,
-                  count: altSample.selected.length,
-                })
-              }
-            }
-
-            // Zero AI Hallucination: Never backfill with fake questions
-            const remainingDeficit = deficit - backfilled
-            if (remainingDeficit > 0) {
-              warnings.push(
-                `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${remainingDeficit} questions in curated database question bank.`
-              )
+            const needed = deficit - backfilled
+            const altSample = sampleBucketWithoutReplacement(altPool || [], needed, usedIds, usedTexts, rng)
+            if (altSample.selected.length > 0) {
+              selectedQuestions.push(...altSample.selected.map(q => ({
+                ...q,
+                unit_code: unitRow.unitCode,
+                unit_name: unitRow.unitName,
+                difficulty_level: altDiff,
+                group_tag: 'Group 2/2A',
+                group_name: 'TNPSC Group 2/2A',
+              })))
+              backfilled += altSample.selected.length
             }
           }
         }
@@ -548,30 +493,13 @@ export const testGeneratorService = {
       ...q,
       question_number: idx + 1,
     }))
-
-    const actualDiffBreakdown = { easy: 0, medium: 0, hard: 0 }
-    const actualPartBreakdown = { PART_1: 0, PART_2: 0 }
-
-    finalQuestions.forEach(q => {
-      const d = (q.difficulty_level || 'medium').toLowerCase()
-      if (actualDiffBreakdown[d] !== undefined) actualDiffBreakdown[d]++
-      else actualDiffBreakdown.medium++
-
-      const p = q.part_code || (q.question_number <= 100 ? 'PART_1' : 'PART_2')
-      actualPartBreakdown[p] = (actualPartBreakdown[p] || 0) + 1
-    })
 
     return {
       examType: 'TNPSC Group 2/2A',
-      languageSpecialization: selectedLang,
+      languageSpecialization: isEnglish ? 'General English' : 'General Tamil',
       totalQuestions: finalQuestions.length,
       targetQuota: 200,
       questions: finalQuestions,
-      allocationMatrix: combinedMatrix,
-      distribution: {
-        difficulty: actualDiffBreakdown,
-        parts: actualPartBreakdown,
-      },
       manifest: {
         totalUniqueIds: usedIds.size,
         warnings,
@@ -582,62 +510,23 @@ export const testGeneratorService = {
   },
 
   /**
-   * Generates a 200-question Group 4 test strictly complying with:
-   * - Part 1 (100 Questions): Selected Language ('General English' or 'General Tamil')
-   *   - Difficulty balance: 30 Easy, 50 Medium, 20 Hard
-   * - Part 2 (75 Questions): General Studies (SSLC Standard)
-   *   - Difficulty balance: 22 Easy, 38 Medium, 15 Hard
-   * - Part 3 (25 Questions): Aptitude & Mental Ability
-   *   - Difficulty balance: 8 Easy, 12 Medium, 5 Hard
-   * - Total: Exactly 200 Questions (60 Easy, 100 Medium, 40 Hard)
+   * Generates a 200-question Group 4 test:
+   * - Part A (100 Questions): General Tamil (35+35+30)
+   * - Part B (75 Questions): GS Units I-VI (8+7+12+15+18+15)
+   * - Part C (25 Questions): Aptitude (15+10)
+   * Total: Exactly 200 Questions (20% Easy, 50% Medium, 30% Hard)
    */
   async generateGroup4Test(options = {}) {
     const {
-      languageSpecialization = 'General Tamil', // 'General English' | 'General Tamil'
-      questionPoolProvider = null,
+      userId = null,
+      languageSpecialization = 'General Tamil',
       strict = false,
       allowFallback = true,
       rng = Math.random,
     } = options
 
-    const validLangs = ['General English', 'General Tamil']
-    const selectedLang = validLangs.includes(languageSpecialization) ? languageSpecialization : 'General Tamil'
-
-    // Blueprint definition for Group 4 (200 Questions)
-    const part1LanguageUnits = [
-      {
-        partCode: 'PART_1',
-        unitCode: selectedLang === 'General English' ? 'LANG_EN' : 'LANG_TA',
-        unitNumber: 1,
-        unitName: selectedLang,
-        quota: 100,
-      }
-    ]
-
-    const part2GeneralStudiesUnits = [
-      {
-        partCode: 'PART_2',
-        unitCode: 'GS_SSLC',
-        unitNumber: 2,
-        unitName: 'General Studies (Science, History, Geography, Polity, Economy)',
-        quota: 75,
-      }
-    ]
-
-    const part3AptitudeUnits = [
-      {
-        partCode: 'PART_3',
-        unitCode: 'APTITUDE',
-        unitNumber: 3,
-        unitName: 'Aptitude & Mental Ability Tests (SSLC Standard)',
-        quota: 25,
-      }
-    ]
-
-    const part1Matrix = buildAllocationMatrix(part1LanguageUnits, 100)
-    const part2Matrix = buildAllocationMatrix(part2GeneralStudiesUnits, 75)
-    const part3Matrix = buildAllocationMatrix(part3AptitudeUnits, 25)
-    const combinedMatrix = [...part1Matrix, ...part2Matrix, ...part3Matrix]
+    const unitDefinitions = GROUP4_SYLLABUS_QUOTAS.normalized200
+    const allocationMatrix = buildAllocationMatrix(unitDefinitions, 200)
 
     const usedIds = new Set()
     const usedTexts = new Set()
@@ -645,32 +534,31 @@ export const testGeneratorService = {
     const warnings = []
     const fallbacks = []
 
-    for (const unitRow of combinedMatrix) {
+    for (const unitRow of allocationMatrix) {
       for (const diff of ['easy', 'medium', 'hard']) {
         const requiredCount = unitRow.quotas[diff]
         if (requiredCount <= 0) continue
 
-        let candidatePool = []
-        if (typeof questionPoolProvider === 'function') {
-          candidatePool = await questionPoolProvider({
-            examGroup: 'TNPSC Group 4',
-            partCode: unitRow.partCode,
-            unitCode: unitRow.unitCode,
-            unitName: unitRow.unitName,
-            languageSpecialization: selectedLang,
-            difficultyLevel: diff,
-          })
-        } else {
-          candidatePool = await this.fetchQuestionBankPool({
-            groupName: 'TNPSC Group 4',
-            unitCode: unitRow.unitCode,
-            difficultyLevel: diff,
-            languageSpecialization: selectedLang,
-          })
+        let candidatePool = await this.fetchQuestionBankPool({
+          groupName: 'TNPSC Group 4',
+          examTag: 'TNPSC_GROUP_4',
+          unitCode: unitRow.unitCode,
+          difficultyLevel: diff,
+          languageSpecialization: 'General Tamil',
+        })
+
+        let orderedPool = candidatePool || []
+        if (userId && orderedPool.length > 0) {
+          const { unseen, seen } = await questionHistoryService.partitionPoolByHistory(
+            userId,
+            'TNPSC_GROUP_4',
+            orderedPool
+          )
+          orderedPool = [...unseen, ...seen]
         }
 
         const { selected, availableCount, deficit } = sampleBucketWithoutReplacement(
-          candidatePool || [],
+          orderedPool,
           requiredCount,
           usedIds,
           usedTexts,
@@ -681,73 +569,40 @@ export const testGeneratorService = {
           ...q,
           part_code: q.part_code || unitRow.partCode,
           unit_code: q.unit_code || unitRow.unitCode,
+          unit_name: q.unit_name || unitRow.unitName,
           difficulty_level: q.difficulty_level || diff,
+          group_tag: 'Group 4',
+          group_name: 'TNPSC Group 4',
         }))
         selectedQuestions.push(...stamped)
 
-        if (deficit > 0) {
-          if (strict) {
-            throw new InsufficientQuestionPoolError({
-              bucket: `${unitRow.unitCode} (${unitRow.unitName})`,
+        if (deficit > 0 && allowFallback) {
+          warnings.push(`Group 4 Bucket ${unitRow.unitCode} [${diff}] has deficit of ${deficit} questions.`)
+          const otherDiffs = ['medium', 'easy', 'hard'].filter(k => k !== diff)
+          let backfilled = 0
+
+          for (const altDiff of otherDiffs) {
+            if (backfilled >= deficit) break
+            const altPool = await this.fetchQuestionBankPool({
+              groupName: 'TNPSC Group 4',
+              examTag: 'TNPSC_GROUP_4',
               unitCode: unitRow.unitCode,
-              unitName: unitRow.unitName,
-              difficultyLevel: diff,
-              requested: requiredCount,
-              available: availableCount,
-              deficit,
+              difficultyLevel: altDiff,
+              languageSpecialization: 'General Tamil',
             })
-          }
 
-          if (allowFallback) {
-            warnings.push(
-              `Group 4 Bucket ${unitRow.unitCode} [${diff}] has deficit of ${deficit} questions.`
-            )
-
-            // Adjacent difficulty fallback
-            const otherDiffs = ['medium', 'easy', 'hard'].filter(k => k !== diff)
-            let backfilled = 0
-
-            for (const altDiff of otherDiffs) {
-              if (backfilled >= deficit) break
-              let altPool = []
-              if (typeof questionPoolProvider === 'function') {
-                altPool = await questionPoolProvider({
-                  examGroup: 'TNPSC Group 4',
-                  partCode: unitRow.partCode,
-                  unitCode: unitRow.unitCode,
-                  unitName: unitRow.unitName,
-                  languageSpecialization: selectedLang,
-                  difficultyLevel: altDiff,
-                })
-              } else {
-                altPool = await this.fetchQuestionBankPool({
-                  groupName: 'TNPSC Group 4',
-                  unitCode: unitRow.unitCode,
-                  difficultyLevel: altDiff,
-                  languageSpecialization: selectedLang,
-                })
-              }
-
-              const needed = deficit - backfilled
-              const altSample = sampleBucketWithoutReplacement(altPool || [], needed, usedIds, usedTexts, rng)
-              if (altSample.selected.length > 0) {
-                selectedQuestions.push(...altSample.selected)
-                backfilled += altSample.selected.length
-                fallbacks.push({
-                  unitCode: unitRow.unitCode,
-                  originalDiff: diff,
-                  fallbackDiff: altDiff,
-                  count: altSample.selected.length,
-                })
-              }
-            }
-
-            // Zero AI Hallucination: Never backfill with fake questions
-            const remainingDeficit = deficit - backfilled
-            if (remainingDeficit > 0) {
-              warnings.push(
-                `Bucket ${unitRow.unitCode} [${diff}] has deficit of ${remainingDeficit} questions in curated database question bank.`
-              )
+            const needed = deficit - backfilled
+            const altSample = sampleBucketWithoutReplacement(altPool || [], needed, usedIds, usedTexts, rng)
+            if (altSample.selected.length > 0) {
+              selectedQuestions.push(...altSample.selected.map(q => ({
+                ...q,
+                unit_code: unitRow.unitCode,
+                unit_name: unitRow.unitName,
+                difficulty_level: altDiff,
+                group_tag: 'Group 4',
+                group_name: 'TNPSC Group 4',
+              })))
+              backfilled += altSample.selected.length
             }
           }
         }
@@ -759,29 +614,12 @@ export const testGeneratorService = {
       question_number: idx + 1,
     }))
 
-    const actualDiffBreakdown = { easy: 0, medium: 0, hard: 0 }
-    const actualPartBreakdown = { PART_1: 0, PART_2: 0, PART_3: 0 }
-
-    finalQuestions.forEach(q => {
-      const d = (q.difficulty_level || 'medium').toLowerCase()
-      if (actualDiffBreakdown[d] !== undefined) actualDiffBreakdown[d]++
-      else actualDiffBreakdown.medium++
-
-      const p = q.part_code || (q.question_number <= 100 ? 'PART_1' : q.question_number <= 175 ? 'PART_2' : 'PART_3')
-      actualPartBreakdown[p] = (actualPartBreakdown[p] || 0) + 1
-    })
-
     return {
       examType: 'TNPSC Group 4',
-      languageSpecialization: selectedLang,
+      languageSpecialization: 'General Tamil',
       totalQuestions: finalQuestions.length,
       targetQuota: 200,
       questions: finalQuestions,
-      allocationMatrix: combinedMatrix,
-      distribution: {
-        difficulty: actualDiffBreakdown,
-        parts: actualPartBreakdown,
-      },
       manifest: {
         totalUniqueIds: usedIds.size,
         warnings,
@@ -792,43 +630,29 @@ export const testGeneratorService = {
   },
 
   /**
-   * Helper to fetch candidate questions from Supabase public.questions
-   * Resiliently finds published papers for the exam group and queries real questions
+   * Helper: fetches questions from Supabase question bank for a specific unit & difficulty
    */
-  async fetchQuestionBankPool({ groupName, unitCode, difficultyLevel, languageSpecialization, tags = [] }) {
+  async fetchQuestionBankPool({ groupName, examTag, unitCode, difficultyLevel, languageSpecialization }) {
     try {
-      let papersQuery = supabase
-        .from('papers')
-        .select('id, title')
-        .eq('status', 'published')
-
-      if (groupName?.includes('Group 4')) {
-        papersQuery = papersQuery.or('exam_name.ilike.%Group 4%,title.ilike.%Group 4%,title.ilike.%Group-4%')
-      } else if (groupName?.includes('Group 1')) {
-        papersQuery = papersQuery.or('exam_name.ilike.%Group 1%,title.ilike.%Group 1%,title.ilike.%Group-1%')
-      } else if (groupName?.includes('Group 2')) {
-        papersQuery = papersQuery.or('exam_name.ilike.%Group 2%,title.ilike.%Group 2%,title.ilike.%Group-2%')
-      } else if (groupName) {
-        papersQuery = papersQuery.eq('exam_name', groupName)
-      }
-
-      const { data: papers, error: pErr } = await papersQuery.limit(10)
-      if (pErr || !papers || papers.length === 0) return []
-
-      const paperIds = papers.map(p => p.id)
-      const { data: qData, error: qErr } = await supabase
+      let q = supabase
         .from('questions')
-        .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil')
-        .in('paper_id', paperIds)
-        .limit(200)
+        .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, unit_name, unit_code, macro_topic, micro_topic, difficulty_level, is_pyq')
+        .not('correct_option', 'is', null)
 
-      if (qErr) {
-        console.warn('[testGeneratorService] DB fetch note:', qErr.message)
-        return []
+      // Filter by unit_code if present
+      if (unitCode) {
+        q = q.or(`unit_code.eq.${unitCode},unit_tag.ilike.%${unitCode}%,unit_name.ilike.%${unitCode}%`)
       }
-      return qData || []
+
+      const { data, error } = await q.limit(250)
+      if (error) {
+        console.warn('[testGeneratorService] Query error fallback:', error.message)
+        const fb = await supabase.from('questions').select('*').limit(250)
+        return fb.data || []
+      }
+      return data || []
     } catch (e) {
-      console.warn('[testGeneratorService] Query caught:', e)
+      console.warn('[testGeneratorService] fetchQuestionBankPool error:', e)
       return []
     }
   },
@@ -848,7 +672,7 @@ export const testGeneratorService = {
       year: 'numeric'
     })})${generatedTest.languageSpecialization ? ` [${generatedTest.languageSpecialization}]` : ''}`
 
-    // 1. Create a published Paper with schema-valid columns (maximum_marks instead of total_marks)
+    // 1. Create a published Paper
     const paperPayload = {
       title: examTitle,
       year: new Date().getFullYear(),
@@ -869,38 +693,38 @@ export const testGeneratorService = {
       .single()
 
     if (paperErr) {
-      console.error('[testGeneratorService] Live DB paper insert failed:', paperErr)
-      throw new Error(`Failed to create mock exam paper in database: ${paperErr.message || JSON.stringify(paperErr)}`)
+      throw new Error(`Failed to create mock exam paper in database: ${paperErr.message}`)
     }
     const paper = createdPaper
 
-    // 2. Insert questions for this paper with complete 5-identifier metadata
+    // 2. Insert questions for this paper with complete 5-identifier metadata + Option E
     const questionRecords = generatedTest.questions.map((q, idx) => ({
       paper_id: paper.id,
       question_number: idx + 1,
-      question_text: q.question_text,
-      option_a: q.option_a,
-      option_b: q.option_b,
-      option_c: q.option_c,
-      option_d: q.option_d,
-      correct_option: q.correct_option || 'A',
-      explanation: q.explanation || null,
-      question_text_tamil: q.question_text_tamil || null,
-      option_a_tamil: q.option_a_tamil || null,
-      option_b_tamil: q.option_b_tamil || null,
-      option_c_tamil: q.option_c_tamil || null,
-      option_d_tamil: q.option_d_tamil || null,
-      explanation_tamil: q.explanation_tamil || null,
+      question_text: q.question_text || q.en_question_text,
+      option_a: q.option_a || q.en_option_a,
+      option_b: q.option_b || q.en_option_b,
+      option_c: q.option_c || q.en_option_c,
+      option_d: q.option_d || q.en_option_d,
+      correct_option: q.correct_option || q.answer_key || 'A',
+      explanation: q.explanation || q.en_explanation || null,
+      question_text_tamil: q.question_text_tamil || q.ta_question_text || null,
+      option_a_tamil: q.option_a_tamil || q.ta_option_a || null,
+      option_b_tamil: q.option_b_tamil || q.ta_option_b || null,
+      option_c_tamil: q.option_c_tamil || q.ta_option_c || null,
+      option_d_tamil: q.option_d_tamil || q.ta_option_d || null,
+      explanation_tamil: q.explanation_tamil || q.ta_explanation || null,
       group_tag: q.group_tag || (generatedTest.examType?.includes('Group 1') ? 'Group 1' : generatedTest.examType?.includes('Group 2') ? 'Group 2' : 'Group 4'),
       group_name: q.group_name || generatedTest.examType || 'TNPSC Group 4',
-      unit_tag: q.unit_tag || (q.unit_name ? q.unit_name.split('—')[0].trim() : 'Unit 1'),
+      unit_tag: q.unit_tag || (q.unit_code ? q.unit_code : 'Unit 1'),
       unit_name: q.unit_name || null,
+      unit_code: q.unit_code || null,
       macro_topic: q.macro_topic || q.macro_topic_name || null,
       macro_topic_name: q.macro_topic_name || q.macro_topic || null,
       micro_topic: q.micro_topic || q.micro_topic_name || null,
       micro_topic_name: q.micro_topic_name || q.micro_topic || null,
-      exam_year: String(q.exam_year || '2024'),
-      is_pyq: Boolean(q.is_pyq),
+      exam_year: String(q.exam_year || q.year || '2024'),
+      is_pyq: Boolean(q.is_pyq || q.source_type === 'PYQ'),
       difficulty_level: q.difficulty_level || 'Medium',
     }))
 

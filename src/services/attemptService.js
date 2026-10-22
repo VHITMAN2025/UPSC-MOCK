@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js'
+import { questionHistoryService } from './questionHistoryService.js'
 
 export const attemptService = {
   async startOrGetAttempt(userId, paperId) {
@@ -191,7 +192,10 @@ export const attemptService = {
         let isCorrect = null
         let marksObtained = 0
 
-        if (!selected) {
+        // Option E ('Answer not known') or null selection is strictly unattempted
+        const isOptionE = selected && String(selected).trim().toUpperCase() === 'E'
+
+        if (!selected || isOptionE) {
           unansweredCount++
           isCorrect = null
           marksObtained = 0
@@ -242,6 +246,17 @@ export const attemptService = {
         .single()
 
       if (updateErr) throw updateErr
+
+      // Record seen questions in user_question_history for Zero-Repetition Tracking
+      const examTag = (paper?.exam_name || '').includes('Group 1')
+        ? 'TNPSC_GROUP_1'
+        : (paper?.exam_name || '').includes('Group 2')
+        ? 'TNPSC_GROUP_2'
+        : 'TNPSC_GROUP_4'
+
+      questionHistoryService.recordQuestionsSeen(attempt.user_id, examTag, upsertRows).catch(e => {
+        console.warn('[attemptService] recordQuestionsSeen note:', e)
+      })
 
       // Fetch previous attempt for progress comparison
       const { data: prevAttempts } = await supabase

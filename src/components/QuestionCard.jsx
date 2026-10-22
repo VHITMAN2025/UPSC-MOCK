@@ -46,6 +46,12 @@ export function QuestionCard({
       key: 'D', 
       textEn: question.option_d || '',
       textTa: question.option_d_tamil || question.option_d || '',
+    },
+    {
+      key: 'E',
+      textEn: question.option_e || 'Answer not known',
+      textTa: question.option_e_tamil || 'விடை தெரியவில்லை',
+      isOptionE: true,
     }
   ]
 
@@ -262,8 +268,12 @@ export function QuestionCard({
                 </span>
               )}
               {isReviewMode && isThisWrongSelection && (
-                <span className="text-xs font-bold text-red-700 bg-red-100 px-2.5 py-0.5 rounded-full shrink-0">
-                  Your Answer
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full shrink-0 ${
+                  opt.key === 'E'
+                    ? 'text-slate-700 bg-slate-200'
+                    : 'text-red-700 bg-red-100'
+                }`}>
+                  {opt.key === 'E' ? 'Answer Not Known (Option E · Unattempted)' : 'Your Answer'}
                 </span>
               )}
             </label>
