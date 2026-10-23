@@ -31,7 +31,11 @@ export function UserDashboard() {
   const [showSyllabus, setShowSyllabus] = useState(false)
 
   useEffect(() => {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.warn('[Dashboard] No user logged in')
+      setLoading(false)
+      return
+    }
     loadAll()
   }, [user?.id, selectedExam])
 
@@ -55,7 +59,10 @@ export function UserDashboard() {
       ])
 
       if (streakRes.status === 'fulfilled') setStreak(streakRes.value.data)
-      if (attemptsRes.status === 'fulfilled') setRecentAttempts(attemptsRes.value.slice(0, 5))
+      if (attemptsRes.status === 'fulfilled') {
+        console.log('[Dashboard] Loaded attempts:', attemptsRes.value.length)
+        setRecentAttempts(attemptsRes.value.slice(0, 5))
+      }
       if (affairsRes.status === 'fulfilled')  setRecentAffairs(affairsRes.value.data ?? [])
       if (notifsRes.status === 'fulfilled')   setRecentNotifs(notifsRes.value.data ?? [])
       if (notesRes.status === 'fulfilled')    setPinnedNotes(notesRes.value.data ?? [])
@@ -71,6 +78,8 @@ export function UserDashboard() {
   const completedAttempts = recentAttempts.filter(
     a => a.status === 'completed' && a.attempt_type !== 'QUICK_RECALL' && a.papers?.paper_type !== 'quick_recall'
   )
+  console.log('[Dashboard] Completed attempts:', completedAttempts.length, completedAttempts)
+  
   const avgAccuracy = completedAttempts.length
     ? (completedAttempts.reduce((s, a) => s + Number(a.accuracy ?? 0), 0) / completedAttempts.length).toFixed(1)
     : '—'
@@ -87,6 +96,17 @@ export function UserDashboard() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-7 h-7 animate-spin text-tnpsc-brand" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <p className="text-lg text-body-secondary">Please log in to view your dashboard</p>
+        <Link to="/login" className="px-6 py-3 bg-tnpsc-brand text-white rounded-lg font-semibold hover:bg-tnpsc-brand-dark transition-colors">
+          Go to Login
+        </Link>
       </div>
     )
   }

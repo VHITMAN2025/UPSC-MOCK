@@ -80,7 +80,16 @@ export function AdminExtractedQuestionsPage() {
     try {
       const res = await questionService.getAllExtractedQuestionsForAdmin({ limit: 4000 })
       const rawList = res.questions || []
+      console.log('[AdminExtractedQuestionsPage] Loaded questions:', rawList.length)
+      console.log('[AdminExtractedQuestionsPage] Sample questions:', rawList.slice(0, 3))
       const normalizedList = rawList.map((q, idx) => normalizeTo29Columns(q, idx + 1))
+      console.log('[AdminExtractedQuestionsPage] Normalized questions:', normalizedList.length)
+      console.log('[AdminExtractedQuestionsPage] Sample normalized:', normalizedList.slice(0, 3).map(q => ({
+        id: q.question_id,
+        exam_tag: q.exam_tag,
+        source_type: q.source_type,
+        text: q.en_question_text?.substring(0, 50)
+      })))
       setQuestions(normalizedList)
       setPapers(res.papers || [])
       if (res.papers?.length > 0 && !selectedTargetPaperId) {
@@ -108,10 +117,12 @@ export function AdminExtractedQuestionsPage() {
 
   // Filter questions belonging to selected exam group and source type
   const groupFilteredQuestions = useMemo(() => {
-    return questions.filter(q => {
-      const qTag = normalizeExamTag(q.exam_tag || q.group_tag)
-      if (qTag !== selectedGroupTag) return false
-
+    // If no questions loaded, return empty
+    if (questions.length === 0) return []
+    
+    // For now, show all questions regardless of taxonomy (since taxonomy columns don't exist in DB)
+    // Apply only source filter
+    const filtered = questions.filter(q => {
       if (sourceFilter === 'vina') {
         if (q.source_type !== 'VINA') return false
       } else if (sourceFilter === 'pyq') {
@@ -119,6 +130,16 @@ export function AdminExtractedQuestionsPage() {
       }
       return true
     })
+    
+    console.log('[AdminExtractedQuestionsPage] Filter results (taxonomy filtering disabled):', {
+      total: questions.length,
+      selectedGroup: selectedGroupTag,
+      sourceFilter,
+      filtered: filtered.length,
+      note: 'Showing all questions - taxonomy columns not in database'
+    })
+    
+    return filtered
   }, [questions, selectedGroupTag, sourceFilter])
 
   // Filter by search query
@@ -374,7 +395,41 @@ export function AdminExtractedQuestionsPage() {
     try {
       const validQuestions = csvValidationResults.rows
         .filter(r => r.isValid)
-        .map(r => r.data)
+        .map(r => {
+          // Convert 29-column format to legacy format for saveQuestionsToSupabase
+          const normalized = r.data
+          return {
+            question_number: normalized.question_number || r.rowNumber,
+            question_text: normalized.en_question_text || '',
+            question_text_tamil: normalized.ta_question_text || '',
+            option_a: normalized.en_option_a || '',
+            option_b: normalized.en_option_b || '',
+            option_c: normalized.en_option_c || '',
+            option_d: normalized.en_option_d || '',
+            option_a_tamil: normalized.ta_option_a || '',
+            option_b_tamil: normalized.ta_option_b || '',
+            option_c_tamil: normalized.ta_option_c || '',
+            option_d_tamil: normalized.ta_option_d || '',
+            correct_option: normalized.answer_key || 'A',
+            explanation: normalized.en_explanation || '',
+            explanation_tamil: normalized.ta_explanation || '',
+            group_tag: normalized.exam_tag?.replace('TNPSC_GROUP_', 'Group ') || selectedGroupTag?.replace('TNPSC_GROUP_', 'Group ') || 'Group 1',
+            group_name: normalized.exam_tag || selectedGroupTag || 'TNPSC_GROUP_1',
+            unit_tag: normalized.unit_code || 'UNIT_I',
+            unit_name: normalized.subject_name || 'General Studies',
+            macro_topic: normalized.macro_topic || 'General',
+            macro_topic_name: normalized.macro_topic || 'General',
+            micro_topic: normalized.micro_topic || 'General Concepts',
+            micro_topic_name: normalized.micro_topic || 'General Concepts',
+            exam_year: normalized.year || 2026,
+            is_pyq: normalized.source_type === 'PYQ',
+            difficulty_level: normalized.difficulty_level || 'MEDIUM',
+            source_type: normalized.source_type || 'VINA',
+            exam_tag: normalized.exam_tag || selectedGroupTag || 'TNPSC_GROUP_1',
+          }
+        })
+
+      console.log('[CSV Import] Converted questions:', validQuestions.slice(0, 2))
 
       // Use target paper or create batch paper
       const targetPaper = selectedTargetPaperId || papers[0]?.id

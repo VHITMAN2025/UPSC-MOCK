@@ -299,22 +299,37 @@ export function validateQuestionAgainstMasterTaxonomy(question, targetExamTag) {
     errors.push(`Invalid unit_code '${qUnitCode}' for ${examTag}. Must be one of: ${Array.from(validUnitCodes).join(', ')}`)
   }
 
-  // Check macro_topic
+  // Check macro_topic (fuzzy match with partial matching)
   const matchingUnits = masterList.filter(m => m.unit_code.toUpperCase() === qUnitCode)
   const validMacros = new Set(matchingUnits.map(m => m.macro_topic.toLowerCase()))
   if (matchingUnits.length > 0 && qMacro) {
-    const isMacroValid = Array.from(validMacros).some(vm => vm === qMacro || qMacro.includes(vm) || vm.includes(qMacro))
+    // Normalize: remove punctuation, extra spaces for better matching
+    const normalizeTopic = (t) => t.toLowerCase().replace(/[&,]/g, '').replace(/\s+/g, ' ').trim()
+    const normalizedQMacro = normalizeTopic(qMacro)
+    const isMacroValid = Array.from(validMacros).some(vm => {
+      const normalizedValid = normalizeTopic(vm)
+      return normalizedValid === normalizedQMacro || 
+             normalizedQMacro.includes(normalizedValid) || 
+             normalizedValid.includes(normalizedQMacro)
+    })
     if (!isMacroValid) {
-      errors.push(`Out-of-syllabus macro_topic '${question.macro_topic}' under unit '${qUnitCode}'.`)
+      errors.push(`Out-of-syllabus macro_topic '${question.macro_topic}' under unit '${qUnitCode}'. Valid options: ${Array.from(validMacros).join(', ')}`)
     }
   }
 
-  // Check micro_topic
+  // Check micro_topic (fuzzy match with partial matching)
   const validMicros = new Set(matchingUnits.map(m => m.micro_topic.toLowerCase()))
   if (matchingUnits.length > 0 && qMicro) {
-    const isMicroValid = Array.from(validMicros).some(vm => vm === qMicro || qMicro.includes(vm) || vm.includes(qMicro))
+    const normalizeTopic = (t) => t.toLowerCase().replace(/[&,]/g, '').replace(/\s+/g, ' ').trim()
+    const normalizedQMicro = normalizeTopic(qMicro)
+    const isMicroValid = Array.from(validMicros).some(vm => {
+      const normalizedValid = normalizeTopic(vm)
+      return normalizedValid === normalizedQMicro || 
+             normalizedQMicro.includes(normalizedValid) || 
+             normalizedValid.includes(normalizedQMicro)
+    })
     if (!isMicroValid) {
-      errors.push(`Out-of-syllabus micro_topic '${question.micro_topic}' under unit '${qUnitCode}'.`)
+      errors.push(`Out-of-syllabus micro_topic '${question.micro_topic}' under unit '${qUnitCode}'. Valid options: ${Array.from(validMicros).join(', ')}`)
     }
   }
 
@@ -359,14 +374,18 @@ export function normalizeTo29Columns(rawQ, index = 1) {
   let uCode = rawQ.unit_code || ''
   if (!uCode) {
     const uName = (rawQ.unit_name || rawQ.unit_tag || '').toUpperCase()
-    if (uName.includes('SCIENCE') || uName.includes('UNIT 1') || uName === '1') uCode = 'UNIT_I'
-    else if (uName.includes('GEOGRAPHY') || uName.includes('UNIT 2') || uName === '2') uCode = 'UNIT_II'
-    else if (uName.includes('HISTORY') || uName.includes('UNIT 3') || uName === '3') uCode = 'UNIT_III'
-    else if (uName.includes('POLITY') || uName.includes('UNIT 4') || uName === '4') uCode = 'UNIT_IV'
-    else if (uName.includes('ECONOMY') || uName.includes('UNIT 5') || uName === '5') uCode = 'UNIT_V'
-    else if (uName.includes('HERITAGE') || uName.includes('UNIT 6') || uName === '6') uCode = 'UNIT_VI'
-    else if (uName.includes('APTITUDE') || uName.includes('UNIT 10') || uName === '10') uCode = 'APT_UNIT_I'
-    else if (uName.includes('TAMIL') || uName.includes('UNIT 11') || uName === '11') uCode = 'LANG_TA_A'
+    // Support both numeric (UNIT 1) and Roman numeral (UNIT I) formats
+    if (uName.includes('SCIENCE') || uName.includes('UNIT 1') || uName.includes('UNIT I') || uName === '1' || uName === 'I') uCode = 'UNIT_I'
+    else if (uName.includes('GEOGRAPHY') || uName.includes('UNIT 2') || uName.includes('UNIT II') || uName === '2' || uName === 'II') uCode = 'UNIT_II'
+    else if (uName.includes('HISTORY') || uName.includes('UNIT 3') || uName.includes('UNIT III') || uName === '3' || uName === 'III') uCode = 'UNIT_III'
+    else if (uName.includes('POLITY') || uName.includes('UNIT 4') || uName.includes('UNIT IV') || uName === '4' || uName === 'IV') uCode = 'UNIT_IV'
+    else if (uName.includes('ECONOMY') || uName.includes('UNIT 5') || uName.includes('UNIT V') || uName === '5' || uName === 'V') uCode = 'UNIT_V'
+    else if (uName.includes('HERITAGE') || uName.includes('UNIT 6') || uName.includes('UNIT VI') || uName === '6' || uName === 'VI') uCode = 'UNIT_VI'
+    else if (uName.includes('NATIONAL MOVEMENT') || uName.includes('UNIT 7') || uName.includes('UNIT VII') || uName === '7' || uName === 'VII') uCode = 'UNIT_VII'
+    else if (uName.includes('TAMIL NADU') || uName.includes('TN HERITAGE') || uName.includes('UNIT 8') || uName.includes('UNIT VIII') || uName === '8' || uName === 'VIII') uCode = 'UNIT_VIII'
+    else if (uName.includes('DEVELOPMENT') || uName.includes('ADMINISTRATION') || uName.includes('UNIT 9') || uName.includes('UNIT IX') || uName === '9' || uName === 'IX') uCode = 'UNIT_IX'
+    else if (uName.includes('APTITUDE') || uName.includes('UNIT 10') || uName.includes('UNIT X') || uName === '10' || uName === 'X') uCode = 'APT_UNIT_I'
+    else if (uName.includes('TAMIL') || uName.includes('UNIT 11') || uName.includes('UNIT XI') || uName === '11' || uName === 'XI') uCode = 'LANG_TA_A'
     else if (uName.includes('ENGLISH')) uCode = 'LANG_EN_A'
     else uCode = 'UNIT_I'
   }

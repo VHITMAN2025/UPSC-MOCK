@@ -338,6 +338,57 @@ export const attemptService = {
     // If no exam filter, return all
     if (!examName) return this.getUserAttempts(userId)
 
+    const clean = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const cleanExamName = clean(examName)
+    
+    console.log(`[AttemptService] getUserAttemptsByExam called with examName: "${examName}"`)
+    console.log(`[AttemptService] Cleaned exam name: "${cleanExamName}"`)
+    
+    // For Group-based exams (Group 1, 2/2A, 4), always use fuzzy matching
+    // because papers may have exam_name="Custom Upload" with group info in title
+    const isGroupExam = cleanExamName.includes('group1') || cleanExamName.includes('group2') || cleanExamName.includes('group4')
+    
+    console.log(`[AttemptService] Is group exam: ${isGroupExam}`)
+    
+    if (isGroupExam) {
+      console.log(`[AttemptService] Using fuzzy matching for group exam "${examName}"`)
+      const all = await this.getUserAttempts(userId)
+      console.log(`[AttemptService] Fetched ${all.length} total attempts for fuzzy filtering`)
+      
+      const filtered = all.filter(a => {
+        if (!a.papers) {
+          console.log(`[AttemptService]   Skipping attempt ${a.id} - no papers data`)
+          return false
+        }
+        const attemptExamName = clean(a.papers.exam_name || '')
+        const attemptTitle = clean(a.papers.title || '')
+        const attemptText = attemptExamName + attemptTitle
+        
+        console.log(`[AttemptService]   Checking attempt ${a.id}: exam_name="${a.papers.exam_name}", title="${a.papers.title}"`)
+        console.log(`[AttemptService]   Cleaned combined text: "${attemptText}"`)
+        
+        // Match Group 1, 2/2A, or 4
+        let matches = false
+        if (cleanExamName.includes('group1')) {
+          matches = attemptText.includes('group1')
+          console.log(`[AttemptService]   Group 1 check: ${matches}`)
+        } else if (cleanExamName.includes('group2')) {
+          matches = attemptText.includes('group2') || attemptText.includes('group2a')
+          console.log(`[AttemptService]   Group 2/2A check: ${matches}`)
+        } else if (cleanExamName.includes('group4')) {
+          matches = attemptText.includes('group4')
+          console.log(`[AttemptService]   Group 4 check: ${matches}`)
+        }
+        
+        return matches
+      })
+      
+      console.log(`[AttemptService] Fuzzy matched ${filtered.length} attempts for "${examName}"`)
+      return filtered
+    }
+
+    // For non-group exams, try direct match first (for performance)
+    console.log(`[AttemptService] Trying direct database match for "${examName}"`)
     const { data, error } = await supabase
       .from('attempts')
       .select(`
@@ -348,12 +399,30 @@ export const attemptService = {
       .eq('papers.exam_name', examName)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      // Fallback: fetch all and filter client-side if inner join fails
-      const all = await this.getUserAttempts(userId)
-      return all.filter(a => a.papers?.exam_name === examName)
+    if (!error && data && data.length > 0) {
+      console.log(`[AttemptService] Direct match found ${data.length} attempts for "${examName}"`)
+      return data
     }
-    return data || []
+
+    // Fallback: fetch all and filter client-side
+    console.log(`[AttemptService] No direct match, falling back to fuzzy matching for "${examName}"`)
+    const all = await this.getUserAttempts(userId)
+    console.log(`[AttemptService] Fetched ${all.length} total attempts for fallback fuzzy filtering`)
+    
+    const filtered = all.filter(a => {
+      if (!a.papers) return false
+      const attemptExamName = clean(a.papers.exam_name || '')
+      const attemptTitle = clean(a.papers.title || '')
+      const attemptText = attemptExamName + attemptTitle
+      
+      const matches = attemptText.includes(cleanExamName)
+      console.log(`[AttemptService]   Fallback check - attempt ${a.id}: "${attemptText}" includes "${cleanExamName}": ${matches}`)
+      
+      return matches
+    })
+    
+    console.log(`[AttemptService] Fallback fuzzy matched ${filtered.length} attempts`)
+    return filtered
   },
 
   async compareLatestWithPreviousAttempt(userId, paperId, currentAttemptId = null) {
