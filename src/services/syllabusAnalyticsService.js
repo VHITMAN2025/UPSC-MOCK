@@ -1265,6 +1265,9 @@ export const syllabusAnalyticsService = {
    * Fully accounts for mock exam attempts, quick recall answers, and targeted practice sessions.
    */
   async getSyllabusWithAnalytics(userId, examName = 'TNPSC Group 4', options = {}) {
+    console.log(`[SyllabusAnalytics] === STARTING getSyllabusWithAnalytics ===`)
+    console.log(`[SyllabusAnalytics] userId: ${userId}, examName: "${examName}"`)
+    
     // 1. Build 3-level hierarchy dynamically based on exam and user preference
     const hierarchy = await this.buildHierarchy(examName, options)
     const allMicroTopics = hierarchy.units.flatMap(u =>
@@ -1302,6 +1305,9 @@ export const syllabusAnalyticsService = {
     })
 
     // 2. Fetch questions from DB & user progress/attempts in parallel (unpacks all 5 promises)
+    // IMPORTANT: Filter attempts, practice sessions, and recall sessions by examName to ensure
+    // each exam group (Group 1, Group 2/2A, Group 4) shows ONLY its own data
+    const normExamName = norm(examName)
     const [
       dbQuestionsRes,
       dbRecallQuestionsRes,
@@ -1341,6 +1347,7 @@ export const syllabusAnalyticsService = {
             .from('quick_recall_sessions')
             .select('id, exam_context, questions_json, completed, quick_recall_answers(id, question_index, question_text, selected_answer, is_correct)')
             .eq('user_id', userId)
+            .eq('exam_context', examName)
             .limit(100)
         : Promise.resolve({ data: [] }),
       userId
@@ -1348,6 +1355,7 @@ export const syllabusAnalyticsService = {
             .from('practice_sessions')
             .select('id, exam_context, subject, questions_json, answers_json, status')
             .eq('user_id', userId)
+            .eq('exam_context', examName)
             .eq('status', 'completed')
             .limit(100)
         : Promise.resolve({ data: [] }),
@@ -1355,6 +1363,8 @@ export const syllabusAnalyticsService = {
 
     // Process DB questions into the Question Bank
     const dbQuestions = dbQuestionsRes.status === 'fulfilled' ? (dbQuestionsRes.value.data || []) : []
+    console.log(`[SyllabusAnalytics] Loaded ${dbQuestions.length} questions from database`)
+    
     dbQuestions.forEach(q => {
       const qId = String(q.id)
       const matchedMicro = this.classifyQuestionToMicroTopic(q, allMicroTopics)
@@ -1369,6 +1379,7 @@ export const syllabusAnalyticsService = {
         }
       }
     })
+    console.log(`[SyllabusAnalytics] Mapped ${questionToMicroMap.size} questions to micro-topics`)
 
     // Process Recall Questions into the Question Bank
     const dbRecallQuestions = dbRecallQuestionsRes.status === 'fulfilled' ? (dbRecallQuestionsRes.value.data || []) : []
@@ -1388,13 +1399,66 @@ export const syllabusAnalyticsService = {
     })
 
     // 3. Process User Test Submissions & Attempt Logs
+    // Filter attempts by exam_name to ensure each exam group shows only its own data
     const userAttempts = userAttemptsRes.status === 'fulfilled' ? (userAttemptsRes.value.data || []) : []
-    userAttempts.forEach(attempt => {
+    
+    console.log(`[SyllabusAnalytics] Filtering ${userAttempts.length} attempts for exam: "${examName}"`)
+    userAttempts.forEach((att, idx) => {
+      console.log(`  Attempt ${idx + 1}: exam_name="${att.papers?.exam_name}", title="${att.papers?.title}"`)
+    })
+    
+    const filteredAttempts = userAttempts.filter(attempt => {
+      if (!attempt.papers) return false
+      
+      // Use clean() to remove ALL special chars and spaces for proper matching
+      const attemptExamName = clean(attempt.papers.exam_name || '')
+      const attemptTitle = clean(attempt.papers.title || '')
+      
+      // Check both exam_name and title (for custom uploads that may not have exam_name set)
+      const attemptText = attemptExamName + attemptTitle
+      const cleanExamName = clean(examName)
+      
+      console.log(`  Checking: "${attemptText}" against "${cleanExamName}"`)
+      
+      // After clean(), all spaces/dashes removed: "Group 4" -> "group4", "Group-4" -> "group4"
+      
+      // Match Group 1 (cleaned: "group1")
+      if (cleanExamName.includes('group1')) {
+        const match = attemptText.includes('group1')
+        console.log(`    Group 1 check: ${match} for "${attempt.papers?.title}"`)
+        return match
+      }
+      // Match Group 2/2A (cleaned: "group2" or "group2a" or "group22a")
+      if (cleanExamName.includes('group2')) {
+        const match = attemptText.includes('group2') || attemptText.includes('group2a') || attemptText.includes('group22a')
+        console.log(`    Group 2/2A check: ${match} for "${attempt.papers?.title}"`)
+        return match
+      }
+      // Match Group 4 (cleaned: "group4")
+      if (cleanExamName.includes('group4')) {
+        const match = attemptText.includes('group4')
+        console.log(`    Group 4 check: ${match} for "${attempt.papers?.title}"`)
+        return match
+      }
+      return false
+    })
+    
+    console.log(`[SyllabusAnalytics] Filtered to ${filteredAttempts.length} attempts for "${examName}"`)
+    console.log(`[SyllabusAnalytics] Included attempts:`, filteredAttempts.map(a => a.papers?.title))
+    
+    let attemptsCounter = 0
+    let skippedNoSelection = 0
+    let skippedNoMicroId = 0
+    let skippedNoBucket = 0
+    
+    filteredAttempts.forEach(attempt => {
       const answers = attempt.attempt_answers || []
+      console.log(`  Processing attempt with ${answers.length} answers`)
       answers.forEach(ans => {
-        if (!ans.selected_option) return
-
         const qId = String(ans.question_id)
+        
+        // Count ALL questions that exist in attempt_answers, regardless of whether they were answered
+        // This handles cases where selected_option wasn't saved properly
         let microId = questionToMicroMap.get(qId)
 
         if (!microId) {
@@ -1405,6 +1469,8 @@ export const syllabusAnalyticsService = {
           if (fallbackMicro) {
             microId = fallbackMicro.micro_topic_id
             questionToMicroMap.set(qId, microId)
+          } else {
+            skippedNoMicroId++
           }
         }
 
@@ -1413,15 +1479,24 @@ export const syllabusAnalyticsService = {
           bucket.bankQuestionIds.add(qId)
           bucket.attemptedQuestionIds.add(qId)
           bucket.totalAttempts += 1
+          attemptsCounter += 1
+          
+          // Only count as correct if actually answered correctly
           if (ans.is_correct === true) {
             bucket.correctAttempts += 1
           }
+        } else if (microId && !microBuckets.has(microId)) {
+          skippedNoBucket++
         }
       })
     })
+    console.log(`[SyllabusAnalytics] Added ${attemptsCounter} attempt answers from filtered attempts`)
+    console.log(`[SyllabusAnalytics] Skipped: ${skippedNoMicroId} no classification, ${skippedNoBucket} no bucket`)
 
     // 4. Process Quick Recall Answers
     const recallSessions = userRecallSessionsRes.status === 'fulfilled' ? (userRecallSessionsRes.value.data || []) : []
+    console.log(`[SyllabusAnalytics] Processing ${recallSessions.length} quick_recall_sessions for "${examName}"`)
+    let recallCounter = 0
     recallSessions.forEach(session => {
       const answers = session.quick_recall_answers || []
       answers.forEach(ans => {
@@ -1438,15 +1513,19 @@ export const syllabusAnalyticsService = {
         if (microId && microBuckets.has(microId)) {
           const bucket = microBuckets.get(microId)
           bucket.totalAttempts += 1
+          recallCounter += 1
           if (ans.is_correct === true) {
             bucket.correctAttempts += 1
           }
         }
       })
     })
+    console.log(`[SyllabusAnalytics] Added ${recallCounter} recall answers`)
 
     // 4b. Process Targeted Practice Sessions (Syncs unit mastery after targeted practice)
     const userPracticeSessions = userPracticeSessionsRes?.status === 'fulfilled' ? (userPracticeSessionsRes.value.data || []) : []
+    console.log(`[SyllabusAnalytics] Processing ${userPracticeSessions.length} practice_sessions for "${examName}"`)
+    let practiceCounter = 0
     userPracticeSessions.forEach(ps => {
       const qs = Array.isArray(ps.questions_json) ? ps.questions_json : []
       const ansMap = ps.answers_json || {}
@@ -1482,6 +1561,7 @@ export const syllabusAnalyticsService = {
           bucket.bankQuestionIds.add(strId)
           bucket.attemptedQuestionIds.add(strId)
           bucket.totalAttempts += 1
+          practiceCounter += 1
 
           const qMeta = qs.find(q => String(q.id) === strId)
           const isCorrect = qMeta?.correct_option ? String(userOpt).toUpperCase() === String(qMeta.correct_option).toUpperCase() : false
@@ -1491,6 +1571,7 @@ export const syllabusAnalyticsService = {
         }
       })
     })
+    console.log(`[SyllabusAnalytics] Added ${practiceCounter} practice answers`)
 
     // 5. Roll-up Math: Micro -> Macro -> Unit -> Exam
     let examTotalQuestions = 0

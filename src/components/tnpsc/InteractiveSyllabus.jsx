@@ -14,79 +14,79 @@ export const SYLLABUS_UNITS = [
     unit_number: 1,
     unit_name: 'Unit 1 — General Science',
     displayName: 'General Science',
-    score: 78,
+    score: 0,
     meta: 'Science basics · 4 topics',
     desc: 'Physics, chemistry, biology and everyday science concepts commonly used in TNPSC preparation.',
     foundationTopics: [
-      { id: 'u1-t1', name: 'Physics — Motion & Force', status: 'Mastered' },
-      { id: 'u1-t2', name: 'Chemistry — Acids, Bases & Salts', status: 'Mastered' },
+      { id: 'u1-t1', name: 'Physics — Motion & Force', status: 'Needs Review' },
+      { id: 'u1-t2', name: 'Chemistry — Acids, Bases & Salts', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u1-t3', name: 'Biology — Human Systems', status: 'Mastered' },
-      { id: 'u1-t4', name: 'Environment — Ecology Basics', status: 'Mastered' },
+      { id: 'u1-t3', name: 'Biology — Human Systems', status: 'Needs Review' },
+      { id: 'u1-t4', name: 'Environment — Ecology Basics', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 2,
     unit_name: 'Unit 2 — Current Events',
     displayName: 'Current Events',
-    score: 65,
+    score: 0,
     meta: 'National & regional events · 4 topics',
     desc: 'History, national symbols, appointments, state profiles, awards, honors, sports and government welfare schemes.',
     foundationTopics: [
-      { id: 'u2-t1', name: 'National & State Current Events', status: 'In Progress' },
-      { id: 'u2-t2', name: 'Government Welfare Schemes & Policies', status: 'In Progress' },
+      { id: 'u2-t1', name: 'National & State Current Events', status: 'Needs Review' },
+      { id: 'u2-t2', name: 'Government Welfare Schemes & Policies', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u2-t3', name: 'Science, Technology & Defense Milestones', status: 'In Progress' },
-      { id: 'u2-t4', name: 'Awards, Honors & Sports Profiles', status: 'In Progress' },
+      { id: 'u2-t3', name: 'Science, Technology & Defense Milestones', status: 'Needs Review' },
+      { id: 'u2-t4', name: 'Awards, Honors & Sports Profiles', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 3,
     unit_name: 'Unit 3 — Geography of India',
     displayName: 'Geography of India',
-    score: 62,
+    score: 0,
     meta: 'Physical & human geography · 8 topics',
     desc: 'Location & physical features, monsoon, rainfall, weather, climate, water resources and rivers of India & Tamil Nadu.',
     foundationTopics: [
-      { id: 'geo_himalayan_mountains', name: 'Himalayan Mountains', status: 'In Progress' },
-      { id: 'geo_peninsular_plateau', name: 'Peninsular Plateau', status: 'In Progress' },
-      { id: 'geo_coastal_plains', name: 'Coastal Plains', status: 'In Progress' },
-      { id: 'geo_elnino_lanina', name: 'El-Nino & La-Nina', status: 'In Progress' },
+      { id: 'geo_himalayan_mountains', name: 'Himalayan Mountains', status: 'Needs Review' },
+      { id: 'geo_peninsular_plateau', name: 'Peninsular Plateau', status: 'Needs Review' },
+      { id: 'geo_coastal_plains', name: 'Coastal Plains', status: 'Needs Review' },
+      { id: 'geo_elnino_lanina', name: 'El-Nino & La-Nina', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'geo_monsoon_mechanism', name: 'Indian Monsoon Mechanism', status: 'In Progress' },
-      { id: 'geo_himalayan_rivers', name: 'Himalayan Rivers (Ganga, Indus)', status: 'In Progress' },
-      { id: 'geo_tn_rivers', name: 'Tamil Nadu Rivers (Cauvery, Vaigai)', status: 'In Progress' },
-      { id: 'geo_water_resources', name: 'Water Resources & Climate Patterns', status: 'In Progress' },
+      { id: 'geo_monsoon_mechanism', name: 'Indian Monsoon Mechanism', status: 'Needs Review' },
+      { id: 'geo_himalayan_rivers', name: 'Himalayan Rivers (Ganga, Indus)', status: 'Needs Review' },
+      { id: 'geo_tn_rivers', name: 'Tamil Nadu Rivers (Cauvery, Vaigai)', status: 'Needs Review' },
+      { id: 'geo_water_resources', name: 'Water Resources & Climate Patterns', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 4,
     unit_name: 'Unit 4 — History & Culture of India',
     displayName: 'History & Culture of India',
-    score: 69,
+    score: 0,
     meta: 'Ancient & medieval India · 4 topics',
     desc: 'Indus Valley civilization, Guptas, Delhi Sultans, Mughals and Marathas, Age of Vijayanagaram and Bahmani Kingdoms, South Indian history.',
     foundationTopics: [
-      { id: 'u4-t1', name: 'Indus Valley Civilization & Vedic Period', status: 'Mastered' },
-      { id: 'u4-t2', name: 'Guptas, Delhi Sultanate & Mughals', status: 'In Progress' },
+      { id: 'u4-t1', name: 'Indus Valley Civilization & Vedic Period', status: 'Needs Review' },
+      { id: 'u4-t2', name: 'Guptas, Delhi Sultanate & Mughals', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u4-t3', name: 'South Indian History & Vijayanagar Empire', status: 'In Progress' },
-      { id: 'u4-t4', name: 'Social Harmony & Cultural Synthesis', status: 'Mastered' },
+      { id: 'u4-t3', name: 'South Indian History & Vijayanagar Empire', status: 'Needs Review' },
+      { id: 'u4-t4', name: 'Social Harmony & Cultural Synthesis', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 5,
     unit_name: 'Unit 5 — Indian Polity',
     displayName: 'Indian Polity',
-    score: 46,
+    score: 0,
     meta: 'Constitution & governance · 4 topics',
     desc: 'Constitution of India, Preamble to the Constitution, Salient features of the Constitution, Union, State and Union Territory, Citizenship, Fundamental Rights, Fundamental Duties.',
     foundationTopics: [
-      { id: 'u5-t1', name: 'Preamble, Fundamental Rights & Duties', status: 'In Progress' },
+      { id: 'u5-t1', name: 'Preamble, Fundamental Rights & Duties', status: 'Needs Review' },
       { id: 'u5-t2', name: 'Union Executive, Parliament & President', status: 'Needs Review' },
     ],
     applicationTopics: [
@@ -98,15 +98,15 @@ export const SYLLABUS_UNITS = [
     unit_number: 6,
     unit_name: 'Unit 6 — Indian Economy',
     displayName: 'Indian Economy',
-    score: 58,
+    score: 0,
     meta: 'Economy & planning · 4 topics',
     desc: 'Nature of Indian Economy, Five year plan models, Planning Commission and Niti Aayog, Sources of revenue, Reserve Bank of India, Fiscal Policy and Monetary Policy.',
     foundationTopics: [
-      { id: 'u6-t1', name: 'Nature of Indian Economy & Planning Models', status: 'In Progress' },
-      { id: 'u6-t2', name: 'Banking, RBI & Monetary Policy', status: 'In Progress' },
+      { id: 'u6-t1', name: 'Nature of Indian Economy & Planning Models', status: 'Needs Review' },
+      { id: 'u6-t2', name: 'Banking, RBI & Monetary Policy', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u6-t3', name: 'Public Finance, GST & Budgeting', status: 'In Progress' },
+      { id: 'u6-t3', name: 'Public Finance, GST & Budgeting', status: 'Needs Review' },
       { id: 'u6-t4', name: 'Economic Reforms & Tamil Nadu Economy', status: 'Needs Review' },
     ]
   },
@@ -114,23 +114,23 @@ export const SYLLABUS_UNITS = [
     unit_number: 7,
     unit_name: 'Unit 7 — Indian National Movement',
     displayName: 'Indian National Movement',
-    score: 55,
+    score: 0,
     meta: 'Freedom movement · 4 topics',
     desc: 'National renaissance, Early uprising against British rule, Indian National Congress, Emergence of leaders, Different modes of agitations.',
     foundationTopics: [
-      { id: 'u7-t1', name: 'Early Uprisings & 1857 Revolt', status: 'In Progress' },
-      { id: 'u7-t2', name: 'Indian National Congress & Moderate Era', status: 'In Progress' },
+      { id: 'u7-t1', name: 'Early Uprisings & 1857 Revolt', status: 'Needs Review' },
+      { id: 'u7-t2', name: 'Indian National Congress & Moderate Era', status: 'Needs Review' },
     ],
     applicationTopics: [
       { id: 'u7-t3', name: 'Gandhian Era & Mass Mobilization', status: 'Needs Review' },
-      { id: 'u7-t4', name: 'Communalism, Partition & Independence', status: 'In Progress' },
+      { id: 'u7-t4', name: 'Communalism, Partition & Independence', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 8,
     unit_name: 'Unit 8 — History, Culture, Heritage of Tamil Nadu',
     displayName: 'History, Culture, Heritage of TN',
-    score: 31,
+    score: 0,
     meta: 'Tamil heritage · 4 topics',
     desc: 'History of Tamil Society, Archaeological discoveries, Sangam literature to contemporary literature, Thirukkural, Role of Tamil Nadu in freedom struggle.',
     foundationTopics: [
@@ -146,48 +146,48 @@ export const SYLLABUS_UNITS = [
     unit_number: 9,
     unit_name: 'Unit 9 — Development Administration in Tamil Nadu',
     displayName: 'Development Administration in TN',
-    score: 74,
+    score: 0,
     meta: 'State administration · 4 topics',
     desc: 'Human Development Indicators in Tamil Nadu, Social Justice and Social Harmony as Cornerstones of Socio-Economic Development, Education and Health systems.',
     foundationTopics: [
-      { id: 'u9-t1', name: 'Human Development Indicators & Social Justice', status: 'Mastered' },
-      { id: 'u9-t2', name: 'Education & Health Delivery Systems', status: 'Mastered' },
+      { id: 'u9-t1', name: 'Human Development Indicators & Social Justice', status: 'Needs Review' },
+      { id: 'u9-t2', name: 'Education & Health Delivery Systems', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u9-t3', name: 'e-Governance & Administrative Reforms in TN', status: 'Mastered' },
-      { id: 'u9-t4', name: 'Welfare Schemes & Economic Geography of TN', status: 'Mastered' },
+      { id: 'u9-t3', name: 'e-Governance & Administrative Reforms in TN', status: 'Needs Review' },
+      { id: 'u9-t4', name: 'Welfare Schemes & Economic Geography of TN', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 10,
     unit_name: 'Unit 10 — Aptitude & Mental Ability',
     displayName: 'Aptitude & Mental Ability',
-    score: 67,
+    score: 0,
     meta: 'Aptitude & reasoning · 4 topics',
     desc: 'Simplification, Percentage, Highest Common Factor (HCF), Lowest Common Multiple (LCM), Ratio and Proportion, Simple interest, Compound interest, Time and Work, Logical Reasoning.',
     foundationTopics: [
-      { id: 'u10-t1', name: 'Percentage, Ratio & Simple/Compound Interest', status: 'Mastered' },
-      { id: 'u10-t2', name: 'Time, Work & Mensuration', status: 'In Progress' },
+      { id: 'u10-t1', name: 'Percentage, Ratio & Simple/Compound Interest', status: 'Needs Review' },
+      { id: 'u10-t2', name: 'Time, Work & Mensuration', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'u10-t3', name: 'Logical Reasoning, Number Series & Puzzles', status: 'In Progress' },
-      { id: 'u10-t4', name: 'Data Interpretation & Graphs', status: 'In Progress' },
+      { id: 'u10-t3', name: 'Logical Reasoning, Number Series & Puzzles', status: 'Needs Review' },
+      { id: 'u10-t4', name: 'Data Interpretation & Graphs', status: 'Needs Review' },
     ]
   },
   {
     unit_number: 11,
     unit_name: 'Unit 11 — Language: General Tamil / General English',
     displayName: 'Language Paper (Part A)',
-    score: 82,
+    score: 0,
     meta: 'Part A Language · 4 topics · Group 2/2A & Group 4',
     desc: 'General Tamil (இலக்கணம், இலக்கியம், தமிழ் அறிஞர்கள்) OR General English (Grammar, Prescribed Poems, Authors). Mandatory 100 questions for Group 2/2A and Group 4 (Not in Group 1).',
     foundationTopics: [
-      { id: 'eng_active_passive', name: 'Active & Passive Voice / பொதுத்தமிழ் இலக்கணம்', status: 'Mastered' },
-      { id: 'eng_question_tags', name: 'Question Tags / பிரித்தெழுதுக & சேர்த்தெழுதுக', status: 'Mastered' },
+      { id: 'eng_active_passive', name: 'Active & Passive Voice / பொதுத்தமிழ் இலக்கணம்', status: 'Needs Review' },
+      { id: 'eng_question_tags', name: 'Question Tags / பிரித்தெழுதுக & சேர்த்தெழுதுக', status: 'Needs Review' },
     ],
     applicationTopics: [
-      { id: 'eng_sea_fever', name: 'Sea Fever / திருக்குறள் தொடர்பான செய்திகள்', status: 'In Progress' },
-      { id: 'eng_the_comet', name: 'The Comet / சிலப்பதிகாரம் & மணிமேகலை', status: 'In Progress' },
+      { id: 'eng_sea_fever', name: 'Sea Fever / திருக்குறள் தொடர்பான செய்திகள்', status: 'Needs Review' },
+      { id: 'eng_the_comet', name: 'The Comet / சிலப்பதிகாரம் & மணிமேகலை', status: 'Needs Review' },
     ]
   }
 ]
@@ -220,21 +220,42 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
   useEffect(() => {
     let isCancelled = false
     async function syncLiveData() {
-      if (!user?.id) return
+      if (!user?.id) {
+        console.warn('[InteractiveSyllabus] No user logged in, skipping live sync')
+        return
+      }
+      console.log('[InteractiveSyllabus] Fetching analytics for:', selectedExam)
       try {
         const liveAnalytics = await syllabusAnalyticsService.getSyllabusWithAnalytics(user.id, selectedExam)
+        console.log('[InteractiveSyllabus] Live analytics received:', {
+          exam: liveAnalytics?.exam_name,
+          totalAttempts: liveAnalytics?.total_attempts,
+          units: liveAnalytics?.units?.map(u => ({
+            unit: u.unit_number,
+            accuracy: u.accuracy_percentage,
+            coverage: u.coverage_percentage,
+            attempts: u.total_attempts
+          }))
+        })
         if (isCancelled || !liveAnalytics?.units?.length) return
 
         setUnitData(prevUnits => {
           return prevUnits.map(unit => {
             const liveMatch = liveAnalytics.units.find(lu => lu.unit_number === unit.unit_number)
+            // If no match OR no attempts for this specific exam group, return default 0% data
             if (!liveMatch || liveMatch.total_attempts === 0) return unit
 
-            const liveScore = Math.round(liveMatch.accuracy_percentage || 0)
+            const liveAccuracy = Math.round(liveMatch.accuracy_percentage || 0)
+            const liveCoverage = Math.round(liveMatch.coverage_percentage || 0)
+            
+            // Only update if this unit actually has attempts for THIS exam group
+            if (liveMatch.attempted_questions === 0) return unit
+            
             const fLen = unit.foundationTopics.length
             return {
               ...unit,
-              score: liveScore,
+              score: liveAccuracy,
+              coverage: liveCoverage,
               meta: `${liveMatch.macro_topics?.length || unit.foundationTopics.length + unit.applicationTopics.length} topics · ${liveMatch.attempted_questions || 0}/${liveMatch.total_questions || 0} attempted`,
               foundationTopics: unit.foundationTopics.map((t, idx) => {
                 const liveMacro = liveMatch.macro_topics?.[idx]
@@ -267,9 +288,10 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
   const isMastered = activeUnit.score >= 70
 
   // Calculate dynamic roll-up summary KPIs
-  const overallMastery = Math.round(unitData.reduce((acc, u) => acc + u.score, 0) / unitData.length)
+  const overallAccuracy = Math.round(unitData.reduce((acc, u) => acc + u.score, 0) / unitData.length)
+  const overallCoverage = Math.round(unitData.reduce((acc, u) => acc + (u.coverage || 0), 0) / unitData.length)
   const strongUnits = unitData.filter(u => u.score >= 65).length
-  const needsRevision = unitData.filter(u => u.score < 50).length
+  const needsRevision = unitData.filter(u => u.score < 50 && (u.coverage || 0) > 0).length
   const unitsCovered = `${unitData.length} / ${unitData.length}`
 
   // Filter units by search query
@@ -391,41 +413,41 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
       </div>
 
       {/* ── 2. Top Summary KPI Row (Exactly matches Image & Prototype) ─────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 bg-[#fbfcfe] border-b border-[#edf0f5] shrink-0">
-        <div className="bg-gradient-to-br from-[#f5f2ff] to-[#f0eeff] border border-[#ddd7ff] rounded-2xl p-4 shadow-2xs">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-6 py-4 bg-[#fbfcfe] border-b border-[#edf0f5] shrink-0">
+        <div className="bg-gradient-to-br from-[#ecfeff] to-[#cffafe] border border-[#a5f3fc] rounded-2xl p-4 shadow-2xs">
           <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
-            OVERALL SYLLABUS MASTERY
+            OVERALL SYLLABUS COVERAGE
           </small>
-          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#635bff]">
-            {overallMastery}%
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#0891b2]">
+            {overallCoverage}%
           </b>
+          <small className="block text-[9px] text-[#8994a7] mt-0.5">
+            Questions attempted across all units
+          </small>
         </div>
 
         <div className="bg-white border border-[#e5e8ef] rounded-2xl p-4 shadow-2xs">
           <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
             STRONG UNITS
           </small>
-          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#10b981]">
             {strongUnits}
           </b>
+          <small className="block text-[9px] text-[#8994a7] mt-0.5">
+            Units with ≥65% accuracy
+          </small>
         </div>
 
         <div className="bg-white border border-[#e5e8ef] rounded-2xl p-4 shadow-2xs">
           <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
             NEEDS REVISION
           </small>
-          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
+          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#ef4444]">
             {needsRevision}
           </b>
-        </div>
-
-        <div className="bg-white border border-[#e5e8ef] rounded-2xl p-4 shadow-2xs">
-          <small className="block text-[10px] font-bold text-[#69758a] uppercase tracking-wider">
-            UNITS COVERED
+          <small className="block text-[9px] text-[#8994a7] mt-0.5">
+            Units with &lt;50% accuracy
           </small>
-          <b className="block mt-1 text-2xl sm:text-3xl font-black text-[#172033]">
-            {unitsCovered}
-          </b>
         </div>
       </div>
 
@@ -470,9 +492,14 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
                     <span className="text-xs font-black text-[#172033] truncate">
                       {unit.unit_name}
                     </span>
-                    <span className={`text-xs font-black ${isUnitWeak ? 'text-[#ef4444]' : 'text-[#635bff]'}`}>
-                      {unit.score}%
-                    </span>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className={`text-xs font-black ${isUnitWeak ? 'text-[#ef4444]' : 'text-[#635bff]'}`}>
+                        {unit.score}% Acc
+                      </span>
+                      <span className="text-[10px] font-bold text-[#8994a7]">
+                        {unit.coverage || 0}% Cov
+                      </span>
+                    </div>
                   </div>
 
                   <div className="text-[10px] text-[#8994a7] mt-1 font-medium">
@@ -526,29 +553,61 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
             </div>
 
             {/* Mastery Strip (Bold score + Progress Track + Zone Badge) */}
-            <div className="flex items-center gap-4 bg-[#f8fafc] border border-[#e5e8ef] rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs">
-              <b className="text-2xl sm:text-3xl font-black text-[#172033] min-w-[58px]">
-                {activeUnit.score}%
-              </b>
-              <div className="flex-1 h-2.5 bg-[#e2e8f0] rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    isWeakZone ? 'bg-[#ef4444]' : isMastered ? 'bg-[#10b981]' : 'bg-[#635bff]'
+            <div className="bg-[#f8fafc] border border-[#e5e8ef] rounded-2xl p-4 sm:p-5 mb-8 shadow-2xs space-y-3">
+              {/* Accuracy Row */}
+              <div className="flex items-center gap-4">
+                <div className="min-w-[80px]">
+                  <p className="text-xs font-bold text-[#69758a] uppercase tracking-wider mb-1">Accuracy</p>
+                  <b className="text-2xl sm:text-3xl font-black text-[#172033]">
+                    {activeUnit.score}%
+                  </b>
+                </div>
+                <div className="flex-1 h-2.5 bg-[#e2e8f0] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isWeakZone ? 'bg-[#ef4444]' : isMastered ? 'bg-[#10b981]' : 'bg-[#635bff]'
+                    }`}
+                    style={{ width: `${Math.max(6, activeUnit.score)}%` }}
+                  />
+                </div>
+                <span
+                  className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shrink-0 border ${
+                    isWeakZone
+                      ? 'bg-[#fff0f0] text-[#ef4444] border-[#fecdd3]'
+                      : isMastered
+                      ? 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0]'
+                      : 'bg-[#eef2ff] text-[#4f46e5] border-[#c7d2fe]'
                   }`}
-                  style={{ width: `${Math.max(6, activeUnit.score)}%` }}
-                />
+                >
+                  {isWeakZone ? 'WEAK' : isMastered ? 'MASTERED' : 'IN PROGRESS'}
+                </span>
               </div>
-              <span
-                className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shrink-0 border ${
-                  isWeakZone
-                    ? 'bg-[#fff0f0] text-[#ef4444] border-[#fecdd3]'
-                    : isMastered
-                    ? 'bg-[#ecfdf5] text-[#059669] border-[#a7f3d0]'
-                    : 'bg-[#eef2ff] text-[#4f46e5] border-[#c7d2fe]'
-                }`}
-              >
-                {isWeakZone ? 'WEAK ZONE' : isMastered ? 'MASTERED' : 'IN PROGRESS'}
-              </span>
+
+              {/* Coverage Row */}
+              <div className="flex items-center gap-4">
+                <div className="min-w-[80px]">
+                  <p className="text-xs font-bold text-[#69758a] uppercase tracking-wider mb-1">Coverage</p>
+                  <b className="text-2xl sm:text-3xl font-black text-[#172033]">
+                    {activeUnit.coverage || 0}%
+                  </b>
+                </div>
+                <div className="flex-1 h-2.5 bg-[#e2e8f0] rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#06b6d4] to-[#0891b2]"
+                    style={{ width: `${Math.max(6, activeUnit.coverage || 0)}%` }}
+                  />
+                </div>
+                <span className="text-xs text-[#69758a] shrink-0 min-w-[100px] text-right">
+                  {(() => {
+                    const match = activeUnit.meta?.match(/(\d+)\/(\d+)\s+attempted/)
+                    if (match) return `${match[1]}/${match[2]} questions`
+                    // Fallback: calculate from coverage percentage
+                    const metaMatch = activeUnit.meta?.match(/(\d+)\s+topics/)
+                    const estimated = metaMatch ? Math.ceil((activeUnit.coverage || 0) / 100 * 55) : 0
+                    return `~${estimated}/55 questions`
+                  })()}
+                </span>
+              </div>
             </div>
 
             {/* Structured Topic Breakdown */}
@@ -709,3 +768,4 @@ export function InteractiveSyllabus({ onClose }) {
 }
 
 export default InteractiveSyllabus
+

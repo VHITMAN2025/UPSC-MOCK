@@ -84,6 +84,7 @@ export function AnalyticsPage() {
     setLoading(true)
     setError(null)
     try {
+      console.log('[AnalyticsPage] Starting data load for exam:', selectedExam)
       const [overviewRes, recallRes, syllabusRes] = await Promise.allSettled([
         analyticsService.getOverview(user.id, selectedExam),
         analyticsService.getQuickRecallAnalytics(user.id),
@@ -92,8 +93,18 @@ export function AnalyticsPage() {
 
       if (overviewRes.status === 'fulfilled') setData(overviewRes.value)
       if (recallRes.status === 'fulfilled')   setRecallData(recallRes.value)
-      if (syllabusRes.status === 'fulfilled') setSyllabusData(syllabusRes.value)
+      if (syllabusRes.status === 'fulfilled') {
+        console.log('[AnalyticsPage] Syllabus data received:', {
+          exam: syllabusRes.value?.exam_name,
+          units: syllabusRes.value?.units?.length,
+          totalAttempts: syllabusRes.value?.total_attempts,
+          coverage: syllabusRes.value?.coverage_percentage,
+          accuracy: syllabusRes.value?.accuracy_percentage
+        })
+        setSyllabusData(syllabusRes.value)
+      }
     } catch (err) {
+      console.error('[AnalyticsPage] Error loading data:', err)
       setError(err.message)
     } finally {
       setLoading(false)

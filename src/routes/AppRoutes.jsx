@@ -31,6 +31,7 @@ import { AnalyticsPage }      from '../pages/user/AnalyticsPage'
 import { NotesPage }          from '../pages/user/NotesPage'
 import { BYOPPage }           from '../pages/user/BYOPPage'
 import { ProfilePage }        from '../pages/user/ProfilePage'
+import { DebugPage }          from '../pages/user/DebugPage'
 
 // ── Admin Pages ───────────────────────────────────────────────────────────────
 import { AdminDashboard }         from '../pages/admin/AdminDashboard'
@@ -83,6 +84,7 @@ export function AppRoutes() {
         <Route path="/my-papers"         element={<BYOPPage />} />
         <Route path="/notes"             element={<NotesPage />} />
         <Route path="/profile"           element={<ProfilePage />} />
+        <Route path="/debug"             element={<DebugPage />} />
       </Route>
 
       {/* ── Fullscreen Exam (no sidebar) ── */}
