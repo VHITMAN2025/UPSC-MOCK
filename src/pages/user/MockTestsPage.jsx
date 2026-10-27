@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Zap, Clock, FileText, Play, Loader2, BookOpen, Sparkles, CheckCircle2, Sliders, Layers } from 'lucide-react'
+import { Zap, Clock, FileText, Play, Loader2, BookOpen, Sparkles, CheckCircle2, Sliders, Layers, AlertCircle } from 'lucide-react'
 import { useApp } from '../../contexts/AppContext'
 import { paperService } from '../../services/paperService'
 import { attemptService } from '../../services/attemptService'
 import { testGeneratorService } from '../../services/testGeneratorService'
 import { useAuth } from '../../hooks/useAuth'
+import { supabase } from '../../lib/supabase'
 
 export function MockTestsPage() {
   const { selectedExam, group2LanguagePref, setGroup2LanguagePref, toast } = useApp()
@@ -19,12 +20,36 @@ export function MockTestsPage() {
   // Test Generator State
   const [generating, setGenerating] = useState(false)
   const [selectedLanguage, setSelectedLanguage] = useState(group2LanguagePref || 'General Tamil')
+  const [availableQuestionsCount, setAvailableQuestionsCount] = useState(0)
+  const [checkingQuestions, setCheckingQuestions] = useState(true)
 
   useEffect(() => {
     if (group2LanguagePref) setSelectedLanguage(group2LanguagePref)
   }, [group2LanguagePref])
 
-  useEffect(() => { loadPapers() }, [selectedExam])
+  useEffect(() => { 
+    loadPapers()
+    checkAvailableQuestions()
+  }, [selectedExam])
+
+  async function checkAvailableQuestions() {
+    setCheckingQuestions(true)
+    try {
+      const { count, error } = await supabase
+        .from('questions')
+        .select('*', { count: 'exact', head: true })
+        .not('correct_option', 'is', null)
+        .not('unit_code', 'is', null)
+      
+      if (!error) {
+        setAvailableQuestionsCount(count || 0)
+      }
+    } catch (err) {
+      console.error('[MockTestsPage] Check questions error:', err)
+    } finally {
+      setCheckingQuestions(false)
+    }
+  }
 
   async function loadPapers() {
     setLoading(true)
@@ -54,46 +79,34 @@ export function MockTestsPage() {
 
   async function handleGenerateIntelligentTest() {
     if (!user) {
-      toast.error('Please log in to generate an intelligent mock test.')
+      toast.error('Please log in to generate a mock test.')
       navigate('/login')
+      return
+    }
+
+    if (availableQuestionsCount === 0) {
+      toast.error('No questions available. Please contact admin to upload questions.')
       return
     }
 
     setGenerating(true)
     try {
-      let generatedTest = null
+      // Use flexible generator that works with any number of questions
+      const generatedTest = await testGeneratorService.generateFlexibleMockTest({
+        userId: user.id,
+        examType: selectedExam,
+        languageSpecialization: selectedLanguage,
+        allowFallback: true,
+      })
 
-      if (selectedExam === 'TNPSC Group 1') {
-        generatedTest = await testGeneratorService.generateGroup1Test({
-          quotaResolutionMode: 'normalize_to_200',
-          strict: false,
-          allowFallback: true,
-        })
-      } else if (selectedExam === 'TNPSC Group 2/2A') {
-        generatedTest = await testGeneratorService.generateGroup2Test({
-          languageSpecialization: selectedLanguage,
-          strict: false,
-          allowFallback: true,
-        })
-      } else if (selectedExam === 'TNPSC Group 4') {
-        generatedTest = await testGeneratorService.generateGroup4Test({
-          languageSpecialization: selectedLanguage,
-          strict: false,
-          allowFallback: true,
-        })
-      } else {
-        // Fallback test generation using Group 1 matrix standard
-        generatedTest = await testGeneratorService.generateGroup1Test({
-          quotaResolutionMode: 'normalize_to_200',
-          strict: false,
-          allowFallback: true,
-        })
+      if (!generatedTest || generatedTest.totalQuestions === 0) {
+        throw new Error('No questions available for test generation')
       }
 
-      toast.info('Materializing 200 questions into test session…')
+      toast.info(`Materializing ${generatedTest.totalQuestions} questions into test session…`)
       const result = await testGeneratorService.materializeGeneratedMockPaper(user.id, generatedTest)
 
-      toast.success(`Generated 200Q test with exact quotas! Launching exam…`)
+      toast.success(`Generated ${generatedTest.totalQuestions}Q test! Launching exam…`)
       navigate(`/exam/${result.paperId}`)
     } catch (err) {
       console.error('[MockTestsPage] Generation error:', err)
@@ -129,133 +142,69 @@ export function MockTestsPage() {
       </div>
 
       {/* ─── Intelligent Test Generator Card ─────────────────────────── */}
-      <div className="bg-gradient-to-br from-[#111426] via-[#1a1f3c] to-[#0f1123] rounded-2xl p-6 text-white shadow-card border border-indigo-500/30">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-bold tracking-wide uppercase mb-2 border border-indigo-400/30">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-              Intelligent Dynamic Test Generator
+      {checkingQuestions ? (
+        <div className="bg-white rounded-2xl p-6 text-center border border-surface-border">
+          <Loader2 className="w-6 h-6 animate-spin text-tnpsc-brand mx-auto mb-2" />
+          <p className="text-sm text-body-secondary">Checking available questions...</p>
+        </div>
+      ) : availableQuestionsCount === 0 ? (
+        <div className="bg-amber-50 rounded-2xl p-6 text-center border border-amber-200">
+          <AlertCircle className="w-10 h-10 text-amber-600 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-amber-900">No Questions Available</h3>
+          <p className="text-sm text-amber-700 mt-2">
+            The question bank is empty. Please contact the admin to upload questions, or check back later.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-[#111426] via-[#1a1f3c] to-[#0f1123] rounded-2xl p-6 text-white shadow-card border border-indigo-500/30">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-bold tracking-wide uppercase mb-2 border border-indigo-400/30">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
+                Dynamic Test Generator
+              </div>
+              <h2 className="text-lg font-bold tracking-tight">
+                {selectedExam} Mock Test
+              </h2>
+              <p className="text-xs text-slate-300 mt-1 max-w-xl">
+                {availableQuestionsCount} questions available · Zero-repeat tracking · New questions on each attempt
+              </p>
             </div>
-            <h2 className="text-lg font-bold tracking-tight">
-              {isGroup1 && 'TNPSC Group 1 · Full 200-Question Exam Simulation'}
-              {isGroup2 && 'TNPSC Group 2/2A · Specialized 200-Question Exam Simulation'}
-              {isGroup4 && 'TNPSC Group 4 · Full 200-Question Exam Simulation'}
-              {!isGroup1 && !isGroup2 && !isGroup4 && `${selectedExam} · 200-Question Blueprint Mock Test`}
-            </h2>
-            <p className="text-xs text-slate-300 mt-1 max-w-xl">
-              Strictly balances official syllabus quotas and difficulty distribution (30% Easy · 50% Medium · 20% Hard) without duplicate items.
-            </p>
+
+            <button
+              onClick={handleGenerateIntelligentTest}
+              disabled={generating}
+              className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold text-xs tracking-wide shadow-lg shadow-indigo-500/25 transition-all transform active:scale-[0.98] disabled:opacity-60 shrink-0"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating Test…
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-white" />
+                  Generate & Start Mock
+                </>
+              )}
+            </button>
           </div>
 
-          <button
-            onClick={handleGenerateIntelligentTest}
-            disabled={generating}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold text-xs tracking-wide shadow-lg shadow-indigo-500/25 transition-all transform active:scale-[0.98] disabled:opacity-60 shrink-0"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating 200 Questions…
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-white" />
-                Generate & Start Mock (200Q)
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Blueprint Specifications */}
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {/* Left specification block */}
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2.5">
-            <div className="flex items-center gap-2 text-indigo-300 font-bold uppercase tracking-wider text-[11px]">
-              <Layers className="w-4 h-4" />
-              {(isGroup2 || isGroup4) ? 'Language Specialization (Part 1)' : 'Syllabus Weightage Quotas'}
-            </div>
-
-            {isGroup1 && (
-              <div className="space-y-1.5 text-slate-300 text-[11px]">
-                <div className="flex justify-between border-b border-white/5 pb-1">
-                  <span>Part A (General Studies · 175 Qs):</span>
-                  <span className="font-mono text-white">U1(10), U2(10), U3(25), U4(40), U5(45), U6(45)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Part B (Aptitude & Mental Ability · 25 Qs):</span>
-                  <span className="font-mono text-white">U1 (15), U2 (10)</span>
-                </div>
-              </div>
-            )}
-
-            {(isGroup2 || isGroup4) && (
-              <div className="space-y-2">
-                <p className="text-slate-300 text-[11px]">
-                  Select your optional subject preference for Part 1 (Questions 1–100):
-                </p>
-                <div className="flex gap-2">
-                  {[
-                    { value: 'General Tamil', label: 'பொதுத் தமிழ் (General Tamil)' },
-                    { value: 'General English', label: 'General English' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setSelectedLanguage(opt.value)
-                        setGroup2LanguagePref(opt.value)
-                      }}
-                      className={`flex-1 py-2 px-2.5 rounded-lg text-[11px] font-semibold border transition-all ${
-                        selectedLanguage === opt.value
-                          ? 'bg-indigo-600 text-white border-indigo-400 shadow'
-                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  {isGroup4
-                    ? 'Part 2 allocates 75 General Studies (SSLC Standard) + Part 3 allocates 25 Aptitude questions.'
-                    : 'Part 2 automatically allocates 75 General Studies + 25 Aptitude questions.'}
+          {/* Info about available questions */}
+          <div className="mt-5 bg-white/5 rounded-xl p-4 border border-white/10">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div className="text-xs text-slate-300">
+                <p className="font-bold text-white mb-1">Smart Question Selection</p>
+                <p>
+                  This generator will use <b className="text-white">{availableQuestionsCount} available questions</b> from the database.
+                  Questions you've already attempted will be shown last, ensuring you get fresh questions first.
                 </p>
               </div>
-            )}
-
-            {!isGroup1 && !isGroup2 && !isGroup4 && (
-              <div className="text-slate-300 text-[11px]">
-                Stratified across General Studies (100 Qs), General Tamil/English (75 Qs), and Aptitude (25 Qs).
-              </div>
-            )}
-          </div>
-
-          {/* Right specification block */}
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2.5">
-            <div className="flex items-center gap-2 text-indigo-300 font-bold uppercase tracking-wider text-[11px]">
-              <Sliders className="w-4 h-4" />
-              Difficulty Balancing Blueprint
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center pt-1">
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2.5">
-                <span className="block text-[10px] uppercase font-bold text-emerald-400">Easy (30%)</span>
-                <span className="text-base font-extrabold text-white">60 Qs</span>
-              </div>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
-                <span className="block text-[10px] uppercase font-bold text-amber-400">Medium (50%)</span>
-                <span className="text-base font-extrabold text-white">100 Qs</span>
-              </div>
-              <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5">
-                <span className="block text-[10px] uppercase font-bold text-rose-400">Hard (20%)</span>
-                <span className="text-base font-extrabold text-white">40 Qs</span>
-              </div>
-            </div>
-            <p className="text-[10px] text-slate-400 text-center">
-              Total 200 Questions · 300 Marks · Standard 180 Minutes (54s per question pacing benchmark)
-            </p>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ─── Published Papers Grid ───────────────────────────────────── */}
       <div>

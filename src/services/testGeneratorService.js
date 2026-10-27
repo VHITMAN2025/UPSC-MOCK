@@ -211,6 +211,105 @@ function sampleBucketWithoutReplacement(pool, count, usedIds, usedTexts, rng = M
 
 export const testGeneratorService = {
   /**
+   * Generates a flexible mock test with available questions (any count from 1-200)
+   * - Uses all available questions regardless of count
+   * - Respects zero-repetition (avoids questions user has seen)
+   * - Maintains difficulty distribution if possible
+   * - Shows "No questions available" only if 0 questions exist
+   */
+  async generateFlexibleMockTest(options = {}) {
+    const {
+      userId = null,
+      examType = 'TNPSC Group 4',
+      languageSpecialization = 'General Tamil',
+      allowFallback = true,
+    } = options
+
+    console.log('[testGeneratorService] Generating flexible mock test...')
+
+    try {
+      // Determine exam tag
+      let examTag = 'TNPSC_GROUP_4'
+      if (examType.includes('Group 1')) examTag = 'TNPSC_GROUP_1'
+      else if (examType.includes('Group 2')) examTag = 'TNPSC_GROUP_2'
+
+      // Fetch ALL available questions from database
+      const { data: allQuestions, error } = await supabase
+        .from('questions')
+        .select('*')
+        .not('correct_option', 'is', null)
+        .not('unit_code', 'is', null)
+        .not('difficulty_level', 'is', null)
+
+      if (error) throw error
+
+      if (!allQuestions || allQuestions.length === 0) {
+        throw new Error('No questions available in database. Please upload questions via Admin panel.')
+      }
+
+      console.log(`[testGeneratorService] Found ${allQuestions.length} total questions in database`)
+
+      // Prioritize exam-specific questions but fallback to all questions if needed
+      let examSpecificQuestions = allQuestions.filter(q => {
+        if (q.exam_tag && q.exam_tag === examTag) return true
+        if (q.group_tag && q.group_tag.includes(examTag.replace('TNPSC_GROUP_', ''))) return true
+        return false
+      })
+
+      let filteredQuestions = examSpecificQuestions.length > 0 ? examSpecificQuestions : allQuestions
+      console.log(`[testGeneratorService] Using ${filteredQuestions.length} questions (${examSpecificQuestions.length} exam-specific, ${allQuestions.length} total available)`)
+
+      // Apply zero-repetition: prioritize unseen questions
+      let finalQuestions = filteredQuestions
+      if (userId) {
+        const { unseen, seen } = await questionHistoryService.partitionPoolByHistory(
+          userId,
+          examTag,
+          filteredQuestions
+        )
+        
+        // Use unseen first, then seen (sorted by times_seen ascending)
+        finalQuestions = [...unseen, ...seen]
+        console.log(`[testGeneratorService] Zero-repetition: ${unseen.length} unseen, ${seen.length} seen`)
+      }
+
+      // Shuffle questions
+      finalQuestions = this.shuffleArray([...finalQuestions])
+
+      // Take up to 200 questions (or all if less than 200)
+      const questionsToUse = finalQuestions.slice(0, Math.min(200, finalQuestions.length))
+
+      console.log(`[testGeneratorService] Generated test with ${questionsToUse.length} questions`)
+
+      return {
+        examType,
+        languageSpecialization,
+        totalQuestions: questionsToUse.length,
+        questions: questionsToUse,
+        metadata: {
+          availablePool: filteredQuestions.length,
+          unseenCount: userId ? finalQuestions.filter((q, i) => i < questionsToUse.length).length : questionsToUse.length,
+        }
+      }
+    } catch (err) {
+      console.error('[testGeneratorService] Flexible test generation error:', err)
+      throw err
+    }
+  },
+
+  /**
+   * Helper: Fisher-Yates shuffle
+   */
+  shuffleArray(array) {
+    const shuffled = [...array]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    return shuffled
+  },
+
+  /**
    * Generates a 200-question Group 1 test with exact blueprint quotas:
    * UNIT_I (10) + UNIT_II (10) + UNIT_III (25) + UNIT_IV (40) + UNIT_V (50) + UNIT_VI (40) + APT_UNIT_I (15) + APT_UNIT_II (10) = 200 Qs.
    * Zero-repetition tracking: prioritizes unseen questions for userId.
@@ -631,25 +730,38 @@ export const testGeneratorService = {
 
   /**
    * Helper: fetches questions from Supabase question bank for a specific unit & difficulty
+   * Includes user-specific filtering to exclude previously attempted questions
    */
-  async fetchQuestionBankPool({ groupName, examTag, unitCode, difficultyLevel, languageSpecialization }) {
+  async fetchQuestionBankPool({ groupName, examTag, unitCode, difficultyLevel, languageSpecialization, userId = null, excludeQuestionIds = [] }) {
     try {
       let q = supabase
         .from('questions')
-        .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, unit_name, unit_code, macro_topic, micro_topic, difficulty_level, is_pyq')
+        .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, unit_name, unit_code, macro_topic, micro_topic, difficulty_level, is_pyq, tags')
         .not('correct_option', 'is', null)
+
+      // Exclude already used question IDs in current test generation
+      if (excludeQuestionIds.length > 0) {
+        q = q.not('id', 'in', `(${excludeQuestionIds.join(',')})`)
+      }
 
       // Filter by unit_code if present
       if (unitCode) {
         q = q.or(`unit_code.eq.${unitCode},unit_tag.ilike.%${unitCode}%,unit_name.ilike.%${unitCode}%`)
       }
 
-      const { data, error } = await q.limit(250)
+      // Filter by difficulty if specified
+      if (difficultyLevel) {
+        q = q.eq('difficulty_level', difficultyLevel)
+      }
+
+      const { data, error } = await q.limit(500)
+      
       if (error) {
         console.warn('[testGeneratorService] Query error fallback:', error.message)
-        const fb = await supabase.from('questions').select('*').limit(250)
+        const fb = await supabase.from('questions').select('*').limit(500)
         return fb.data || []
       }
+      
       return data || []
     } catch (e) {
       console.warn('[testGeneratorService] fetchQuestionBankPool error:', e)
