@@ -11,7 +11,8 @@ const CORS_HEADERS = {
 
 interface AnswerItem {
   question_id: string;
-  selected_option: "A" | "B" | "C" | "D" | null;
+  selected_option: "A" | "B" | "C" | "D" | "E" | null;
+  time_spent_seconds?: number;
 }
 
 interface SubmitPayload {
@@ -126,17 +127,21 @@ serve(async (req) => {
     let totalScore = 0;
 
     const answerRecordsToInsert: any[] = [];
-    const answersMap = new Map<string, string | null>();
+    const answersMap = new Map<string, AnswerItem>();
     (answers || []).forEach((a) => {
-      if (a.question_id) answersMap.set(a.question_id, a.selected_option || null);
+      if (a.question_id) answersMap.set(a.question_id, a);
     });
 
     for (const q of questions) {
-      const selected = answersMap.get(q.id) || null;
+      const answer = answersMap.get(q.id);
+      const selected = answer?.selected_option || null;
+      const timeSpent = Math.max(0, Math.round(Number(answer?.time_spent_seconds || 0)));
       let isCorrect: boolean | null = null;
       let marksObtained = 0;
 
-      if (!selected) {
+      // E is the explicit "answer not known" choice. It is an unattempted
+      // response, not an incorrect answer, and therefore has no penalty.
+      if (!selected || selected.toUpperCase() === "E") {
         unansweredCount++;
         isCorrect = null;
         marksObtained = 0;
@@ -158,6 +163,7 @@ serve(async (req) => {
         selected_option: selected,
         is_correct: isCorrect,
         marks_obtained: marksObtained,
+        time_spent_seconds: timeSpent,
       });
     }
 

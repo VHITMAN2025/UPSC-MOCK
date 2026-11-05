@@ -2,6 +2,8 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import { apiKeyService } from './apiKeyService.js'
 import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabusAnalyticsService.js'
 import { normalizeUnitName } from '../components/admin/TopicSeparationSummary.jsx'
+import { supabase } from '../lib/supabase.js'
+import * as pdfjsLib from 'pdfjs-dist'
 
 const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
   u.macro_topics.flatMap(mt =>
@@ -14,6 +16,87 @@ const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
 )
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const PDF_BATCH_SIZE = 4
+
+function ensurePdfWorker() {
+  if (pdfjsLib?.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+  }
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+async function renderPdfPageAsJpeg(page) {
+  const viewport = page.getViewport({ scale: 1.25 })
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.ceil(viewport.width)
+  canvas.height = Math.ceil(viewport.height)
+  const context = canvas.getContext('2d', { alpha: false })
+  await page.render({ canvasContext: context, viewport }).promise
+  const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.82)
+  canvas.width = 1
+  canvas.height = 1
+  return jpegDataUrl.split(',')[1]
+}
+
+async function extractLongPdfInBatches(base64Data, preferredModel, onStatusUpdate, customApiKey, options) {
+  ensurePdfWorker()
+  const pdf = await pdfjsLib.getDocument({ data: base64ToBytes(base64Data), stopAtErrors: false }).promise
+  const totalBatches = Math.ceil(pdf.numPages / PDF_BATCH_SIZE)
+  const allQuestions = []
+  const seen = new Set()
+
+  for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
+    const firstPage = batchIndex * PDF_BATCH_SIZE + 1
+    const lastPage = Math.min(pdf.numPages, firstPage + PDF_BATCH_SIZE - 1)
+    onStatusUpdate?.(`Reading pages ${firstPage}-${lastPage} of ${pdf.numPages} (batch ${batchIndex + 1}/${totalBatches})…`)
+    const pageParts = []
+    for (let pageNo = firstPage; pageNo <= lastPage; pageNo += 1) {
+      const page = await pdf.getPage(pageNo)
+      pageParts.push({ inlineData: { data: await renderPdfPageAsJpeg(page), mimeType: 'image/jpeg' } })
+      page.cleanup()
+    }
+
+    const extracted = await extractQuestionsWithAi('', preferredModel, onStatusUpdate, customApiKey, {
+      ...options,
+      pageParts,
+      pageStart: firstPage,
+      pageEnd: lastPage,
+      skipPdfBatching: true,
+    })
+
+    for (const question of extracted) {
+      // Bilingual papers can show the same question on adjoining pages. Keep it once.
+      const key = String(question.question_number || '').trim() || String(question.question_text || '').trim().toLowerCase()
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      allQuestions.push(question)
+    }
+    // Avoid Gemini rate-limit bursts while preserving predictable progress.
+    if (batchIndex < totalBatches - 1) await delay(350)
+  }
+
+  await pdf.destroy()
+  return allQuestions.sort((a, b) => Number(a.question_number) - Number(b.question_number))
+}
+
+export async function loadApprovedPdfTaxonomy() {
+  const { data, error } = await supabase
+    .from('question_taxonomy')
+    .select('exam_group, unit_name, macro_topic_name, micro_topic_name')
+    .eq('active', true)
+    .order('unit_name')
+  if (error) throw new Error(`Approved taxonomy could not be loaded: ${error.message}`)
+  if (!data?.length) throw new Error('No approved taxonomy exists. Import exam_topics.csv before processing a PDF.')
+  return data
+}
+
+const taxonomyKey = (unit, macro, micro) => [unit, macro, micro].map(v => String(v || '').trim().toLowerCase()).join('|')
 
 export async function fetchAvailableGeminiModels(apiKey) {
   if (!apiKey || apiKey.includes('your_gemini')) return []
@@ -163,7 +246,7 @@ Please re-generate the practice quiz items from this document with educational p
  * Extracts structured questions from PDF using Gemini Vision with multi-pass anti-recitation defense.
  * Overcomes RECITATION blocks via educational paraphrasing, higher sampling temperature, and model cascade.
  */
-export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-flash-latest', onStatusUpdate, customApiKey = null) {
+export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemini-flash-latest', onStatusUpdate, customApiKey = null, options = {}) {
   const apiKey = (customApiKey && customApiKey.trim().length > 0)
     ? customApiKey.trim()
     : apiKeyService.getUserApiKey()
@@ -174,7 +257,26 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
     throw err
   }
 
+  const approvedTaxonomy = options.approvedTaxonomy || await loadApprovedPdfTaxonomy()
+
+  // Sending a long scanned paper as one PDF lets Gemini stop when its response
+  // reaches the output-token limit. Render and process it in bounded page batches.
+  if (!options.skipPdfBatching && base64Data) {
+    ensurePdfWorker()
+    const probe = await pdfjsLib.getDocument({ data: base64ToBytes(base64Data), stopAtErrors: false }).promise
+    const pageCount = probe.numPages
+    await probe.destroy()
+    if (pageCount > PDF_BATCH_SIZE) {
+      return extractLongPdfInBatches(base64Data, preferredModel, onStatusUpdate, customApiKey, {
+        ...options,
+        approvedTaxonomy,
+      })
+    }
+  }
+
   const genAI = new GoogleGenerativeAI(apiKey)
+  const approvedByKey = new Map(approvedTaxonomy.map(t => [taxonomyKey(t.unit_name, t.macro_topic_name, t.micro_topic_name), t]))
+  const taxonomyPrompt = approvedTaxonomy.map((t, i) => `${i + 1}. ${t.unit_name} > ${t.macro_topic_name} > ${t.micro_topic_name}`).join('\n')
   const availableModels = await fetchAvailableGeminiModels(apiKey)
 
   const candidateList = [
@@ -219,7 +321,7 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
 
         const model = genAI.getGenerativeModel({
           model: currentModelId,
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: `${SYSTEM_INSTRUCTION}\n\nAPPROVED TAXONOMY (closed list):\n${taxonomyPrompt}\n\nFor every question, choose one EXACT row from this list. Never invent, paraphrase, or combine a topic name. If no row fits, set unit_name, macro_topic_name and micro_topic_name to null.`,
           generationConfig: {
             temperature: activeTemp,
             topP: 0.95,
@@ -233,14 +335,12 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
           ],
         })
 
+        const batchPrompt = options.pageParts
+          ? `${activePrompt}\n\nThese images are only pages ${options.pageStart}-${options.pageEnd} of the paper. Extract every complete question visible in these pages. Do not stop at ten questions, do not invent questions from other pages, and preserve the printed question number.`
+          : activePrompt
         const response = await model.generateContent([
-          activePrompt,
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: 'application/pdf',
-            },
-          },
+          batchPrompt,
+          ...(options.pageParts || [{ inlineData: { data: base64Data, mimeType: 'application/pdf' } }]),
         ])
 
         // Safely extract text from candidate parts or response.text()
@@ -284,30 +384,16 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
               return `${e} / ${t}`
             }
 
-            const rawUnit = q.unit_name || null
-            let unitName = rawUnit ? normalizeUnitName(rawUnit) : null
-            let macroName = q.macro_topic_name || null
-            let microName = q.micro_topic_name || null
-
-            if (!unitName || !macroName || !microName) {
-              const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(
-                { question_text: combined, ...q, unit_name: unitName },
-                CANONICAL_MICROS
-              )
-              if (matched) {
-                unitName = unitName || normalizeUnitName(matched.unit_name)
-                macroName = macroName || matched.macro_topic_name
-                microName = microName || matched.micro_topic_name
-              }
-            }
-
-            unitName = unitName || 'Unit I: General Science'
-            macroName = macroName || 'General Studies'
-            microName = microName || 'General Concepts'
+            const requestedKey = taxonomyKey(q.unit_name, q.macro_topic_name, q.micro_topic_name)
+            const approved = approvedByKey.get(requestedKey)
+            const unitName = approved?.unit_name || null
+            const macroName = approved?.macro_topic_name || null
+            const microName = approved?.micro_topic_name || null
+            const needsReview = !approved
 
             // Embed taxonomy tag in explanation as resilient guarantee
             let baseExplanation = (q.explanation || '').trim()
-            if (!baseExplanation.includes('[Taxonomy:')) {
+            if (approved && !baseExplanation.includes('[Taxonomy:')) {
               const taxPrefix = `[Taxonomy: ${unitName} > ${macroName} > ${microName}]`
               baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
             }
@@ -333,11 +419,14 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
               unit_name: unitName,
               macro_topic_name: macroName,
               micro_topic_name: microName,
-              tags: Array.from(new Set([...(q.tags || []), microName, macroName, unitName])),
-              parser_status: 'ready',
-              isValid: true,
+              tags: approved ? Array.from(new Set([...(q.tags || []), microName, macroName, unitName])) : [],
+              parser_status: needsReview ? 'needs_review' : 'ready',
+              status: needsReview ? 'needs_review' : 'ready',
+              taxonomy_confidence: Number(q.taxonomy_confidence || (needsReview ? 0 : 1)),
+              taxonomy_warning: needsReview ? 'AI result is not an exact approved taxonomy row. Admin classification required.' : null,
+              isValid: !needsReview,
               extraction_status: 'complete',
-              source_page: q.source_page || 1,
+              source_page: q.source_page || options.pageStart || 1,
             }
           })
         }

@@ -152,6 +152,12 @@ function PracticeBuilder({ onStart }) {
   }
 
   async function handleGenerate() {
+    if (!isFixTest && availableCount !== null && availableCount < config.question_count) {
+      const message = `Only ${availableCount} verified questions match this exact syllabus selection. Add approved questions in Admin before requesting ${config.question_count}.`
+      setError(message)
+      toast.error(message)
+      return
+    }
     setLoading(true); setError(null)
     try {
       const result = await practiceService.createSession(user.id, config)
@@ -204,7 +210,7 @@ function PracticeBuilder({ onStart }) {
           </div>
         )}
 
-        {urlTopic && !isFixTest && (
+          {urlTopic && !isFixTest && (
           <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-200 rounded-xl px-4 py-2.5 text-xs">
             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
               <span className="text-indigo-800 font-semibold">
@@ -242,6 +248,9 @@ function PracticeBuilder({ onStart }) {
                 >{s}</button>
               ))}
             </div>
+          )}
+          {!isFixTest && availableCount !== null && availableCount < config.question_count && (
+            <p className="mt-2 text-xs font-semibold text-amber-800">The requested count exceeds the verified inventory. Generation is disabled until more matching questions are approved.</p>
           )}
         </div>
 

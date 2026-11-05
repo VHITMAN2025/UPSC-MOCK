@@ -177,12 +177,14 @@ export function buildAllocationMatrix(unitDefinitions, totalTarget = 200) {
 
 // ─── Fisher-Yates Randomized Sampling without Replacement ─────────────────────
 
-function sampleBucketWithoutReplacement(pool, count, usedIds, usedTexts, rng = Math.random) {
+export function sampleBucketWithoutReplacement(pool, count, usedIds, usedTexts, rng = Math.random) {
+  const batchTexts = new Set()
   const available = pool.filter(q => {
     if (!q || !q.id) return false
     if (usedIds.has(q.id)) return false
     const textKey = (q.question_text || q.en_question_text || '').trim().toLowerCase()
-    if (textKey && usedTexts.has(textKey)) return false
+    if (textKey && (usedTexts.has(textKey) || batchTexts.has(textKey))) return false
+    if (textKey) batchTexts.add(textKey)
     return true
   })
 
@@ -219,8 +221,8 @@ export const testGeneratorService = {
     const {
       userId = null,
       questionPoolProvider = null,
-      strict = false,
-      allowFallback = true,
+      strict = true,
+      allowFallback = false,
       rng = Math.random,
     } = options
 
@@ -352,6 +354,9 @@ export const testGeneratorService = {
       }
     }
 
+    if (selectedQuestions.length !== 200) {
+      throw new InsufficientQuestionPoolError({ bucket: 'Group 1 full-mock blueprint', requested: 200, available: selectedQuestions.length, deficit: 200 - selectedQuestions.length })
+    }
     const finalQuestions = selectedQuestions.slice(0, 200).map((q, idx) => ({
       ...q,
       question_number: idx + 1,
@@ -399,8 +404,8 @@ export const testGeneratorService = {
     const {
       userId = null,
       languageSpecialization = 'General Tamil',
-      strict = false,
-      allowFallback = true,
+      strict = true,
+      allowFallback = false,
       rng = Math.random,
     } = options
 
@@ -489,6 +494,9 @@ export const testGeneratorService = {
       }
     }
 
+    if (selectedQuestions.length !== 200) {
+      throw new InsufficientQuestionPoolError({ bucket: 'Group 2 full-mock blueprint', requested: 200, available: selectedQuestions.length, deficit: 200 - selectedQuestions.length })
+    }
     const finalQuestions = selectedQuestions.slice(0, 200).map((q, idx) => ({
       ...q,
       question_number: idx + 1,
@@ -520,8 +528,8 @@ export const testGeneratorService = {
     const {
       userId = null,
       languageSpecialization = 'General Tamil',
-      strict = false,
-      allowFallback = true,
+      strict = true,
+      allowFallback = false,
       rng = Math.random,
     } = options
 
@@ -609,6 +617,9 @@ export const testGeneratorService = {
       }
     }
 
+    if (selectedQuestions.length !== 200) {
+      throw new InsufficientQuestionPoolError({ bucket: 'Group 4 full-mock blueprint', requested: 200, available: selectedQuestions.length, deficit: 200 - selectedQuestions.length })
+    }
     const finalQuestions = selectedQuestions.slice(0, 200).map((q, idx) => ({
       ...q,
       question_number: idx + 1,
@@ -639,17 +650,14 @@ export const testGeneratorService = {
         .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, unit_name, unit_code, macro_topic, micro_topic, difficulty_level, is_pyq')
         .not('correct_option', 'is', null)
 
-      // Filter by unit_code if present
-      if (unitCode) {
-        q = q.or(`unit_code.eq.${unitCode},unit_tag.ilike.%${unitCode}%,unit_name.ilike.%${unitCode}%`)
-      }
+      // A mock is assembled exclusively from verified repository records.
+      // Every predicate is ANDed so an empty bucket is reported, never filled
+      // with a question from another unit, group, or difficulty.
+      q = q.eq('exam_tag', examTag).eq('unit_code', unitCode)
+      if (difficultyLevel) q = q.ilike('difficulty_level', difficultyLevel)
 
       const { data, error } = await q.limit(250)
-      if (error) {
-        console.warn('[testGeneratorService] Query error fallback:', error.message)
-        const fb = await supabase.from('questions').select('*').limit(250)
-        return fb.data || []
-      }
+      if (error) throw new Error(`Verified question bank query failed: ${error.message}`)
       return data || []
     } catch (e) {
       console.warn('[testGeneratorService] fetchQuestionBankPool error:', e)

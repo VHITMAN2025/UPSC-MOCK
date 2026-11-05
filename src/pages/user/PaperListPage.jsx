@@ -83,9 +83,9 @@ export function PaperListPage() {
       }
     })
 
-    // Get canonical standard years for this group and merge with any database years found
-    const canonical = CANONICAL_YEARS_BY_GROUP[selectedExam] || CANONICAL_YEARS_BY_GROUP['TNPSC Group 4']
-    const allYears = Array.from(new Set([...canonical, ...Object.keys(map).map(Number)])).sort((a, b) => b - a)
+    // Only database papers are displayed. Do not create year cards for content
+    // that has not been uploaded and approved by an administrator.
+    const allYears = Object.keys(map).map(Number).sort((a, b) => b - a)
 
     const cards = allYears.map(yr => ({
       year: yr,
@@ -105,34 +105,10 @@ export function PaperListPage() {
     try {
       let targetPaperId = paper?.id
 
-      // If no paper exists in DB for this exact year, generate or fallback
+      // A previous-year paper must already exist in the approved database.
       if (!targetPaperId) {
-        toast.info(`Preparing ${year} ${selectedExam} examination paper…`)
-        
-        let genRes = null
-        if (selectedExam === 'TNPSC Group 1') {
-          genRes = await testGeneratorService.generateGroup1Test({ strict: false, allowFallback: true })
-        } else if (selectedExam === 'TNPSC Group 2/2A') {
-          genRes = await testGeneratorService.generateGroup2Test({
-            languageSpecialization: group2LanguagePref || 'General Tamil',
-            strict: false,
-            allowFallback: true,
-          })
-        } else {
-          genRes = await testGeneratorService.generateGroup4Test({
-            languageSpecialization: group2LanguagePref || 'General Tamil',
-            strict: false,
-            allowFallback: true,
-          })
-        }
-
-        if (genRes?.paper?.id) {
-          targetPaperId = genRes.paper.id
-        } else {
-          // Fallback to any available paper in this group
-          const anyPaper = Object.values(papersByYear)[0]
-          if (anyPaper) targetPaperId = anyPaper.id
-        }
+        toast.error(`The ${year} paper is not available in the database yet.`)
+        return
       }
 
       if (!targetPaperId) {

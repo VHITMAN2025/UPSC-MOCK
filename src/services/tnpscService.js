@@ -1128,23 +1128,8 @@ export const currentAffairsService = {
       console.warn('[currentAffairsService] DB fetch fallback:', e.message)
     }
 
-    // Merge with fallback high-yield articles so students always have content across Group 1, 2, and 4
+    // Published content must originate from the admin database only.
     let merged = [...dbItems]
-    const seenTitles = new Set(dbItems.map(i => (i.title || '').trim().toLowerCase()))
-
-    FALLBACK_CURRENT_AFFAIRS.forEach(fb => {
-      const fbTitle = fb.title.trim().toLowerCase()
-      if (seenTitles.has(fbTitle)) return
-
-      if (filters.category && filters.category !== 'all' && fb.category !== filters.category) {
-        return
-      }
-      if (filters.search && !fb.title.toLowerCase().includes(filters.search.toLowerCase())) {
-        return
-      }
-      merged.push(fb)
-      seenTitles.add(fbTitle)
-    })
 
     // If language is Tamil, map articles to Tamil translations if available
     const isTa = filters.language && filters.language.startsWith('ta')
@@ -1168,8 +1153,6 @@ export const currentAffairsService = {
       if (!error && data) return data
     } catch {}
     
-    const fallbackMatch = FALLBACK_CURRENT_AFFAIRS.find(i => i.id === id)
-    if (fallbackMatch) return fallbackMatch
     throw new Error('Current affairs article not found.')
   },
 
@@ -1380,16 +1363,7 @@ export const quickRecallService = {
           .in('id', oldOpen.map(o => o.id))
       }
     } catch (err) {
-      console.warn('[QuickRecall] DB check failed, using cache:', err)
-      if (cached) {
-        if (cached.completed) return { status: 'COMPLETED_TODAY', ...cached }
-        return { status: 'IN_PROGRESS', ...cached }
-      }
-    }
-
-    if (cached) {
-      if (cached.completed) return { status: 'COMPLETED_TODAY', ...cached }
-      return { status: 'IN_PROGRESS', ...cached }
+      throw new Error(`Could not load Quick Recall from database: ${err.message}`)
     }
 
     return { status: 'NOT_STARTED' }
@@ -1451,7 +1425,7 @@ export const quickRecallService = {
     }
 
     // 1. Fetch PYQ pool candidates
-    let pyqCandidates = [...FALLBACK_PYQ_POOL]
+    let pyqCandidates = []
     try {
       const { data: dbPyq } = await supabase
         .from('questions')
@@ -1474,14 +1448,14 @@ export const quickRecallService = {
           is_pyq: true,
           exam_source: q.papers?.title || 'PYQ Archive',
         }))
-        pyqCandidates = [...formatted, ...pyqCandidates]
+        pyqCandidates = formatted
       }
     } catch (e) {
       console.warn('DB PYQ query fallback:', e)
     }
 
     // 2. Fetch Synthetic/Model question candidates
-    let synCandidates = [...FALLBACK_SYNTHETIC_POOL]
+    let synCandidates = []
     try {
       const { data: dbSyn } = await supabase
         .from('recall_questions')
@@ -1503,7 +1477,7 @@ export const quickRecallService = {
           is_pyq: false,
           subject: q.subject || 'General Knowledge',
         }))
-        synCandidates = [...formatted, ...synCandidates]
+        synCandidates = formatted
       }
     } catch (e) {
       console.warn('DB Synthetic query fallback:', e)
@@ -1572,6 +1546,9 @@ export const quickRecallService = {
       if (finalSet.length < 5 && sIdx < selectedSyns.length) finalSet.push(selectedSyns[sIdx++])
     }
 
+    if (finalSet.length < 5) {
+      throw new Error(`Quick Recall needs 5 approved database questions; only ${finalSet.length} are available.`)
+    }
     return finalSet.slice(0, 5)
   },
 
@@ -1590,62 +1567,17 @@ export const quickRecallService = {
       started_at: new Date().toISOString(),
     }
 
-    let session = null
-    try {
-      const { data, error } = await supabase
+    const { data: session, error } = await supabase
         .from('quick_recall_sessions')
         .insert([sessionPayload])
         .select()
         .single()
-      if (!error && data) session = data
-    } catch (e) {
-      console.warn('Local session created:', e)
-    }
-
-    if (!session) {
-      session = {
-        id: `qr-session-${Date.now()}`,
-        ...sessionPayload,
-      }
-    }
-
-    // Cache locally for resilient daily state
-    try {
-      localStorage.setItem(`qr_daily_${userId}_${todayStr}`, JSON.stringify({
-        session,
-        questions: questionsSnapshot,
-        answers: [],
-        completed: false,
-      }))
-    } catch (e) {}
+    if (error || !session) throw new Error(`Could not create Quick Recall session in database: ${error?.message || 'unknown error'}`)
 
     return session
   },
 
   async saveAnswer(sessionId, index, questionText, selected, correct, isCorrect, userId) {
-    const todayStr = this.getTodayDateStr()
-    const localKey = userId ? `qr_daily_${userId}_${todayStr}` : null
-
-    if (localKey) {
-      try {
-        const item = localStorage.getItem(localKey)
-        if (item) {
-          const parsed = JSON.parse(item)
-          parsed.answers = parsed.answers || []
-          parsed.answers.push({
-            question_index: index,
-            question_text: questionText,
-            selected_answer: selected,
-            correct_answer: correct,
-            is_correct: isCorrect,
-          })
-          localStorage.setItem(localKey, JSON.stringify(parsed))
-        }
-      } catch (e) {}
-    }
-
-    if (sessionId?.startsWith?.('qr-session-')) return { id: `ans-${Date.now()}` }
-
     try {
       const { data, error } = await supabase
         .from('quick_recall_answers')
@@ -1662,8 +1594,7 @@ export const quickRecallService = {
         .single()
       return data || {}
     } catch (e) {
-      console.warn('saveAnswer error:', e)
-      return {}
+      throw new Error(`Could not save Quick Recall answer to database: ${e.message}`)
     }
   },
 
@@ -1730,19 +1661,6 @@ export const quickRecallService = {
       }
     }
 
-    try {
-      const localKey = `qr_daily_${userId}_${todayStr}`
-      const item = localStorage.getItem(localKey)
-      if (item) {
-        const parsed = JSON.parse(item)
-        parsed.completed = true
-        parsed.final_score = correctCount
-        parsed.streak_at_end = newStreak
-        parsed.qualified = isQualified
-        localStorage.setItem(localKey, JSON.stringify(parsed))
-      }
-    } catch (e) {}
-
     return {
       new_streak: newStreak,
       prev_streak: prevStreak,
@@ -1781,7 +1699,7 @@ function parseQuestionMetadata(explanation) {
   return {}
 }
 
-const VALID_PRACTICE_FIELDS = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name)'
+const VALID_PRACTICE_FIELDS = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, exam_group, exam_tag, unit_number, unit_code, macro_topic, micro_topic, micro_topic_id, source_type, pyq_year, papers(id, title, subject, exam_name)'
 
 async function fetchVerifiedQuestionsPool(examContext = null) {
   let paperIds = []
@@ -1809,6 +1727,17 @@ async function fetchVerifiedQuestionsPool(examContext = null) {
 }
 
 function matchesPracticeCriteria(q, { targetSubject, targetTopic, microTopicId, targetUnit }) {
+  // Production records carry canonical tags. Use only them for filtering: text
+  // heuristics are deliberately not a fallback because they can mix domains.
+  if (q.unit_number != null || q.unit_code || q.macro_topic || q.micro_topic) {
+    const normalizedUnit = String(targetUnit || '').replace(/[^0-9]/g, '')
+    const normalizedCode = normalizedUnit ? `UNIT_${['I','II','III','IV','V','VI','VII','VIII','IX','X'][Number(normalizedUnit) - 1] || ''}` : ''
+    if (normalizedUnit && String(q.unit_number ?? '').trim() !== normalizedUnit && String(q.unit_code || '').toUpperCase() !== normalizedCode) return false
+    if (microTopicId && String(q.micro_topic_id || '') !== String(microTopicId)) return false
+    if (targetTopic && String(q.micro_topic || '').trim().toLowerCase() !== String(targetTopic).trim().toLowerCase() && String(q.macro_topic || '').trim().toLowerCase() !== String(targetTopic).trim().toLowerCase()) return false
+    if (!normalizedUnit && targetSubject && targetSubject !== 'All Subjects' && String(q.macro_topic || '').trim().toLowerCase() !== targetSubject.trim().toLowerCase()) return false
+    return true
+  }
   const meta = parseQuestionMetadata(q.explanation)
   const qText = (q.question_text || '') + ' ' + (q.explanation || '')
   const qSubj = (q.papers?.subject || meta.unit || '') + ' ' + (meta.macro || '') + ' ' + (meta.micro || '')
@@ -1914,12 +1843,10 @@ export const practiceService = {
         matchesPracticeCriteria(q, { targetSubject: targetSubj, targetTopic, microTopicId, targetUnit })
       )
 
-      const curated = getCuratedSubjectQuestions(targetSubj || 'General', targetTopic, microTopicId)
-      return Math.max(matched.length, curated.length)
+      return matched.length
     } catch (err) {
       console.warn('Error counting available questions:', err)
-      const curated = getCuratedSubjectQuestions(subject || 'General', topic, micro_topic_id)
-      return Math.max(curated.length, 5)
+      return 0
     }
   },
 
@@ -1957,20 +1884,6 @@ export const practiceService = {
         console.warn('Error fetching mistake questions for fix test:', err)
       }
 
-      // Check fallback and curated pools if any IDs were not in questions table
-      const foundIds = new Set(selected.map(q => q.id))
-      const missingIds = mistakeIds.filter(id => !foundIds.has(id))
-      if (missingIds.length > 0) {
-        const allPools = [...CURATED_UNIT_QUESTIONS, ...FALLBACK_PYQ_POOL, ...FALLBACK_SYNTHETIC_POOL]
-        missingIds.forEach(id => {
-          const found = allPools.find(q => q.id === id)
-          if (found && !foundIds.has(found.id)) {
-            selected.push(found)
-            foundIds.add(found.id)
-          }
-        })
-      }
-
       if (selected.length === 0) {
         throw new Error('Unable to find the selected mistake questions for this Fix Test. Please reselect from your exam review.')
       }
@@ -2002,20 +1915,6 @@ export const practiceService = {
         }
       })
 
-      // Supplement candidate pool with high-yield curated questions for the exact topic
-      if (candidatePool.length === 0) {
-        const curated = getCuratedSubjectQuestions(targetSubject || 'General', targetTopic, microTopicId)
-        curated.forEach(cq => {
-          if (!candidatePool.some(p => p.id === cq.id || p.question_text === cq.question_text)) {
-            candidatePool.push(cq)
-          }
-        })
-      }
-
-      if (candidatePool.length === 0) {
-        candidatePool = getCuratedSubjectQuestions(targetSubject || 'General', targetTopic, microTopicId)
-      }
-
       const shuffled = [...candidatePool]
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
@@ -2023,8 +1922,10 @@ export const practiceService = {
       }
 
       const requestedCount = config.question_count || 10
-      const count = Math.min(requestedCount, shuffled.length)
-      selected = shuffled.slice(0, count)
+      if (shuffled.length < requestedCount) {
+        throw new Error(`Only ${shuffled.length} verified questions match the selected syllabus filters; ${requestedCount} were requested. Add approved questions in Admin before creating this session.`)
+      }
+      selected = shuffled.slice(0, requestedCount)
     }
 
     if (selected.length === 0) {
@@ -2425,7 +2326,7 @@ export const analyticsService = {
     try {
       const { data: primaryData, error: primaryErr } = await supabase
         .from('attempts')
-        .select('*, papers(title, subject, exam_name, total_questions, duration_minutes), attempt_answers(*, questions(id, question_number, question_text, correct_option))')
+        .select('*, papers(title, subject, exam_name, total_questions, duration_minutes), attempt_answers(*, questions(id, question_number, question_text, correct_option, difficulty_level, unit_name, macro_topic, micro_topic))')
         .eq('user_id', userId)
         .or('status.eq.completed,status.eq.submitted,submitted_at.not.is.null')
         .order('created_at', { ascending: false })
@@ -2527,87 +2428,20 @@ export const analyticsService = {
     // ── Build Question-Level Pacing & Time-Tracking Dataset ──────────────────
     const questionTimings = []
 
-    // 1. Ingest from Mock Exam Attempts (attempt_answers + localStorage per-question timer if available)
+    // 1. Ingest only persisted mock-exam responses. Pacing never invents a
+    // duration from question text, timestamps, or averages: it needs the timer
+    // value that was stored for that specific answer at submission.
     list.forEach((attempt) => {
-      const answers = (attempt.attempt_answers ?? []).filter(aa => aa.selected_option != null)
+      const answers = (attempt.attempt_answers ?? []).filter(aa =>
+        aa.selected_option != null && Number(aa.time_spent_seconds) > 0
+      )
       if (answers.length === 0) return
 
-      // Check if localStorage has granular per-question active seconds recorded in ExamPage
-      let localTimings = {}
-      try {
-        const raw = localStorage.getItem(`exam_q_timings_${attempt.id}`)
-        if (raw) localTimings = JSON.parse(raw) || {}
-      } catch {}
-
-      const startMs = attempt.started_at ? new Date(attempt.started_at).getTime() : null
-      const endMs   = attempt.submitted_at ? new Date(attempt.submitted_at).getTime() : null
-      const totalElapsedSec = (startMs && endMs && endMs > startMs)
-        ? Math.round((endMs - startMs) / 1000)
-        : 0
-
-      // Sort answers by created_at or question_number
-      const sortedAnswers = [...answers].sort((a, b) => {
-        const tA = a.created_at ? new Date(a.created_at).getTime() : 0
-        const tB = b.created_at ? new Date(b.created_at).getTime() : 0
-        if (tA !== tB) return tA - tB
-        return (a.questions?.question_number || 0) - (b.questions?.question_number || 0)
-      })
-
-      // Check if answers have distinct incremental created_at timestamps
-      const distinctTimestamps = new Set(
-        sortedAnswers.map(a => a.created_at ? Math.floor(new Date(a.created_at).getTime() / 1000) : 0)
-      )
-      const hasIncrementalTimestamps = distinctTimestamps.size > Math.max(1, Math.floor(sortedAnswers.length * 0.4))
-
-      // Pre-compute raw estimates so we can scale to actual attempt elapsed time if realistic
-      const rawEstimates = sortedAnswers.map((ans, idx) => {
+      answers.forEach((ans, idx) => {
         const qObj = ans.questions || {}
         const qText = qObj.question_text || `Question #${qObj.question_number || idx + 1}`
         const category = classifyQuestionCategory(qText, attempt.papers?.subject || '', 'Mock Exam')
-        return {
-          ans,
-          idx,
-          qObj,
-          qText,
-          category,
-          estSec: estimateQuestionDurationSec(qText, category, idx, ans.question_id || ans.id),
-        }
-      })
-
-      const sumEstimates = rawEstimates.reduce((s, r) => s + r.estSec, 0) || 1
-      // Consider attemptElapsedSec realistic if average is between 12s and 180s per answered question
-      const isRealisticAttemptDuration =
-        totalElapsedSec >= sortedAnswers.length * 12 &&
-        totalElapsedSec <= sortedAnswers.length * 180
-
-      let prevMs = startMs
-      rawEstimates.forEach(({ ans, idx, qObj, qText, category, estSec }) => {
-        let timeSpentSec = null
-
-        // Priority 1: Explicit DB column or local per-question timer
-        if (ans.time_spent_seconds && Number(ans.time_spent_seconds) > 0) {
-          timeSpentSec = Math.round(Number(ans.time_spent_seconds))
-        } else if (localTimings[ans.question_id] && Number(localTimings[ans.question_id]) > 0) {
-          timeSpentSec = Math.round(Number(localTimings[ans.question_id]))
-        }
-        // Priority 2: Incremental answer timestamp deltas
-        else if (hasIncrementalTimestamps && ans.created_at && prevMs) {
-          const currMs = new Date(ans.created_at).getTime()
-          const deltaSec = Math.round((currMs - prevMs) / 1000)
-          prevMs = currMs
-          if (deltaSec >= 8 && deltaSec <= 240) {
-            timeSpentSec = deltaSec
-          }
-        }
-
-        // Priority 3: Proportional allocation of actual attempt duration or complexity-weighted duration
-        if (!timeSpentSec) {
-          if (isRealisticAttemptDuration) {
-            timeSpentSec = Math.max(10, Math.round((estSec / sumEstimates) * totalElapsedSec))
-          } else {
-            timeSpentSec = estSec
-          }
-        }
+        const timeSpentSec = Math.round(Number(ans.time_spent_seconds))
 
         const deltaFromBenchmarkSec = timeSpentSec - TNPSC_BENCHMARK_SEC
         const paceStatus =
@@ -2643,22 +2477,14 @@ export const analyticsService = {
       const ansMap = ps.answers_json || {}
       const answeredIds = Object.keys(ansMap)
       if (answeredIds.length === 0) return
-
-      const startMs = ps.started_at ? new Date(ps.started_at).getTime() : null
-      const endMs   = ps.completed_at ? new Date(ps.completed_at).getTime() : null
-      const elapsedSec = ps.time_taken_sec
-        ? Number(ps.time_taken_sec)
-        : (startMs && endMs && endMs > startMs ? Math.round((endMs - startMs) / 1000) : 0)
-
-      const isRealistic = elapsedSec >= answeredIds.length * 10 && elapsedSec <= answeredIds.length * 180
+      const persistedQuestionTimes = ps.question_times_json || {}
 
       answeredIds.forEach((qId, idx) => {
+        const timeSpentSec = Number(persistedQuestionTimes[qId])
+        // Older sessions did not persist per-question timing. Do not fabricate it.
+        if (!Number.isFinite(timeSpentSec) || timeSpentSec <= 0) return
         const qMeta = qs.find(q => String(q.id) === String(qId)) || {}
         const category = classifyQuestionCategory(ps.subject || '', ps.subject || '', 'Practice Set')
-        const estSec = estimateQuestionDurationSec(ps.subject || 'Practice Question', category, idx, qId)
-        const timeSpentSec = isRealistic
-          ? Math.max(10, Math.round(elapsedSec / answeredIds.length) + ((idx % 3) - 1) * 5)
-          : estSec
 
         const deltaFromBenchmarkSec = timeSpentSec - TNPSC_BENCHMARK_SEC
         const paceStatus =
@@ -2709,9 +2535,9 @@ export const analyticsService = {
             timeSpentSec = diff
           }
         }
-        if (!timeSpentSec) {
-          timeSpentSec = estimateQuestionDurationSec(qText, category, idx, ans.id || `qr-${rs.id}-${idx}`)
-        }
+        // A missing answer timestamp means this legacy recall response has no
+        // measured timing, so it must not contribute an invented pace value.
+        if (!timeSpentSec) return
 
         const deltaFromBenchmarkSec = timeSpentSec - TNPSC_BENCHMARK_SEC
         const paceStatus =

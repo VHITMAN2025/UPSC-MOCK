@@ -96,11 +96,12 @@ export const attemptService = {
     return data || []
   },
 
-  async submitAttempt(attemptId, answersArray) {
+  async submitAttempt(attemptId, answersArray, timingsByQuestion = {}) {
     // Prepare answers payload format
     const formattedAnswers = Object.entries(answersArray || {}).map(([questionId, selectedOption]) => ({
       question_id: questionId,
-      selected_option: selectedOption || null
+      selected_option: selectedOption || null,
+      time_spent_seconds: Math.max(0, Math.round(Number(timingsByQuestion[questionId] || 0)))
     }))
 
     // Try calling Supabase Edge Function first
@@ -123,6 +124,9 @@ export const attemptService = {
       if (response.ok) {
         const resData = await response.json()
         if (resData.success) {
+          // Views listening to this event refetch their derived metrics without
+          // requiring a hard refresh after a submission.
+          window.dispatchEvent(new CustomEvent('tnpsc-attempt-submitted', { detail: { attemptId } }))
           return resData
         }
       }
@@ -139,6 +143,7 @@ export const attemptService = {
         })
 
       if (!rpcErr && rpcResult) {
+        window.dispatchEvent(new CustomEvent('tnpsc-attempt-submitted', { detail: { attemptId } }))
         return {
           success: true,
           attempt: rpcResult,
@@ -152,6 +157,13 @@ export const attemptService = {
       console.warn('RPC Submission exception, falling back to client-side engine:', rpcCatchErr.message)
     }
 
+    // Scoring must never be performed in a browser: the Edge Function or the
+    // database RPC is authoritative. This preserves one persisted result for
+    // analytics and prevents offline/dummy scores.
+    throw new Error('The secure scoring service is unavailable. Your attempt was not submitted; please retry when the database connection is restored.')
+
+    /* Legacy client-side scorer retained below for reference only. It is
+       intentionally unreachable so it cannot create non-database analytics. */
     // Fallback 2: Robust Client-Side Scoring Engine
     try {
       const { data: attempt, error: attErr } = await supabase
@@ -257,6 +269,7 @@ export const attemptService = {
       questionHistoryService.recordQuestionsSeen(attempt.user_id, examTag, upsertRows).catch(e => {
         console.warn('[attemptService] recordQuestionsSeen note:', e)
       })
+      window.dispatchEvent(new CustomEvent('tnpsc-attempt-submitted', { detail: { attemptId } }))
 
       // Fetch previous attempt for progress comparison
       const { data: prevAttempts } = await supabase

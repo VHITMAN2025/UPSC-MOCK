@@ -3,15 +3,13 @@
  * 
  * Implements:
  * 1. Zero-Repetition Tracking: Ensures Mock Test 2 never repeats questions from Mock Test 1.
- * 2. Remote Supabase user_question_history persistence with seamless local offline fallback.
+ * 2. Remote Supabase user_question_history persistence only.
  * 3. Smart Reshuffling: When question pool is exhausted, prioritizes unseen questions first,
  *    then draws from least-seen questions (ORDER BY times_seen ASC, RANDOM()).
  * 4. Records question exposure on exam submission.
  */
 
 import { supabase } from '../lib/supabase.js'
-
-const LOCAL_STORAGE_PREFIX = 'user_q_hist_'
 
 export const questionHistoryService = {
   /**
@@ -23,7 +21,7 @@ export const questionHistoryService = {
 
     const historyMap = new Map()
 
-    // 1. Try fetching from Supabase table
+    // The database is the only source of truth for repeat prevention.
     try {
       const { data, error } = await supabase
         .from('user_question_history')
@@ -41,23 +39,7 @@ export const questionHistoryService = {
         })
         return historyMap
       }
-    } catch (e) {
-      // Table may not exist or network unavailable -> proceed to local storage
-    }
-
-    // 2. LocalStorage Fallback
-    try {
-      const key = `${LOCAL_STORAGE_PREFIX}${userId}_${examTag}`
-      const localStr = localStorage.getItem(key)
-      if (localStr) {
-        const parsed = JSON.parse(localStr)
-        Object.entries(parsed).forEach(([qId, val]) => {
-          historyMap.set(String(qId), val)
-        })
-      }
-    } catch (e) {
-      console.warn('[questionHistoryService] LocalStorage read note:', e)
-    }
+    } catch (e) { throw new Error(`Could not load question history from database: ${e.message}`) }
 
     return historyMap
   },
@@ -138,7 +120,7 @@ export const questionHistoryService = {
       last_seen_at: now,
     }))
 
-    // 1. Update Supabase table if possible
+    // Update Supabase table; do not create an in-browser shadow history.
     try {
       // Fetch existing counts for increment
       const qIds = upsertRows.map(r => r.question_id)
@@ -155,32 +137,10 @@ export const questionHistoryService = {
         times_seen: (existingMap.get(r.question_id) || 0) + 1,
       }))
 
-      await supabase
+      const { error } = await supabase
         .from('user_question_history')
         .upsert(finalRows, { onConflict: 'user_id,question_id' })
-    } catch (e) {
-      // Table may not exist yet in DB
-    }
-
-    // 2. Always maintain local cache in LocalStorage
-    try {
-      const key = `${LOCAL_STORAGE_PREFIX}${userId}_${examTag}`
-      const localStr = localStorage.getItem(key)
-      const store = localStr ? JSON.parse(localStr) : {}
-
-      questionResults.forEach(r => {
-        const qId = String(r.question_id || r.id)
-        const prev = store[qId] || { times_seen: 0 }
-        store[qId] = {
-          times_seen: prev.times_seen + 1,
-          last_attempt_status: r.is_correct === true ? 'CORRECT' : r.is_correct === false ? 'INCORRECT' : 'UNATTEMPTED',
-          last_seen_at: now,
-        }
-      })
-
-      localStorage.setItem(key, JSON.stringify(store))
-    } catch (e) {
-      console.warn('[questionHistoryService] LocalStorage write note:', e)
-    }
+      if (error) throw error
+    } catch (e) { throw new Error(`Could not save question history to database: ${e.message}`) }
   },
 }

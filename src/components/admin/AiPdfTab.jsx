@@ -6,13 +6,11 @@ import {
 } from 'lucide-react'
 import { questionService } from '../../services/questionService'
 import { useApp } from '../../contexts/AppContext'
-import { extractQuestionsWithAi, blobToBase64, fetchAvailableGeminiModels } from '../../services/aiPdfService'
+import { extractQuestionsWithAi, blobToBase64, fetchAvailableGeminiModels, loadApprovedPdfTaxonomy } from '../../services/aiPdfService'
 import { apiKeyService } from '../../services/apiKeyService'
-import {
-  TopicSeparationSummary,
-  OFFICIAL_SYLLABUS_UNITS,
-  normalizeUnitName
-} from './TopicSeparationSummary'
+import { TopicSeparationSummary, normalizeUnitName } from './TopicSeparationSummary'
+
+const taxonomyId = (item) => [item.unit_name, item.macro_topic_name, item.micro_topic_name].join('\u001f')
 
 export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
@@ -33,6 +31,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [viewMode, setViewMode] = useState('table') // 'table' | 'separated'
   const [collapsedTopics, setCollapsedTopics] = useState(new Set())
+  const [approvedTaxonomy, setApprovedTaxonomy] = useState([])
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -53,6 +52,12 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     }
     fetchModels()
   }, [geminiApiKey])
+
+  useEffect(() => {
+    loadApprovedPdfTaxonomy()
+      .then(setApprovedTaxonomy)
+      .catch((error) => console.warn('Approved taxonomy is not available yet:', error.message))
+  }, [])
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -119,24 +124,33 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
     }
   }
 
-  const handleUnitChange = (qIndex, newUnit) => {
+  const handleTaxonomyChange = (qIndex, selectedId) => {
+    const selected = approvedTaxonomy.find(item => taxonomyId(item) === selectedId)
+    if (!selected) return
     setQuestions(prev => {
       const updated = [...prev]
-      const canonical = normalizeUnitName(newUnit)
       const target = updated[qIndex]
       const oldExpl = target.explanation || ''
       const cleanedExpl = oldExpl.replace(/\[Taxonomy:[^\]]+\]\n*/gi, '').trim()
-      const newTaxPrefix = `[Taxonomy: ${canonical} > ${target.macro_topic_name || 'General Studies'} > ${target.micro_topic_name || 'General Concepts'}]`
+      const newTaxPrefix = `[Taxonomy: ${selected.unit_name} > ${selected.macro_topic_name} > ${selected.micro_topic_name}]`
       
       updated[qIndex] = {
         ...target,
-        unit_name: canonical,
+        unit_name: selected.unit_name,
+        macro_topic: selected.macro_topic_name,
+        macro_topic_name: selected.macro_topic_name,
+        micro_topic: selected.micro_topic_name,
+        micro_topic_name: selected.micro_topic_name,
+        status: 'ready',
+        parser_status: 'ready',
+        taxonomy_confidence: 1,
+        taxonomy_warning: null,
         explanation: `${newTaxPrefix}\n\n${cleanedExpl}`.trim(),
-        tags: Array.from(new Set([...(target.tags || []), canonical])),
+        tags: Array.from(new Set([...(target.tags || []), selected.unit_name, selected.macro_topic_name, selected.micro_topic_name])),
       }
       return updated
     })
-    toast?.success?.(`Question ${qIndex + 1} updated to ${normalizeUnitName(newUnit)}`)
+    toast?.success?.(`Question ${qIndex + 1} assigned to an approved mapping`)
   }
 
   const toggleTopicCollapse = (topicName) => {
@@ -150,6 +164,11 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
 
   const handleSave = async () => {
     if (questions.length === 0) return
+    const unclassified = questions.filter(q => q.status === 'needs_review' || !q.unit_name || !q.macro_topic_name || !q.micro_topic_name)
+    if (unclassified.length > 0) {
+      toast.error(`${unclassified.length} question(s) need an approved Unit, Macro Topic and Micro Topic before saving.`)
+      return
+    }
     setSaving(true)
     setImportMsg('')
 
@@ -273,7 +292,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
             </p>
           ) : (
             <p className="text-xs text-body-secondary">
-              Click to select a PDF file (max 20 MB)
+              Click to select a PDF file (up to 50 MB)
             </p>
           )}
         </div>
@@ -380,8 +399,6 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                 <tbody>
                   {displayQuestions.map((row) => {
                     const originalIdx = row.originalIdx
-                    const currentUnit = normalizeUnitName(row.unit_name)
-
                     return (
                       <tr key={originalIdx} className="border-b border-surface-border hover:bg-slate-50/40 transition-colors">
                         <td className="py-2.5 px-3 font-bold text-body-secondary">{originalIdx + 1}</td>
@@ -393,13 +410,16 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                         <td className="py-2.5 px-3">
                           {/* Unit Dropdown for on-the-fly reclassification */}
                           <select
-                            value={currentUnit}
-                            onChange={(e) => handleUnitChange(originalIdx, e.target.value)}
+                            value={taxonomyId(row)}
+                            onChange={(e) => handleTaxonomyChange(originalIdx, e.target.value)}
                             className="w-full text-[11px] font-semibold text-indigo-900 bg-indigo-50/80 border border-indigo-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                           >
-                            {OFFICIAL_SYLLABUS_UNITS.map(u => (
-                              <option key={u.id} value={u.unit_name}>
-                                {u.shortName}
+                            {!approvedTaxonomy.some(item => taxonomyId(item) === taxonomyId(row)) && (
+                              <option value={taxonomyId(row)}>Needs approved mapping</option>
+                            )}
+                            {approvedTaxonomy.map(item => (
+                              <option key={taxonomyId(item)} value={taxonomyId(item)}>
+                                {item.unit_name} › {item.macro_topic_name} › {item.micro_topic_name}
                               </option>
                             ))}
                           </select>
@@ -453,7 +473,7 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                 if (selectedTopic && topicName !== selectedTopic) return null
 
                 const isCollapsed = collapsedTopics.has(topicName)
-                const unitConfig = OFFICIAL_SYLLABUS_UNITS.find(u => u.unit_name === topicName) || {
+                const unitConfig = {
                   color: 'from-slate-600 to-gray-700',
                   badgeColor: 'bg-slate-100 text-slate-800 border-slate-200',
                   shortName: topicName,
@@ -501,8 +521,6 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                       <div className="p-4 space-y-3">
                         {topicQuestions.map((q) => {
                           const originalIdx = q.originalIdx
-                          const currentUnit = normalizeUnitName(q.unit_name)
-
                           return (
                             <div
                               key={originalIdx}
@@ -522,13 +540,16 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
                                 <div className="flex items-center gap-2 self-start sm:self-auto">
                                   <span className="text-[10px] font-bold text-body-secondary">Move unit:</span>
                                   <select
-                                    value={currentUnit}
-                                    onChange={(e) => handleUnitChange(originalIdx, e.target.value)}
+                                    value={taxonomyId(q)}
+                                    onChange={(e) => handleTaxonomyChange(originalIdx, e.target.value)}
                                     className="text-[10px] font-semibold text-body-text bg-white border border-surface-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
                                   >
-                                    {OFFICIAL_SYLLABUS_UNITS.map(u => (
-                                      <option key={u.id} value={u.unit_name}>
-                                        {u.shortName}
+                                    {!approvedTaxonomy.some(item => taxonomyId(item) === taxonomyId(q)) && (
+                                      <option value={taxonomyId(q)}>Needs approved mapping</option>
+                                    )}
+                                    {approvedTaxonomy.map(item => (
+                                      <option key={taxonomyId(item)} value={taxonomyId(item)}>
+                                        {item.unit_name} › {item.macro_topic_name} › {item.micro_topic_name}
                                       </option>
                                     ))}
                                   </select>

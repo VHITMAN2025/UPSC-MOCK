@@ -80,6 +80,14 @@ export function AnalyticsPage() {
     if (user?.id) load()
   }, [user?.id, selectedExam])
 
+  // Submission can happen in another route while this view remains mounted.
+  // Refresh only from persisted data when it does, never from optimistic counts.
+  useEffect(() => {
+    const refresh = () => { if (user?.id) load() }
+    window.addEventListener('tnpsc-attempt-submitted', refresh)
+    return () => window.removeEventListener('tnpsc-attempt-submitted', refresh)
+  }, [user?.id, selectedExam])
+
   async function load() {
     setLoading(true)
     setError(null)
@@ -223,23 +231,25 @@ export function AnalyticsPage() {
 
         const isOptE = ans.selected_option === 'E' || ans.selected_option === 'e'
         const isUnanswered = ans.selected_option == null || ans.selected_option === ''
-        const isWrong = ans.is_correct === false || isOptE
+        // Unattempted / Option E is stored as NULL by the scoring service and
+        // must not be presented as a scored mistake or synthetic diagnosis.
+        const isWrong = ans.is_correct === false
 
         if (isWrong || isUnanswered) {
           const timing = allQuestionTimings.find(t => String(t.questionId) === String(qId))
           const timeSpentSec = ans.time_spent_seconds != null && Number(ans.time_spent_seconds) > 0
             ? Math.round(Number(ans.time_spent_seconds))
-            : (timing ? timing.timeSpentSec : 45)
+            : null
 
           let classification = 'Concept Confused'
           let badgeColor = 'bg-purple-100 text-purple-800 border-purple-200'
           if (isOptE || isUnanswered) {
             classification = 'Concept Not Known'
             badgeColor = 'bg-slate-100 text-slate-700 border-slate-200'
-          } else if (timeSpentSec < 35) {
+          } else if (timeSpentSec != null && timeSpentSec < 35) {
             classification = 'Careless Reading'
             badgeColor = 'bg-amber-100 text-amber-800 border-amber-200'
-          } else if (timeSpentSec >= 70) {
+          } else if (timeSpentSec != null && timeSpentSec >= 70) {
             classification = 'Time Pressure'
             badgeColor = 'bg-red-100 text-red-800 border-red-200'
           }
@@ -352,21 +362,21 @@ export function AnalyticsPage() {
       {
         level: 'Easy (20% Target)',
         count: easyTot,
-        accuracy: easyTot > 0 ? Math.round((easyCor / easyTot) * 100) : (hasAny ? 0 : 85),
+        accuracy: easyTot > 0 ? Math.round((easyCor / easyTot) * 100) : null,
         color: 'bg-emerald-500',
         textColor: 'text-emerald-700',
       },
       {
         level: 'Medium (50% Target)',
         count: medTot,
-        accuracy: medTot > 0 ? Math.round((medCor / medTot) * 100) : (hasAny ? 0 : 70),
+        accuracy: medTot > 0 ? Math.round((medCor / medTot) * 100) : null,
         color: 'bg-blue-500',
         textColor: 'text-blue-700',
       },
       {
         level: 'Hard (30% Target)',
         count: hardTot,
-        accuracy: hardTot > 0 ? Math.round((hardCor / hardTot) * 100) : (hasAny ? 0 : 52),
+        accuracy: hardTot > 0 ? Math.round((hardCor / hardTot) * 100) : null,
         color: 'bg-purple-500',
         textColor: 'text-purple-700',
       },
@@ -405,7 +415,7 @@ export function AnalyticsPage() {
 
         statsMap[fType].total += 1
         if (ans.is_correct) statsMap[fType].correct += 1
-        statsMap[fType].totalTimeSec += Number(ans.time_spent_seconds || 48)
+        if (Number(ans.time_spent_seconds) > 0) statsMap[fType].totalTimeSec += Number(ans.time_spent_seconds)
       })
     })
 
@@ -414,7 +424,18 @@ export function AnalyticsPage() {
       const attempted = s.total
       const correct = s.correct
       const accuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : null
-      const avgTime = attempted > 0 ? Math.round(s.totalTimeSec / attempted) : 48
+      const timedCount = allAttempts.reduce((count, attempt) => count + (attempt.attempt_answers || []).filter(answer => {
+        const question = answer.questions || {}
+        const questionText = (question.question_text || '').toLowerCase()
+        return Number(answer.time_spent_seconds) > 0 && (
+          (f.type === 'MATCHING' && (questionText.includes('match') || questionText.includes('பொருத்துக') || questionText.includes('list-i'))) ||
+          (f.type === 'ASSERTION_REASON' && (questionText.includes('assertion') || questionText.includes('கூற்று')) && (questionText.includes('reason') || questionText.includes('காரணம்'))) ||
+          (f.type === 'CHRONOLOGY' && (questionText.includes('chronolog') || questionText.includes('காலவரிசை') || questionText.includes('வரிசைப்படுத்துக'))) ||
+          (f.type === 'STATEMENT_EVALUATION' && (questionText.includes('statement') || questionText.includes('கூற்று') || questionText.includes('பின்வரும்'))) ||
+          (f.type === 'MULTIPLE_CHOICE' && !(questionText.includes('match') || questionText.includes('பொருத்துக') || questionText.includes('list-i') || questionText.includes('assertion') || questionText.includes('chronolog') || questionText.includes('காலவரிசை') || questionText.includes('statement')))
+        )
+      }).length, 0)
+      const avgTime = timedCount > 0 ? Math.round(s.totalTimeSec / timedCount) : null
       const status = accuracy == null
         ? 'Untested'
         : accuracy >= 75
@@ -759,10 +780,10 @@ export function AnalyticsPage() {
                   <div key={d.level} className="space-y-1">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-slate-300">{d.level}</span>
-                      <span className="font-bold text-white">{d.accuracy}%</span>
+                      <span className="font-bold text-white">{d.accuracy != null ? `${d.accuracy}%` : '—'}</span>
                     </div>
                     <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${d.color}`} style={{ width: `${Math.min(100, Math.max(d.accuracy, 4))}%` }} />
+                      <div className={`h-full rounded-full ${d.color}`} style={{ width: `${d.accuracy == null ? 0 : Math.min(100, Math.max(d.accuracy, 4))}%` }} />
                     </div>
                   </div>
                 ))}
@@ -1389,7 +1410,7 @@ export function AnalyticsPage() {
                     </div>
                     <div>
                       <span className="text-[10px] text-body-secondary uppercase block">Avg Time</span>
-                      <b className="text-xs font-black text-body-text">{qf.avgTime}s</b>
+                      <b className="text-xs font-black text-body-text">{qf.avgTime != null ? `${qf.avgTime}s` : '—'}</b>
                     </div>
                   </div>
 

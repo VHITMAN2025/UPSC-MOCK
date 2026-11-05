@@ -195,6 +195,20 @@ export const questionService = {
     const miName = payload.micro_topic || payload.micro_topic_name || 'General Concepts'
     const eYear = payload.exam_year || '2024'
     const pyq = Boolean(payload.is_pyq)
+    const romanUnits = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 }
+    const token = String(payload.unit_number || payload.unit_code || uTag).match(/(?:UNIT[_\s-]*)?([IVX]+|\d+)/i)?.[1]?.toUpperCase()
+    const unitNumber = Number.parseInt(token, 10) || romanUnits[token] || 1
+    payload = {
+      ...payload,
+      exam_group: payload.exam_group || (gTag === 'Group 2/2A' ? 'Group 2' : gTag),
+      unit_number: unitNumber,
+      source_type: pyq ? 'PYQ' : 'VINA',
+      pyq_year: pyq ? Number.parseInt(payload.pyq_year || payload.year || eYear, 10) : null,
+      language_format: payload.language_format || {
+        english: { question: payload.question_text || '', options: [payload.option_a || '', payload.option_b || '', payload.option_c || '', payload.option_d || ''] },
+        tamil: { question: payload.question_text_tamil || '', options: [payload.option_a_tamil || null, payload.option_b_tamil || null, payload.option_c_tamil || null, payload.option_d_tamil || null] },
+      },
+    }
 
     let expl = payload.explanation || ''
     if (!expl.includes('[Metadata:')) {
@@ -234,6 +248,17 @@ export const questionService = {
     const miName = payload.micro_topic || payload.micro_topic_name || 'General Concepts'
     const eYear = payload.exam_year || '2024'
     const pyq = Boolean(payload.is_pyq)
+
+    // Preserve the strict contract when an inline admin edit touches taxonomy.
+    if (payload.macro_topic !== undefined || payload.micro_topic !== undefined || payload.unit_number !== undefined || payload.exam_group !== undefined) {
+      payload = {
+        ...payload,
+        exam_group: payload.exam_group || (gTag === 'Group 2/2A' ? 'Group 2' : gTag),
+        unit_number: payload.unit_number || Number.parseInt(String(payload.unit_code || uTag).replace(/\D/g, ''), 10) || 1,
+        source_type: payload.source_type || (pyq ? 'PYQ' : 'VINA'),
+        pyq_year: pyq ? Number.parseInt(payload.pyq_year || payload.year || eYear, 10) : null,
+      }
+    }
 
     if (payload.explanation !== undefined) {
       let expl = (payload.explanation || '')
@@ -369,7 +394,14 @@ export const questionService = {
       const groupName = q.group_name || `TNPSC ${groupTag}`
       const unitTag = q.unit_tag || (unitName.startsWith('Unit') ? unitName.split('—')[0].trim() : 'Unit 1')
       const examYear = String(q.exam_year || q.year || defaultYear)
-      const isPyq = Boolean(q.is_pyq ?? (paperMeta?.year ? true : false))
+      const isPyq = Boolean(q.is_pyq ?? String(q.source_type || '').toUpperCase() === 'PYQ')
+      const sourceType = isPyq ? 'PYQ' : 'VINA'
+      const examGroup = q.exam_group || (groupTag === 'Group 2/2A' ? 'Group 2' : groupTag)
+      const romanUnits = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 }
+      const unitToken = String(q.unit_number || q.unit_code || unitTag || '').match(/(?:UNIT[_\s-]*)?([IVX]+|\d+)/i)?.[1]?.toUpperCase()
+      const unitNumber = Number.parseInt(unitToken, 10) || romanUnits[unitToken] || 1
+      const englishQuestion = sanitizeDatabaseText(q.question_text || q.en_question_text || '')
+      const tamilQuestion = sanitizeDatabaseText(q.question_text_tamil || q.tamil_question || '')
 
       // Embed resilient metadata guarantee tag into explanation
       let baseExplanation = sanitizeDatabaseText(q.explanation || q.extraction_notes || '') || ''
@@ -393,7 +425,7 @@ export const questionService = {
       const sanitized = {
         paper_id: paperId,
         question_number: parseInt(q.question_number, 10),
-        question_text: sanitizeDatabaseText(q.question_text || ''),
+        question_text: englishQuestion,
         option_a: sanitizeDatabaseText(optA),
         option_b: sanitizeDatabaseText(optB),
         option_c: sanitizeDatabaseText(optC),
@@ -420,6 +452,15 @@ export const questionService = {
         exam_year: examYear,
         is_pyq: isPyq,
         difficulty_level: q.difficulty_level || 'Medium',
+        exam_tag: q.exam_tag || (examGroup === 'Group 1' ? 'TNPSC_GROUP_1' : examGroup === 'Group 2' || examGroup === 'Group 2A' ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4'),
+        exam_group: examGroup,
+        unit_number: unitNumber,
+        source_type: sourceType,
+        pyq_year: isPyq ? Number.parseInt(q.pyq_year || q.year || examYear, 10) : null,
+        language_format: {
+          english: { question: englishQuestion, options: [optA, optB, optC, optD] },
+          tamil: { question: tamilQuestion, options: [q.option_a_tamil || null, q.option_b_tamil || null, q.option_c_tamil || null, q.option_d_tamil || null] },
+        },
         tags: qTags,
       }
 

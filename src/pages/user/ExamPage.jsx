@@ -54,13 +54,6 @@ export function ExamPage() {
         setPaper(paperData)
         setAttempt(attemptData)
 
-        // Restore any previously recorded per-question timings for this attempt
-        try {
-          const savedTimings = localStorage.getItem(`exam_q_timings_${attemptData.id}`)
-          if (savedTimings) {
-            questionTimingsRef.current = JSON.parse(savedTimings) || {}
-          }
-        } catch {}
         questionEnterTsRef.current = Date.now()
 
         // Fetch questions in EXAM MODE (excludes correct_option and explanation for security)
@@ -93,9 +86,6 @@ export function ExamPage() {
     const elapsedSec = Math.max(1, Math.round((now - questionEnterTsRef.current) / 1000))
     questionEnterTsRef.current = now
     questionTimingsRef.current[qId] = (questionTimingsRef.current[qId] || 0) + elapsedSec
-    try {
-      localStorage.setItem(`exam_q_timings_${attempt.id}`, JSON.stringify(questionTimingsRef.current))
-    } catch {}
   }, [attempt?.id])
 
   useEffect(() => {
@@ -114,7 +104,7 @@ export function ExamPage() {
     setSubmitting(true)
 
     try {
-      const result = await attemptService.submitAttempt(attempt.id, answers)
+      const result = await attemptService.submitAttempt(attempt.id, answers, questionTimingsRef.current)
       navigate(`/attempt/${attempt.id}/result`, { replace: true, state: { comparison: result.comparison } })
     } catch (err) {
       console.error('Submission error:', err)
