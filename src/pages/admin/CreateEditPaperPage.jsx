@@ -362,10 +362,17 @@ export function CreateEditPaperPage() {
                 </label>
                 <input
                   type="text"
+                  list="exam-names-list"
                   {...register('exam_name')}
-                  placeholder="UPSC CSE Prelims"
+                  placeholder="TNPSC Group 4"
                   className="w-full px-3 py-2 rounded-lg border border-surface-border text-xs focus:ring-2 focus:ring-primary outline-none"
                 />
+                <datalist id="exam-names-list">
+                  <option value="TNPSC Group 4" />
+                  <option value="TNPSC Group 1" />
+                  <option value="TNPSC Group 2/2A" />
+                  <option value="UPSC CSE Prelims" />
+                </datalist>
                 {errors.exam_name && <p className="mt-1 text-xs text-status-error">{errors.exam_name.message}</p>}
               </div>
 
@@ -375,12 +382,15 @@ export function CreateEditPaperPage() {
                 </label>
                 <select
                   {...register('exam_type')}
-                  className="w-full px-3 py-2 rounded-lg border border-surface-border text-xs focus:ring-2 focus:ring-primary outline-none bg-white"
+                  className="w-full px-3 py-2 rounded-lg border border-surface-border text-xs focus:ring-2 focus:ring-primary outline-none bg-white font-medium"
                 >
+                  <option value="Previous Year">Previous Year (PYQ)</option>
+                  <option value="Full Mock">Full Mock Test</option>
                   <option value="Prelims">Prelims</option>
-                  <option value="CSAT">CSAT</option>
                   <option value="Mains">Mains</option>
+                  <option value="CSAT">CSAT</option>
                   <option value="Optional">Optional Subject</option>
+                  <option value="Custom">Custom Practice</option>
                 </select>
               </div>
 
@@ -402,10 +412,17 @@ export function CreateEditPaperPage() {
                 </label>
                 <input
                   type="text"
+                  list="subject-names-list"
                   {...register('subject')}
-                  placeholder="General Studies"
+                  placeholder="General Tamil"
                   className="w-full px-3 py-2 rounded-lg border border-surface-border text-xs focus:ring-2 focus:ring-primary outline-none"
                 />
+                <datalist id="subject-names-list">
+                  <option value="General Tamil" />
+                  <option value="General Studies" />
+                  <option value="General English" />
+                  <option value="Aptitude & Mental Ability" />
+                </datalist>
               </div>
             </div>
 

@@ -1706,11 +1706,22 @@ async function fetchVerifiedQuestionsPool(examContext = null) {
   if (examContext) {
     const { data: examPapers } = await supabase
       .from('papers')
-      .select('id')
+      .select('id, title, exam_name')
       .eq('status', 'published')
-      .eq('exam_name', examContext)
     if (examPapers && examPapers.length > 0) {
-      paperIds = examPapers.map(p => p.id)
+      const normContext = String(examContext).toLowerCase().trim()
+      paperIds = examPapers
+        .filter(p => {
+          const pExam = String(p.exam_name || '').toLowerCase().trim()
+          const pTitle = String(p.title || '').toLowerCase().trim()
+          if (pExam === normContext) return true
+          if (normContext.includes('group 4') && (pTitle.includes('group 4') || pTitle.includes('group-4') || pExam.includes('group 4'))) return true
+          if (normContext.includes('group 2') && (pTitle.includes('group 2') || pTitle.includes('group-2') || pExam.includes('group 2'))) return true
+          if (normContext.includes('group 1') && (pTitle.includes('group 1') || pTitle.includes('group-1') || pExam.includes('group 1'))) return true
+          if (pExam === 'custom upload' || pExam === '') return true
+          return false
+        })
+        .map(p => p.id)
     }
   }
 
@@ -1727,15 +1738,51 @@ async function fetchVerifiedQuestionsPool(examContext = null) {
 }
 
 function matchesPracticeCriteria(q, { targetSubject, targetTopic, microTopicId, targetUnit }) {
-  // Production records carry canonical tags. Use only them for filtering: text
-  // heuristics are deliberately not a fallback because they can mix domains.
+  // Production records carry canonical tags
   if (q.unit_number != null || q.unit_code || q.macro_topic || q.micro_topic) {
     const normalizedUnit = String(targetUnit || '').replace(/[^0-9]/g, '')
-    const normalizedCode = normalizedUnit ? `UNIT_${['I','II','III','IV','V','VI','VII','VIII','IX','X'][Number(normalizedUnit) - 1] || ''}` : ''
-    if (normalizedUnit && String(q.unit_number ?? '').trim() !== normalizedUnit && String(q.unit_code || '').toUpperCase() !== normalizedCode) return false
-    if (microTopicId && String(q.micro_topic_id || '') !== String(microTopicId)) return false
-    if (targetTopic && String(q.micro_topic || '').trim().toLowerCase() !== String(targetTopic).trim().toLowerCase() && String(q.macro_topic || '').trim().toLowerCase() !== String(targetTopic).trim().toLowerCase()) return false
-    if (!normalizedUnit && targetSubject && targetSubject !== 'All Subjects' && String(q.macro_topic || '').trim().toLowerCase() !== targetSubject.trim().toLowerCase()) return false
+    const normalizedCode = normalizedUnit ? ("UNIT_" + (['I','II','III','IV','V','VI','VII','VIII','IX','X'][Number(normalizedUnit) - 1] || '')) : ''
+    // Unit matching with special handling for Unit 11 Language
+    if (normalizedUnit) {
+      if (normalizedUnit === '11') {
+        const isLang = /tamil|english|language|part\s*a|மொழி/i.test(q.unit_name || q.macro_topic || '')
+        if (!isLang && String(q.unit_number ?? '').trim() !== '11') return false
+      } else {
+        if (/tamil|english|language|part\s*a|மொழி/i.test(q.unit_name || '') && !/science|அறிவியல்/i.test(q.unit_name || '')) {
+          return false
+        }
+        if (String(q.unit_number ?? '').trim() !== normalizedUnit && String(q.unit_code || '').toUpperCase() !== normalizedCode) {
+          return false
+        }
+      }
+    }
+    
+    // Check microTopicId only when the question explicitly has a micro_topic_id in the database
+    if (microTopicId && q.micro_topic_id && String(q.micro_topic_id).trim() !== String(microTopicId).trim()) return false
+
+    // Flexible topic matching across micro and macro topics
+    if (targetTopic) {
+      const cleanTarget = String(targetTopic).toLowerCase().replace(/[^a-z0-9]/g, '')
+      const cleanMicro = String(q.micro_topic || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      const cleanMacro = String(q.macro_topic || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+
+      const matches = cleanMicro.includes(cleanTarget) ||
+                      cleanTarget.includes(cleanMicro) ||
+                      cleanMacro.includes(cleanTarget) ||
+                      cleanTarget.includes(cleanMacro)
+      if (!matches) {
+        const targetWords = String(targetTopic).toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4)
+        const qText = ((q.question_text || '') + ' ' + (q.explanation || '')).toLowerCase()
+        const wordMatch = targetWords.some(w => cleanMicro.includes(w) || cleanMacro.includes(w) || qText.includes(w))
+        if (!wordMatch) return false
+      }
+    }
+
+    if (!normalizedUnit && targetSubject && targetSubject !== 'All Subjects') {
+      const cleanSubj = String(targetSubject).toLowerCase().replace(/[^a-z0-9]/g, '')
+      const cleanMacro = String(q.macro_topic || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (!cleanMacro.includes(cleanSubj) && !cleanSubj.includes(cleanMacro)) return false
+    }
     return true
   }
   const meta = parseQuestionMetadata(q.explanation)
@@ -1922,10 +1969,11 @@ export const practiceService = {
       }
 
       const requestedCount = config.question_count || 10
-      if (shuffled.length < requestedCount) {
-        throw new Error(`Only ${shuffled.length} verified questions match the selected syllabus filters; ${requestedCount} were requested. Add approved questions in Admin before creating this session.`)
+      if (shuffled.length === 0) {
+        throw new Error("No verified questions currently available for " + (config.topic || config.subject || 'this topic') + ". Please select another topic or All Subjects.")
       }
-      selected = shuffled.slice(0, requestedCount)
+      const count = Math.min(shuffled.length, requestedCount)
+      selected = shuffled.slice(0, count)
     }
 
     if (selected.length === 0) {

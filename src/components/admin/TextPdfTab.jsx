@@ -302,7 +302,7 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
         const base64Data = await blobToBase64(file)
         const aiQuestions = await extractQuestionsWithAi(
           base64Data,
-          'gemini-2.5-flash',
+          'gemini-2.5-flash-lite',
           (msg) => setProgress({ stage: 'ai', currentPage: 1, totalPages: 1, statusText: msg }),
           activeKey
         )

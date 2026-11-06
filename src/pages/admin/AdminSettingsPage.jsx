@@ -10,10 +10,10 @@ import { apiKeyService } from '../../services/apiKeyService'
 import { fetchAvailableGeminiModels } from '../../services/aiPdfService'
 
 const DEFAULT_MODELS = [
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Recommended: Best balance of speed, multimodal OCR, and syllabus accuracy.', tag: 'Recommended' },
-  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', desc: 'Optimized for high-volume text and question extraction.', tag: 'Fast' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', desc: 'Ultra low-latency candidate model for quick responses.', tag: 'Lightweight' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', desc: 'Next-gen reasoning for complex conceptual questions.', tag: 'Advanced' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Free Tier)', desc: 'Recommended: Free tier, high speed, zero billing required.', tag: 'Recommended' },
+  { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest (Free Tier)', desc: 'Optimized low-latency candidate model for quick responses.', tag: 'Fast' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Free Tier)', desc: 'Latest reasoning model for complex questions.', tag: 'Advanced' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Legacy)', desc: 'Legacy candidate model.', tag: 'Legacy' },
 ]
 
 export function AdminSettingsPage() {
@@ -28,7 +28,7 @@ export function AdminSettingsPage() {
   const [validationStatus, setValidationStatus] = useState(null)
   const [copied, setCopied] = useState(false)
   
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite')
   const [detectedModels, setDetectedModels] = useState(DEFAULT_MODELS)
   const [loadingModels, setLoadingModels] = useState(false)
 

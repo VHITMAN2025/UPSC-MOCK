@@ -22,12 +22,13 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
   const [questions, setQuestions] = useState([])
   const [importMsg, setImportMsg] = useState('')
   const [modelsList, setModelsList] = useState([
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
-    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
-    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Free Tier - Recommended)' },
+    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Free Tier)' },
+    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Free Tier)' },
+    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest (Free Tier)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
   ])
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite')
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [viewMode, setViewMode] = useState('table') // 'table' | 'separated'
   const [collapsedTopics, setCollapsedTopics] = useState(new Set())
@@ -92,10 +93,9 @@ export default function AiPdfTab({ paperId, paperTitle, onImportSuccess }) {
         selectedModel,
         (msg) => {
           setStatusMsg(msg)
-          if (typeof toast === 'function') toast(msg)
-          else if (toast?.info) toast.info(msg)
         },
-        activeKey
+        activeKey,
+        { approvedTaxonomy }
       )
 
       setQuestions(parsedQuestions)

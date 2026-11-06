@@ -38,10 +38,14 @@ export const apiKeyService = {
    * to override with their own personal key if provided.
    */
   getUserApiKey() {
+    const envKey = (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY) ||
+                   (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY)) || ''
+
     try {
       const local = localStorage.getItem(LOCAL_STORAGE_KEY)
       if (local && local.trim().length > 0) {
-        return local.trim()
+        const t = local.trim()
+        if (!t.startsWith('ya29.')) return t
       }
     } catch {}
 
@@ -183,7 +187,7 @@ export const apiKeyService = {
 
     try {
       const genAI = new GoogleGenerativeAI(cleanKey)
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
         generationConfig: { maxOutputTokens: 5 },
@@ -230,7 +234,7 @@ export const apiKeyService = {
     const startTime = Date.now()
     try {
       const genAI = new GoogleGenerativeAI(cleanKey)
-      const modelName = 'gemini-2.5-flash'
+      const modelName = 'gemini-3.1-flash-lite'
       const model = genAI.getGenerativeModel({ model: modelName })
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: 'Ping test. Reply with one word: OK' }] }],

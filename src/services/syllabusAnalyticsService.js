@@ -1137,9 +1137,9 @@ export const syllabusAnalyticsService = {
       }
     }
 
-    const targetMicro = question.micro_topic_name || explMicro
-    const targetMacro = question.macro_topic_name || explMacro
-    const targetUnit = question.unit_name || explUnit
+    const targetMicro = question.micro_topic || question.micro_topic_name || explMicro
+    const targetMacro = question.macro_topic || question.macro_topic_name || explMacro
+    const targetUnit = question.unit_name || (question.unit_number ? ('Unit ' + question.unit_number) : null) || explUnit
 
     // 1. Direct match by micro_topic_id or micro_topic_name
     if (question.micro_topic_id) {
@@ -1254,14 +1254,8 @@ export const syllabusAnalyticsService = {
 
     if (bestMicro && bestScore > 0) return bestMicro
 
-    // Deterministic hash fallback within candidatePool so the same question always maps to the same micro-topic
-    const idStr = String(question.id || question.question_text || 'q')
-    let hash = 0
-    for (let i = 0; i < idStr.length; i++) {
-      hash = ((hash << 5) - hash + idStr.charCodeAt(i)) | 0
-    }
-    const idx = Math.abs(hash) % candidatePool.length
-    return candidatePool[idx]
+    // If no micro-topic matched, do not force-assign to an arbitrary topic
+    return null
   },
 
   /**
@@ -1279,7 +1273,7 @@ export const syllabusAnalyticsService = {
     // Map micro_topic_id -> aggregation buckets
     const microBuckets = new Map()
     allMicroTopics.forEach(mt => {
-      const bankSet = new Set(mt.baseline_questions || [])
+      const bankSet = new Set()
       microBuckets.set(mt.micro_topic_id, {
         bankQuestionIds: bankSet,
         attemptedQuestionIds: new Set(),
@@ -1317,11 +1311,11 @@ export const syllabusAnalyticsService = {
       Promise.all([
         supabase
           .from('questions')
-          .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name, status)')
+          .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, unit_number, unit_name, macro_topic, micro_topic, micro_topic_id, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name, status)')
           .range(0, 999),
         supabase
           .from('questions')
-          .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name, status)')
+          .select('id, paper_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, unit_number, unit_name, macro_topic, micro_topic, micro_topic_id, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, papers(id, title, subject, exam_name, status)')
           .range(1000, 1999),
       ]).then(([p1, p2]) => ({ data: [...(p1?.data || []), ...(p2?.data || [])], error: p1?.error || p2?.error })),
       supabase
@@ -1332,7 +1326,7 @@ export const syllabusAnalyticsService = {
       userId
         ? supabase
             .from('attempts')
-            .select('id, paper_id, status, papers(id, title, subject, exam_name), attempt_answers(id, question_id, selected_option, is_correct)')
+            .select('id, paper_id, status, papers(id, title, subject, exam_name), attempt_answers(id, question_id, selected_option, is_correct, questions(id, unit_number, unit_name, macro_topic, micro_topic, micro_topic_id))')
             .eq('user_id', userId)
             .in('status', ['completed', 'submitted'])
             .order('started_at', { ascending: false })
@@ -1398,6 +1392,14 @@ export const syllabusAnalyticsService = {
 
         const qId = String(ans.question_id)
         let microId = questionToMicroMap.get(qId)
+
+        if (!microId && ans.questions) {
+          const matched = this.classifyQuestionToMicroTopic(ans.questions, allMicroTopics)
+          if (matched) {
+            microId = matched.micro_topic_id
+            questionToMicroMap.set(qId, microId)
+          }
+        }
 
         if (!microId) {
           const fallbackMicro = this.classifyQuestionToMicroTopic(
@@ -1514,13 +1516,13 @@ export const syllabusAnalyticsService = {
 
         const enrichedMicroTopics = macro.micro_topics.map(micro => {
           const bucket = microBuckets.get(micro.micro_topic_id) || {
-            bankQuestionIds: new Set(micro.baseline_questions || []),
+            bankQuestionIds: new Set(),
             attemptedQuestionIds: new Set(),
             totalAttempts: 0,
             correctAttempts: 0,
           }
 
-          const totalQuestions = Math.max(bucket.bankQuestionIds.size, bucket.attemptedQuestionIds.size, 1)
+          const totalQuestions = Math.max(bucket.bankQuestionIds.size, bucket.attemptedQuestionIds.size, 0)
           const attemptedQuestions = bucket.attemptedQuestionIds.size
           const totalAttempts = bucket.totalAttempts
           const correctAttempts = bucket.correctAttempts

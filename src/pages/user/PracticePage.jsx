@@ -90,7 +90,12 @@ function PracticeBuilder({ onStart }) {
           topic: config.topic,
           micro_topic_id: config.micro_topic_id,
         })
-        if (active) setAvailableCount(count)
+        if (active) {
+          setAvailableCount(count)
+          if (count > 0 && count < config.question_count) {
+            setConfig(c => ({ ...c, question_count: count }))
+          }
+        }
       } catch (e) {
         if (active) setAvailableCount(null)
       } finally {
@@ -152,15 +157,21 @@ function PracticeBuilder({ onStart }) {
   }
 
   async function handleGenerate() {
-    if (!isFixTest && availableCount !== null && availableCount < config.question_count) {
-      const message = `Only ${availableCount} verified questions match this exact syllabus selection. Add approved questions in Admin before requesting ${config.question_count}.`
+    if (!isFixTest && availableCount !== null && availableCount === 0) {
+      const message = "No verified questions currently match this exact syllabus selection. Add approved questions in Admin or choose another topic."
       setError(message)
       toast.error(message)
       return
     }
+
+    let finalConfig = { ...config }
+    if (!isFixTest && availableCount !== null && availableCount > 0 && availableCount < config.question_count) {
+      finalConfig.question_count = availableCount
+    }
+
     setLoading(true); setError(null)
     try {
-      const result = await practiceService.createSession(user.id, config)
+      const result = await practiceService.createSession(user.id, finalConfig)
       if (result.isInventoryLimited && result.inventoryNotice) {
         toast.info(result.inventoryNotice)
       } else {
@@ -249,8 +260,11 @@ function PracticeBuilder({ onStart }) {
               ))}
             </div>
           )}
-          {!isFixTest && availableCount !== null && availableCount < config.question_count && (
-            <p className="mt-2 text-xs font-semibold text-amber-800">The requested count exceeds the verified inventory. Generation is disabled until more matching questions are approved.</p>
+          {!isFixTest && availableCount !== null && availableCount === 0 && (
+            <p className="mt-2 text-xs font-semibold text-amber-800">No verified questions currently match this selection in the question bank. Add approved questions in Admin or select another topic.</p>
+          )}
+          {!isFixTest && availableCount !== null && availableCount > 0 && availableCount < config.question_count && (
+            <p className="mt-2 text-xs font-medium text-emerald-800">All ${availableCount} available verified questions for this topic will be loaded for your practice session.</p>
           )}
         </div>
 
@@ -409,6 +423,9 @@ function PracticeSession({ session, questions, onComplete }) {
         time_taken_sec: totalSec ? (totalSec - seconds) : null,
         completed_at: new Date().toISOString(),
       })
+
+      // Dispatch event to keep Interactive Syllabus & Diagnostics in sync
+      window.dispatchEvent(new CustomEvent('tnpsc-attempt-submitted', { detail: { sessionId: session.id } }))
 
       setSubmitted(true)
       onComplete({

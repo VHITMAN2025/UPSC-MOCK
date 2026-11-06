@@ -2,12 +2,11 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { paperService } from '../../services/paperService'
 import { attemptService } from '../../services/attemptService'
-import { testGeneratorService } from '../../services/testGeneratorService'
 import { useApp } from '../../contexts/AppContext'
 import { useAuth } from '../../hooks/useAuth'
 import {
-  Calendar, ArrowRight, Loader2, BookOpen, Sparkles,
-  CheckCircle2, Play, AlertCircle, Layers
+  Calendar, ArrowRight, Loader2, BookOpen,
+  CheckCircle2, AlertCircle, Sparkles, Upload
 } from 'lucide-react'
 
 // Standard historical exam years per TNPSC exam group
@@ -18,7 +17,7 @@ const CANONICAL_YEARS_BY_GROUP = {
 }
 
 export function PaperListPage() {
-  const { selectedExam, group2LanguagePref, toast } = useApp()
+  const { selectedExam, toast } = useApp()
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -48,11 +47,11 @@ export function PaperListPage() {
   const getPaperEffectiveYear = (paper) => {
     const titleMatch = paper.title?.match(/\b(20\d{2}|19\d{2})\b/)
     if (titleMatch) return parseInt(titleMatch[1], 10)
-    if (paper.year && paper.year !== 2026) return paper.year
+    if (paper.year && paper.year <= 2025) return paper.year
     return paper.year || 2024
   }
 
-  // Filter and map papers to years based on the active exam group in the sidebar
+  // Filter and map papers to years based on active exam group
   const { yearCards, papersByYear } = useMemo(() => {
     const groupLower = (selectedExam || 'TNPSC Group 4').toLowerCase()
     let keywords = ['group 4', 'group-4', 'grp_4']
@@ -62,15 +61,17 @@ export function PaperListPage() {
       keywords = ['group 2', 'group-2', 'grp_2', 'grp_ii', 'group 2/2a', 'group 2a']
     }
 
-    // Match only published papers belonging to the selected group
+    // Match published papers belonging to the selected group (exclude full mock tests)
     const matchedPapers = papers.filter(p => {
       if (p.status !== 'published') return false
       const title = (p.title || '').toLowerCase()
+      const examType = (p.exam_type || '').toLowerCase()
+      if (examType.includes('mock') || title.includes('mock test')) return false
       const examName = (p.exam_name || '').toLowerCase()
       return keywords.some(k => title.includes(k) || examName.includes(k))
     })
 
-    // Map each year to the best available paper
+    // Map each year to the best available paper with most questions
     const map = {}
     matchedPapers.forEach(p => {
       const yr = getPaperEffectiveYear(p)
@@ -83,49 +84,48 @@ export function PaperListPage() {
       }
     })
 
-    // Only database papers are displayed. Do not create year cards for content
-    // that has not been uploaded and approved by an administrator.
-    const allYears = Object.keys(map).map(Number).sort((a, b) => b - a)
+    // Combine canonical historical years with any custom uploaded years
+    const canonical = CANONICAL_YEARS_BY_GROUP[selectedExam] || CANONICAL_YEARS_BY_GROUP['TNPSC Group 4'] || []
+    const dbYears = Object.keys(map).map(Number).filter(yr => yr <= 2025)
+    const allYears = Array.from(new Set([...canonical, ...dbYears])).sort((a, b) => b - a)
 
-    const cards = allYears.map(yr => ({
-      year: yr,
-      paper: map[yr] || null,
-      hasDirectPaper: Boolean(map[yr]),
-      questionCount: map[yr]?.total_questions || (selectedExam === 'TNPSC Group 1' ? 200 : 200),
-    }))
+    const cards = allYears.map(yr => {
+      const p = map[yr]
+      const hasQuestions = Boolean(p && (p.total_questions || 0) > 0)
+      return {
+        year: yr,
+        paper: p || null,
+        hasDirectPaper: hasQuestions,
+        isAvailable: hasQuestions,
+        questionCount: p?.total_questions || 0,
+      }
+    })
 
     return { yearCards: cards, papersByYear: map }
   }, [papers, selectedExam])
 
-  // Handle clicking a specific year
+  // Handle clicking a specific year card
   const handleYearClick = async (yearItem) => {
-    const { year, paper } = yearItem
+    const { year, paper, isAvailable } = yearItem
+
+    if (!isAvailable || !paper?.id) {
+      toast.info(`The official ${year} question paper has not been uploaded yet. Admins can upload it in Admin > Question Papers.`)
+      return
+    }
+
     setStartingYear(year)
 
     try {
-      let targetPaperId = paper?.id
-
-      // A previous-year paper must already exist in the approved database.
-      if (!targetPaperId) {
-        toast.error(`The ${year} paper is not available in the database yet.`)
-        return
-      }
-
-      if (!targetPaperId) {
-        toast.error(`Could not locate paper for ${year}. Please try another year.`)
-        return
-      }
-
       // Check authentication
       if (!user) {
         toast.info('Please log in to attempt the exam.')
-        navigate('/login', { state: { from: { pathname: `/exam/${targetPaperId}` } } })
+        navigate('/login', { state: { from: { pathname: `/exam/${paper.id}` } } })
         return
       }
 
       // Initialize or retrieve user attempt and navigate directly to live exam room
-      await attemptService.startOrGetAttempt(user.id, targetPaperId)
-      navigate(`/exam/${targetPaperId}`)
+      await attemptService.startOrGetAttempt(user.id, paper.id)
+      navigate(`/exam/${paper.id}`)
     } catch (err) {
       console.error('Error starting year exam:', err)
       toast.error('Could not start exam: ' + err.message)
@@ -150,7 +150,7 @@ export function PaperListPage() {
         <p className="text-xs sm:text-sm text-body-secondary max-w-xl mx-auto">
           Choose a year below to begin the official previous year question paper for{' '}
           <strong className="text-body-text">{selectedExam}</strong>.
-          The exam room will launch immediately.
+          The exam room will launch immediately with full scoring and review.
         </p>
 
         <p className="text-[11px] text-slate-400">
@@ -171,6 +171,7 @@ export function PaperListPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
           {yearCards.map((item) => {
             const isStarting = startingYear === item.year
+            const isAvailable = item.isAvailable
 
             return (
               <button
@@ -178,19 +179,37 @@ export function PaperListPage() {
                 type="button"
                 onClick={() => handleYearClick(item)}
                 disabled={Boolean(startingYear)}
-                className={`group relative p-6 rounded-2xl border text-center transition-all duration-200 flex flex-col items-center justify-between min-h-[140px] ${
+                className={`group relative p-5 rounded-2xl border text-center transition-all duration-200 flex flex-col items-center justify-between min-h-[155px] ${
                   isStarting
                     ? 'bg-tnpsc-brand text-white border-tnpsc-brand shadow-brand scale-95'
-                    : 'bg-white hover:bg-slate-50 border-surface-border hover:border-tnpsc-brand hover:shadow-card shadow-subtle'
+                    : isAvailable
+                    ? 'bg-white hover:bg-emerald-50/20 border-surface-border hover:border-emerald-500 hover:shadow-card shadow-subtle cursor-pointer'
+                    : 'bg-slate-50/70 border-dashed border-slate-200 hover:border-slate-300 text-slate-400 cursor-pointer'
                 } disabled:cursor-not-allowed`}
               >
+                {/* Status Badge */}
+                <div className="w-full flex justify-end">
+                  {isAvailable ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 shadow-subtle">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {item.questionCount} Qs
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200">
+                      Pending Upload
+                    </span>
+                  )}
+                </div>
+
                 {/* Year Number (Big & Bold) */}
-                <div className="space-y-1 my-auto">
+                <div className="space-y-1 my-2">
                   <span
                     className={`text-3xl sm:text-4xl font-black tracking-tight transition-colors ${
                       isStarting
                         ? 'text-white'
-                        : 'text-body-text group-hover:text-tnpsc-brand'
+                        : isAvailable
+                        ? 'text-body-text group-hover:text-tnpsc-brand'
+                        : 'text-slate-500'
                     }`}
                   >
                     {item.year}
@@ -205,16 +224,20 @@ export function PaperListPage() {
                 </div>
 
                 {/* Bottom Action Label */}
-                <div className="pt-3 w-full border-t border-slate-100 flex items-center justify-center gap-1">
+                <div className="pt-2.5 w-full border-t border-slate-100 flex items-center justify-center gap-1">
                   {isStarting ? (
                     <span className="text-[11px] font-bold flex items-center gap-1.5 text-white">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       Opening…
                     </span>
-                  ) : (
-                    <span className="text-[11px] font-bold text-tnpsc-brand group-hover:underline flex items-center gap-1">
+                  ) : isAvailable ? (
+                    <span className="text-[11px] font-bold text-emerald-600 group-hover:underline flex items-center gap-1">
                       <span>Start Exam</span>
                       <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+                      <span>Upload Pending</span>
                     </span>
                   )}
                 </div>
@@ -226,3 +249,4 @@ export function PaperListPage() {
     </div>
   )
 }
+export default PaperListPage;

@@ -205,7 +205,19 @@ export function InteractiveSyllabusPanel({ isModal = false, onClose }) {
     }
 
     syncLiveData()
-    return () => { isCancelled = true }
+
+    // Real-time synchronization: listen for attempt and practice submissions
+    const handleAttemptSubmitted = () => {
+      syncLiveData()
+    }
+    window.addEventListener('tnpsc-attempt-submitted', handleAttemptSubmitted)
+    window.addEventListener('focus', handleAttemptSubmitted)
+
+    return () => {
+      isCancelled = true
+      window.removeEventListener('tnpsc-attempt-submitted', handleAttemptSubmitted)
+      window.removeEventListener('focus', handleAttemptSubmitted)
+    }
   }, [user?.id, selectedExam])
 
   const activeUnit = unitData[activeUnitIdx] || unitData[0] || {}

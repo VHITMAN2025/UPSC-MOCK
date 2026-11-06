@@ -759,7 +759,7 @@ export function BYOPPage() {
   const [showReview, setShowReview] = useState(false)
   const [reviewPaperId, setReviewPaperId] = useState(null)
   const [saving, setSaving]         = useState(false)
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite')
   const [modelsList, setModelsList] = useState([
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
     { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },

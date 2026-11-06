@@ -8,7 +8,7 @@ export const OFFICIAL_SYLLABUS_UNITS = [
   {
     id: 'unit-1',
     unit_number: 1,
-    unit_name: 'Unit I: General Science',
+    unit_name: 'Unit 1: General Science',
     shortName: 'General Science',
     category: 'General Studies',
     color: 'from-blue-500 to-cyan-500',
@@ -18,7 +18,17 @@ export const OFFICIAL_SYLLABUS_UNITS = [
   {
     id: 'unit-2',
     unit_number: 2,
-    unit_name: 'Unit II: Geography of India',
+    unit_name: 'Unit 2: Current Events',
+    shortName: 'Current Events',
+    category: 'General Studies',
+    color: 'from-amber-500 to-yellow-500',
+    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+    dotColor: 'bg-amber-500',
+  },
+  {
+    id: 'unit-3',
+    unit_number: 3,
+    unit_name: 'Unit 3: Geography of India',
     shortName: 'Geography of India',
     category: 'General Studies',
     color: 'from-emerald-500 to-teal-500',
@@ -26,19 +36,19 @@ export const OFFICIAL_SYLLABUS_UNITS = [
     dotColor: 'bg-emerald-500',
   },
   {
-    id: 'unit-3',
-    unit_number: 3,
-    unit_name: 'Unit III: History, Culture of India, and Indian National Movement',
-    shortName: 'History & INM',
-    category: 'General Studies',
-    color: 'from-amber-500 to-orange-500',
-    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
-    dotColor: 'bg-amber-500',
-  },
-  {
     id: 'unit-4',
     unit_number: 4,
-    unit_name: 'Unit IV: Indian Polity',
+    unit_name: 'Unit 4: History & Culture',
+    shortName: 'History & Culture',
+    category: 'General Studies',
+    color: 'from-orange-500 to-amber-600',
+    badgeColor: 'bg-orange-50 text-orange-700 border-orange-200',
+    dotColor: 'bg-orange-500',
+  },
+  {
+    id: 'unit-5',
+    unit_number: 5,
+    unit_name: 'Unit 5: Indian Polity',
     shortName: 'Indian Polity',
     category: 'General Studies',
     color: 'from-indigo-500 to-violet-500',
@@ -46,49 +56,59 @@ export const OFFICIAL_SYLLABUS_UNITS = [
     dotColor: 'bg-indigo-500',
   },
   {
-    id: 'unit-5',
-    unit_number: 5,
-    unit_name: 'Unit V: Indian Economy and Development Administration in Tamil Nadu',
-    shortName: 'Economy & TN Dev',
+    id: 'unit-6',
+    unit_number: 6,
+    unit_name: 'Unit 6: Indian Economy',
+    shortName: 'Indian Economy',
     category: 'General Studies',
     color: 'from-purple-500 to-pink-500',
     badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
     dotColor: 'bg-purple-500',
   },
   {
-    id: 'unit-6',
-    unit_number: 6,
-    unit_name: 'Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu',
-    shortName: 'TN History & Heritage',
+    id: 'unit-7',
+    unit_number: 7,
+    unit_name: 'Unit 7: National Movement',
+    shortName: 'National Movement',
     category: 'General Studies',
     color: 'from-rose-500 to-red-500',
     badgeColor: 'bg-rose-50 text-rose-700 border-rose-200',
     dotColor: 'bg-rose-500',
   },
   {
-    id: 'part-b-aptitude',
-    unit_number: 7,
-    unit_name: 'Part B: Aptitude (Mental Ability)',
-    shortName: 'Aptitude',
-    category: 'Aptitude & Mental Ability',
-    color: 'from-sky-500 to-blue-600',
-    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
-    dotColor: 'bg-sky-500',
+    id: 'unit-8',
+    unit_number: 8,
+    unit_name: 'Unit 8: TN History & Culture',
+    shortName: 'TN History & Culture',
+    category: 'Tamil Nadu Heritage',
+    color: 'from-pink-500 to-rose-600',
+    badgeColor: 'bg-pink-50 text-pink-700 border-pink-200',
+    dotColor: 'bg-pink-500',
   },
   {
-    id: 'part-b-reasoning',
-    unit_number: 8,
-    unit_name: 'Part B: Reasoning (Mental Ability)',
-    shortName: 'Reasoning',
+    id: 'unit-9',
+    unit_number: 9,
+    unit_name: 'Unit 9: TN Administration',
+    shortName: 'TN Administration',
+    category: 'Tamil Nadu Administration',
+    color: 'from-cyan-500 to-blue-600',
+    badgeColor: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    dotColor: 'bg-cyan-500',
+  },
+  {
+    id: 'unit-10',
+    unit_number: 10,
+    unit_name: 'Unit 10: Aptitude',
+    shortName: 'Aptitude & Mental Ability',
     category: 'Aptitude & Mental Ability',
     color: 'from-teal-500 to-emerald-600',
     badgeColor: 'bg-teal-50 text-teal-700 border-teal-200',
     dotColor: 'bg-teal-500',
   },
   {
-    id: 'part-c-tamil',
-    unit_number: 9,
-    unit_name: 'Part C: General Tamil (Language)',
+    id: 'part-a-tamil',
+    unit_number: 11,
+    unit_name: 'Part A: General Tamil',
     shortName: 'General Tamil',
     category: 'Language',
     color: 'from-amber-600 to-red-600',
@@ -96,9 +116,9 @@ export const OFFICIAL_SYLLABUS_UNITS = [
     dotColor: 'bg-orange-500',
   },
   {
-    id: 'part-c-english',
-    unit_number: 10,
-    unit_name: 'Part C: General English (Language)',
+    id: 'part-a-english',
+    unit_number: 12,
+    unit_name: 'Part A: General English',
     shortName: 'General English',
     category: 'Language',
     color: 'from-indigo-600 to-blue-700',
@@ -111,38 +131,44 @@ export const OFFICIAL_SYLLABUS_UNITS = [
  * Normalizes any freeform unit title returned by AI or imported into canonical unit name
  */
 export function normalizeUnitName(rawName) {
-  if (!rawName || typeof rawName !== 'string') return 'Unit I: General Science'
+  if (!rawName || typeof rawName !== 'string') return 'Unit 1: General Science'
   const norm = rawName.toLowerCase().trim()
 
-  if (norm.includes('science') || norm.includes('அறிவியல்') || norm.includes('unit 1') || norm.includes('unit i:') || norm.includes('unit i ')) {
-    return 'Unit I: General Science'
+  if (norm.includes('unit 1') || (norm.includes('science') && !norm.includes('social')) || norm.includes('அறிவியல்') || norm.includes('unit i:') || norm.includes('unit i ')) {
+    return 'Unit 1: General Science'
   }
-  if (norm.includes('geography') || norm.includes('புவியியல்') || norm.includes('unit 2') || norm.includes('unit ii:') || norm.includes('unit ii ')) {
-    return 'Unit II: Geography of India'
+  if (norm.includes('unit 2') || norm.includes('current events') || norm.includes('current affairs') || norm.includes('நடப்பு நிகழ்வுகள்')) {
+    return 'Unit 2: Current Events'
   }
-  if (norm.includes('polity') || norm.includes('ஆட்சியியல்') || norm.includes('அரசியலமைப்பு') || norm.includes('constitution') || norm.includes('unit 4') || norm.includes('unit 5') || norm.includes('unit iv')) {
-    return 'Unit IV: Indian Polity'
+  if (norm.includes('unit 3') || norm.includes('geography') || norm.includes('புவியியல்')) {
+    return 'Unit 3: Geography of India'
   }
-  if (norm.includes('economy') || norm.includes('பொருளாதாரம்') || norm.includes('development administration') || norm.includes('வளர்ச்சி நிர்வாகம்') || norm.includes('unit v') || norm.includes('unit 7') || norm.includes('unit 9')) {
-    return 'Unit V: Indian Economy and Development Administration in Tamil Nadu'
+  if (norm.includes('unit 4') || norm.includes('ancient india') || norm.includes('medieval india') || norm.includes('history & culture')) {
+    return 'Unit 4: History & Culture'
   }
-  if (norm.includes('thirukkural') || norm.includes('திருக்குறள்') || norm.includes('sangam') || norm.includes('சங்கம்') || norm.includes('keezhadi') || norm.includes('கீழடி') || norm.includes('periyar') || norm.includes('பெரியார்') || norm.includes('dravidian') || norm.includes('திராவிட') || norm.includes('unit vi') || norm.includes('unit 8')) {
-    return 'Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu'
+  if (norm.includes('unit 5') || norm.includes('polity') || norm.includes('constitution') || norm.includes('ஆட்சியியல்') || norm.includes('அரசியலமைப்பு')) {
+    return 'Unit 5: Indian Polity'
   }
-  if (norm.includes('history') || norm.includes('வரலாறு') || norm.includes('national movement') || norm.includes('national renaissance') || norm.includes('தேசிய இயக்கம்') || norm.includes('unit 3') || norm.includes('unit iii')) {
-    return 'Unit III: History, Culture of India, and Indian National Movement'
+  if (norm.includes('unit 6') || norm.includes('economy') || norm.includes('பொருளாதாரம்') || norm.includes('rbi') || norm.includes('fiscal')) {
+    return 'Unit 6: Indian Economy'
   }
-  if (norm.includes('reasoning') || norm.includes('காரணியவியல்') || norm.includes('puzzle') || norm.includes('dice') || norm.includes('logic')) {
-    return 'Part B: Reasoning (Mental Ability)'
+  if (norm.includes('unit 7') || norm.includes('national movement') || norm.includes('inm') || norm.includes('1857') || norm.includes('gandhian') || norm.includes('தேசிய இயக்கம்')) {
+    return 'Unit 7: National Movement'
   }
-  if (norm.includes('aptitude') || norm.includes('திறனறிவு') || norm.includes('percentage') || norm.includes('ratio') || norm.includes('hcf') || norm.includes('lcm') || norm.includes('mental ability') || norm.includes('math')) {
-    return 'Part B: Aptitude (Mental Ability)'
+  if (norm.includes('unit 8') || norm.includes('thirukkural') || norm.includes('திருக்குறள்') || norm.includes('sangam') || norm.includes('சங்கம்') || norm.includes('tamil society') || norm.includes('dravidian') || norm.includes('tn history')) {
+    return 'Unit 8: TN History & Culture'
+  }
+  if (norm.includes('unit 9') || norm.includes('tn administration') || norm.includes('development administration') || norm.includes('social justice') || norm.includes('e-governance')) {
+    return 'Unit 9: TN Administration'
+  }
+  if (norm.includes('unit 10') || norm.includes('aptitude') || norm.includes('mental ability') || norm.includes('simplification') || norm.includes('lcm') || norm.includes('reasoning') || norm.includes('திறனறிவு')) {
+    return 'Unit 10: Aptitude'
   }
   if (norm.includes('tamil') || norm.includes('தமிழ்') || norm.includes('இலக்கணம்') || norm.includes('இலக்கியம்')) {
-    return 'Part C: General Tamil (Language)'
+    return 'Part A: General Tamil'
   }
   if (norm.includes('english') || norm.includes('grammar') || norm.includes('vocabulary')) {
-    return 'Part C: General English (Language)'
+    return 'Part A: General English'
   }
 
   // Check against exact canonical list
