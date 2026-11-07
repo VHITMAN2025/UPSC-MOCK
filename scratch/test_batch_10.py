@@ -1,0 +1,76 @@
+import os, sys, json, urllib.request, time
+
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+
+env_path = os.path.join(os.getcwd(), '.env')
+gemini_key = None
+supabase_url = None
+supabase_key = None
+
+with open(env_path, 'r', encoding='utf-8') as f:
+    for line in f:
+        line = line.strip()
+        if line.startswith('VITE_GEMINI_API_KEY='):
+            gemini_key = line.split('=', 1)[1].strip()
+        elif line.startswith('VITE_SUPABASE_URL='):
+            supabase_url = line.split('=', 1)[1].strip()
+        elif line.startswith('VITE_SUPABASE_ANON_KEY='):
+            supabase_key = line.split('=', 1)[1].strip()
+
+# Fetch 5 pure Tamil questions from DB
+req = urllib.request.Request(
+    f"{supabase_url}/rest/v1/questions?select=id,question_text,question_text_tamil,option_a,option_b,option_c,option_d&limit=5",
+    headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}
+)
+with urllib.request.urlopen(req) as resp:
+    questions = json.loads(resp.read().decode('utf-8'))
+
+print(f"Fetched {len(questions)} questions")
+
+prompt = """You are an expert translator for TNPSC examinations.
+Translate the following questions and their 4 options from Tamil into clear, natural, high-quality English.
+Keep proper nouns accurately transliterated (e.g. Nayanar, Nallanthuvanar, Bharathiyar).
+
+Return strictly a JSON array of objects with schema:
+[
+  {
+    "id": "<matching question id>",
+    "en_question_text": "<English question stem>",
+    "en_option_a": "<English option A>",
+    "en_option_b": "<English option B>",
+    "en_option_c": "<English option C>",
+    "en_option_d": "<English option D>"
+  }
+]
+
+Questions to translate:
+"""
+
+items = []
+for q in questions:
+    items.append({
+        "id": q['id'],
+        "question": q.get('question_text_tamil') or q.get('question_text'),
+        "a": q.get('option_a'),
+        "b": q.get('option_b'),
+        "c": q.get('option_c'),
+        "d": q.get('option_d')
+    })
+
+prompt += json.dumps(items, ensure_ascii=False, indent=2)
+
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={gemini_key}"
+body = json.dumps({
+    "contents": [{"parts": [{"text": prompt}]}],
+    "generationConfig": {"responseMimeType": "application/json"}
+}).encode('utf-8')
+
+t0 = time.time()
+req_ai = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+with urllib.request.urlopen(req_ai) as resp:
+    res = json.loads(resp.read().decode('utf-8'))
+    raw_text = res['candidates'][0]['content']['parts'][0]['text']
+    translated = json.loads(raw_text)
+    print(f"Translated {len(translated)} questions in {time.time() - t0:.2f}s:")
+    print(json.dumps(translated, indent=2, ensure_ascii=False))

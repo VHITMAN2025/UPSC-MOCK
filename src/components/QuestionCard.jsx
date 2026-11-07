@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Bookmark, CheckCircle2, XCircle, AlertCircle, Sparkles, Globe, Calendar, Layers } from 'lucide-react'
+import questionTranslations from '../data/question_translations.js'
 
 export function QuestionCard({
   question,
@@ -15,37 +16,78 @@ export function QuestionCard({
   language: initialLanguage = 'english' // 'english' | 'tamil'
 }) {
   const [activeLang, setActiveLang] = useState(initialLanguage)
+  const qId = question.id || question.question_id
+  const tr = qId ? questionTranslations[qId] : null
+
+  const parseStem = (enRaw, taRaw) => {
+    let en = tr?.en_question_text || String(enRaw || '').trim()
+    let ta = String(taRaw || '').trim()
+    if (en.includes('தமிழ்:')) {
+      const parts = en.split('தமிழ்:')
+      en = parts[0].trim()
+      if (!ta) ta = parts[1].trim()
+    } else if (en.includes('\n') && /[a-zA-Z]/.test(en) && /[\u0B80-\u0BFF]/.test(en)) {
+      const lines = en.split('\n').map(l => l.trim()).filter(Boolean)
+      const enLines = lines.filter(l => /[a-zA-Z]/.test(l) && !/[\u0B80-\u0BFF]/.test(l))
+      const taLines = lines.filter(l => /[\u0B80-\u0BFF]/.test(l))
+      if (enLines.length > 0) en = enLines.join(' ')
+      if (!ta && taLines.length > 0) ta = taLines.join(' ')
+    }
+    return { en, ta: ta || en }
+  }
+
+  const parseOption = (enRaw, taRaw, optKey) => {
+    let en = (tr && tr[`en_option_${optKey}`]) || String(enRaw || '').replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
+    let ta = String(taRaw || '').replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
+    if (en.includes(' / ')) {
+      const parts = en.split(' / ')
+      if (/[a-zA-Z]/.test(parts[0]) && /[\u0B80-\u0BFF]/.test(parts[1])) {
+        en = parts[0].trim()
+        if (!ta) ta = parts[1].trim()
+      } else if (/[\u0B80-\u0BFF]/.test(parts[0]) && /[a-zA-Z]/.test(parts[1])) {
+        en = parts[1].trim()
+        if (!ta) ta = parts[0].trim()
+      }
+    }
+    return { en: en || ta, ta: ta || en }
+  }
+
+  const parsedStem = parseStem(
+    question.en_question_text || question.question_text,
+    question.ta_question_text || question.question_text_tamil || question.tamil_question
+  )
+  const textEn = parsedStem.en || parsedStem.ta || ''
+  const textTa = parsedStem.ta || parsedStem.en || ''
+
+  const optAPair = parseOption(question.en_option_a || question.option_a, question.ta_option_a || question.option_a_tamil, 'a')
+  const optBPair = parseOption(question.en_option_b || question.option_b, question.ta_option_b || question.option_b_tamil, 'b')
+  const optCPair = parseOption(question.en_option_c || question.option_c, question.ta_option_c || question.option_c_tamil, 'c')
+  const optDPair = parseOption(question.en_option_d || question.option_d, question.ta_option_d || question.option_d_tamil, 'd')
 
   // Determine available bilingual texts
-  const hasTamil = Boolean(
-    question.question_text_tamil ||
-    question.option_a_tamil ||
-    question.option_b_tamil ||
-    question.tamil_question
-  )
-
+  const hasTamil = Boolean(textTa || optAPair.ta || question.question_text_tamil)
   const currentLang = hasTamil ? activeLang : 'english'
 
   const options = [
     { 
       key: 'A', 
-      textEn: question.option_a || '',
-      textTa: question.option_a_tamil || question.option_a || '',
+      textEn: optAPair.en,
+      textTa: optAPair.ta,
     },
     { 
       key: 'B', 
-      textEn: question.option_b || '',
-      textTa: question.option_b_tamil || question.option_b || '',
+      textEn: optBPair.en,
+      textTa: optBPair.ta,
     },
     { 
       key: 'C', 
-      textEn: question.option_c || '',
-      textTa: question.option_c_tamil || question.option_c || '',
+      textEn: optCPair.en,
+      textTa: optCPair.ta,
     },
     { 
       key: 'D', 
-      textEn: question.option_d || '',
-      textTa: question.option_d_tamil || question.option_d || '',
+      textEn: optDPair.en,
+      textTa: optDPair.ta,
     },
     {
       key: 'E',
@@ -54,9 +96,6 @@ export function QuestionCard({
       isOptionE: true,
     }
   ]
-
-  const textEn = question.question_text || ''
-  const textTa = question.question_text_tamil || question.tamil_question || ''
 
   const isReviewMode = mode === 'review'
   const isCorrect = isReviewMode && selectedOption === correctOption
@@ -185,8 +224,8 @@ export function QuestionCard({
             <p className="text-base sm:text-lg text-body-text font-semibold leading-relaxed whitespace-pre-line font-tamil">
               {textTa}
             </p>
-            {textEn && (
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed border-t border-slate-100 pt-1">
+            {textEn && textEn !== textTa && (
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed border-t border-slate-100 pt-1">
                 {textEn}
               </p>
             )}
@@ -194,9 +233,9 @@ export function QuestionCard({
         ) : (
           <div>
             <p className="text-base sm:text-lg text-body-text font-semibold leading-relaxed whitespace-pre-line">
-              {textEn}
+              {textEn || textTa}
             </p>
-            {textTa && (
+            {textTa && textTa !== textEn && (
               <p className="text-xs text-slate-500 mt-1 leading-relaxed font-tamil border-t border-slate-100 pt-1">
                 {textTa}
               </p>
@@ -226,8 +265,10 @@ export function QuestionCard({
             optionStyle = 'border-tnpsc-brand bg-tnpsc-brand-light/40 text-tnpsc-brand font-semibold ring-2 ring-tnpsc-brand'
           }
 
-          const primaryText = currentLang === 'tamil' && opt.textTa ? opt.textTa : opt.textEn
-          const secondaryText = currentLang === 'tamil' && opt.textTa && opt.textEn !== opt.textTa ? opt.textEn : null
+          const primaryText = currentLang === 'tamil' && opt.textTa ? opt.textTa : (opt.textEn || opt.textTa)
+          const secondaryText = currentLang === 'tamil'
+            ? (opt.textTa && opt.textEn && opt.textEn !== opt.textTa ? opt.textEn : null)
+            : (opt.textEn && opt.textTa && opt.textTa !== opt.textEn ? opt.textTa : null)
 
           return (
             <label

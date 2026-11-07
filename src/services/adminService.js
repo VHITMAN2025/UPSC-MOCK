@@ -472,12 +472,16 @@ export const adminSyllabusService = {
 // ─── Quick Recall admin ───────────────────────────────────────────────────────
 export const adminRecallService = {
   async getAll(filters = {}) {
-    let q = supabase.from('recall_questions').select('*').order('created_at', { ascending: false })
+    let q = supabase.from('recall_questions').select('*').order('created_at', { ascending: false }).limit(filters.limit || 4000)
     if (filters.subject && filters.subject !== 'all') q = q.eq('subject', filters.subject)
     if (filters.status && filters.status !== 'all') q = q.eq('status', filters.status)
     if (filters.search) q = q.ilike('question_text', `%${filters.search}%`)
     const { data, error } = await q
-    if (error) throw error; return data ?? []
+    if (error) {
+      console.warn('[adminRecallService] getAll error, fallback empty:', error)
+      return []
+    }
+    return data ?? []
   },
   async upsert(payload, id = null) {
     if (id) {
@@ -488,6 +492,62 @@ export const adminRecallService = {
     }
     const { data, error } = await supabase.from('recall_questions').insert([payload]).select().single()
     if (error) throw error; return data
+  },
+  async bulkInsert(questionsList) {
+    if (!questionsList || !questionsList.length) return { count: 0 }
+    
+    const rows = questionsList.map(q => {
+      const tags = [
+        `unit_code:${q.unit_code || 'UNIT_I'}`,
+        `macro:${q.macro_topic || 'General'}`,
+        `micro:${q.micro_topic || 'General'}`,
+        `sub:${q.sub_topic || ''}`,
+        `source:${q.source_type || 'VINA'}`,
+        `year:${q.year || 2024}`,
+        `cog:${q.cognitive_skill || 'FACTUAL_RECALL'}`,
+      ].filter(Boolean)
+
+      return {
+        question_text: q.en_question_text || q.question_text || '',
+        question_ta: q.ta_question_text || q.question_text_tamil || null,
+        option_a: q.en_option_a || q.option_a || '',
+        option_b: q.en_option_b || q.option_b || '',
+        option_c: q.en_option_c || q.option_c || '',
+        option_d: q.en_option_d || q.option_d || '',
+        correct_option: (q.answer_key || q.correct_option || 'A').toUpperCase(),
+        explanation: q.en_explanation || q.explanation || null,
+        subject: q.subject_name || q.subject || 'General Studies',
+        topic: q.macro_topic || q.topic || 'General',
+        difficulty: (q.difficulty_level || 'medium').toLowerCase(),
+        exam_context: q.exam_tag || 'TNPSC_GROUP_4',
+        is_active: true,
+        for_daily: true,
+        status: 'published',
+        tags,
+      }
+    })
+
+    let inserted = 0
+    for (let i = 0; i < rows.length; i += 50) {
+      const chunk = rows.slice(i, i + 50)
+      const { data, error } = await supabase.from('recall_questions').insert(chunk).select('id')
+      if (error) {
+        console.error('[adminRecallService] bulkInsert chunk error:', error)
+        throw error
+      }
+      inserted += data?.length || chunk.length
+    }
+    return { count: inserted }
+  },
+  async updateQuestion(id, updates) {
+    const { data, error } = await supabase
+      .from('recall_questions')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
   },
   async toggle(id, is_active) {
     const { data, error } = await supabase

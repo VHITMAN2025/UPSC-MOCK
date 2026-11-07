@@ -4,7 +4,7 @@ import {
   LayoutDashboard, BookOpen, FileText, History,
   Newspaper, BellRing, BookMarked, BarChart3,
   StickyNote, Upload, Brain, ChevronLeft, ChevronRight,
-  LogOut, Settings, Zap, ShieldCheck,
+  LogOut, Settings, Zap, ShieldCheck, HelpCircle,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -22,6 +22,7 @@ const NAV = [
   { label: 'My Papers (BYOP)',    path: '/my-papers',       icon: Upload },
   { label: 'My Notes',            path: '/notes',           icon: StickyNote },
   { label: 'My Attempts',         path: '/my-attempts',     icon: History },
+  { label: 'Help & Support',      path: '/help',            icon: HelpCircle },
 ]
 
 export function TnpscSidebar({ mobileOpen, onMobileClose }) {

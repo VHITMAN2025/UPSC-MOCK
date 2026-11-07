@@ -738,6 +738,18 @@ export const testGeneratorService = {
 
     await questionService.saveQuestionsToSupabase(paper.id, questionRecords, true)
 
+    // Record to user mock question history for zero-repetition across mocks
+    try {
+      const examTag = generatedTest.examType?.includes('Group 1')
+        ? 'TNPSC_GROUP_1'
+        : generatedTest.examType?.includes('Group 2')
+        ? 'TNPSC_GROUP_2'
+        : 'TNPSC_GROUP_4'
+      await questionHistoryService.recordMockQuestionsSeen(userId, examTag, generatedTest.questions)
+    } catch (histErr) {
+      console.warn('[testGeneratorService] recordMockQuestionsSeen warning:', histErr)
+    }
+
     // 3. Start attempt for user
     const attempt = await attemptService.startOrGetAttempt(userId, paper.id)
 

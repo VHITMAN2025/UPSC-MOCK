@@ -930,6 +930,7 @@ export const FALLBACK_RECALL_POOL = [
  * All Supabase queries for TNPSC-specific features.
  */
 import { supabase } from '../lib/supabase'
+import { questionHistoryService } from './questionHistoryService'
 
 // ─── Current Affairs ────────────────────────────────────────────────────────
 export const FALLBACK_CURRENT_AFFAIRS = [
@@ -1381,8 +1382,17 @@ export const quickRecallService = {
     const wrongTexts = new Set()
     const recentTexts = new Set()
     const weakTopics = new Set()
+    const examTag = examContext?.includes('Group 1') ? 'TNPSC_GROUP_1' : examContext?.includes('Group 2') ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4'
 
+    // Fetch quick recall history for zero repetition
+    let recallHistoryMap = new Map()
     if (userId) {
+      try {
+        recallHistoryMap = await questionHistoryService.getQuickRecallHistory(userId, examTag)
+      } catch (e) {
+        console.warn('Quick recall history fetch fallback:', e)
+      }
+
       try {
         const [wrongRes, recentRes, weakRes] = await Promise.allSettled([
           supabase
@@ -1432,7 +1442,7 @@ export const quickRecallService = {
         .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, papers!inner(title, is_pyq, exam_name)')
         .eq('papers.is_pyq', true)
         .not('correct_option', 'is', null)
-        .limit(40)
+        .limit(60)
 
       if (dbPyq && dbPyq.length > 0) {
         const formatted = dbPyq.map(q => ({
@@ -1454,19 +1464,20 @@ export const quickRecallService = {
       console.warn('DB PYQ query fallback:', e)
     }
 
-    // 2. Fetch Synthetic/Model question candidates
+    // 2. Fetch Synthetic/Model question candidates from recall_questions
     let synCandidates = []
     try {
       const { data: dbSyn } = await supabase
         .from('recall_questions')
-        .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, subject')
+        .select('id, question_text, question_ta, option_a, option_b, option_c, option_d, correct_option, explanation, subject')
         .eq('is_active', true)
-        .limit(40)
+        .limit(60)
 
       if (dbSyn && dbSyn.length > 0) {
         const formatted = dbSyn.map(q => ({
           id: q.id,
           question_text: q.question_text,
+          question_text_tamil: q.question_ta,
           option_a: q.option_a,
           option_b: q.option_b,
           option_c: q.option_c,
@@ -1483,21 +1494,38 @@ export const quickRecallService = {
       console.warn('DB Synthetic query fallback:', e)
     }
 
-    // 3. Score candidates with personalization weighting
+    // Per-user deterministic hash for randomization (User 1 and User 2 receive different sets)
+    const userRandomScore = (q) => {
+      const seedStr = (userId || 'guest') + '_' + (q.id || q.question_text)
+      let hash = 0
+      for (let i = 0; i < seedStr.length; i++) {
+        hash = (hash * 31 + seedStr.charCodeAt(i)) >>> 0
+      }
+      return (hash % 1000) / 100
+    }
+
+    // 3. Score candidates with non-repetition & personalization
     const scoreCandidate = (q) => {
-      let score = Math.random() * 10
+      let score = userRandomScore(q)
+      const qId = String(q.id || '')
       const txt = (q.question_text || '').trim().toLowerCase()
+
+      const seenHist = recallHistoryMap.get(qId) || (txt ? recallHistoryMap.get(txt) : null)
+      if (seenHist) {
+        // Seen in quick recall before: heavily penalize so unseen questions are chosen first
+        score -= (seenHist.times_seen || 1) * 200
+      } else {
+        score += 150 // Strong bonus for completely unseen questions (Zero Repetition)
+      }
 
       // High priority for previous mistakes (Spaced repetition)
       if (wrongTexts.has(txt)) {
-        score += 100
+        score += 80
         q.is_previous_wrong = true
       }
-      // Avoid recently answered
+      // Avoid recently answered in past 30
       if (recentTexts.has(txt)) {
-        score -= 50
-      } else {
-        score += 25 // Long-unseen bonus
+        score -= 40
       }
       // Weak topic match bonus
       if (q.subject && weakTopics.has(q.subject.toLowerCase())) {
@@ -1565,6 +1593,16 @@ export const quickRecallService = {
       questions_json: questionsSnapshot,
       completed: false,
       started_at: new Date().toISOString(),
+    }
+
+    // Immediately record served questions to user_quick_recall_history for zero repetition
+    if (userId && Array.isArray(questionsSnapshot) && questionsSnapshot.length > 0) {
+      try {
+        const examTag = examContext?.includes('Group 1') ? 'TNPSC_GROUP_1' : examContext?.includes('Group 2') ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4'
+        await questionHistoryService.recordQuickRecallQuestionsSeen(userId, examTag, questionsSnapshot)
+      } catch (histErr) {
+        console.warn('recordQuickRecallQuestionsSeen note:', histErr)
+      }
     }
 
     const { data: session, error } = await supabase

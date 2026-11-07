@@ -4,7 +4,8 @@ import { attemptService } from '../../services/attemptService'
 import { paperService } from '../../services/paperService'
 import { ResultSummary } from '../../components/ResultSummary'
 import { AttemptComparisonCard } from '../../components/AttemptComparisonCard'
-import { Loader2, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react'
+import { ByopMiniAnalytics } from '../../components/ByopMiniAnalytics'
+import { Loader2, ArrowLeft, RefreshCw, AlertCircle, FileSearch } from 'lucide-react'
 
 export function ResultPage() {
   const { attemptId } = useParams()
@@ -43,7 +44,7 @@ export function ResultPage() {
   if (loading) {
     return (
       <div className="py-12 text-center">
-        <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto mb-3" />
+        <Loader2 className="w-8 h-8 text-tnpsc-brand animate-spin mx-auto mb-3" />
         <p className="text-xs text-body-secondary font-medium">Generating score analytics...</p>
       </div>
     )
@@ -55,35 +56,65 @@ export function ResultPage() {
         <AlertCircle className="w-10 h-10 text-status-error mx-auto mb-3" />
         <h2 className="text-lg font-bold text-body-text">Result Not Found</h2>
         <p className="text-xs text-body-secondary mt-1 mb-6">{error || 'Requested attempt result does not exist.'}</p>
-        <Link to="/my-attempts" className="px-4 py-2 bg-primary text-white rounded-lg text-xs font-semibold">
+        <Link to="/my-attempts" className="px-4 py-2 bg-tnpsc-brand text-white rounded-lg text-xs font-semibold">
           View My Attempt History
         </Link>
       </div>
     )
   }
 
-  const { attempt } = attemptDetails
+  const { attempt, answers = [] } = attemptDetails
   const paper = attempt.papers
 
+  const isByop = Boolean(
+    paper?.exam_name === 'Custom Upload' ||
+    paper?.exam_type === 'Custom' ||
+    paper?.description?.includes('BYOP') ||
+    paper?.title?.toLowerCase().includes('byop') ||
+    paper?.title?.toLowerCase().includes('custom')
+  )
+
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-8 pb-16">
       {/* Top Navigation */}
       <div className="flex items-center justify-between">
-        <Link to="/my-attempts" className="inline-flex items-center space-x-1.5 text-xs font-semibold text-body-secondary hover:text-primary transition-colors">
+        <Link
+          to="/my-attempts"
+          className="inline-flex items-center space-x-1.5 text-xs font-semibold text-body-secondary hover:text-tnpsc-brand transition-colors"
+        >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to My Attempt History</span>
         </Link>
-        <Link
-          to={`/papers/${attempt.paper_id}`}
-          className="inline-flex items-center space-x-1 px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-semibold shadow-subtle transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Reattempt Paper</span>
-        </Link>
+
+        <div className="flex items-center gap-2">
+          <Link
+            to={`/attempt/${attempt.id}/review`}
+            className="inline-flex items-center space-x-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-body-text rounded-lg text-xs font-semibold transition-colors"
+          >
+            <FileSearch className="w-3.5 h-3.5" />
+            <span>Question Review</span>
+          </Link>
+          <Link
+            to={`/papers/${attempt.paper_id}`}
+            className="inline-flex items-center space-x-1 px-3 py-1.5 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white rounded-lg text-xs font-semibold shadow-subtle transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reattempt Paper</span>
+          </Link>
+        </div>
       </div>
 
       {/* Main Score Summary Component */}
       <ResultSummary attempt={attempt} paper={paper} />
+
+      {/* Dedicated BYOP Mini-Analytics Component */}
+      {isByop && (
+        <ByopMiniAnalytics
+          attempt={attempt}
+          paper={paper}
+          answers={answers}
+        />
+      )}
 
       {/* Comparison Delta Component */}
       {comparisonData && (

@@ -31,6 +31,7 @@ import { AnalyticsPage }      from '../pages/user/AnalyticsPage'
 import { NotesPage }          from '../pages/user/NotesPage'
 import { BYOPPage }           from '../pages/user/BYOPPage'
 import { ProfilePage }        from '../pages/user/ProfilePage'
+import { HelpContactPage }    from '../pages/user/HelpContactPage'
 
 // ── Admin Pages ───────────────────────────────────────────────────────────────
 import { AdminDashboard }         from '../pages/admin/AdminDashboard'
@@ -83,6 +84,7 @@ export function AppRoutes() {
         <Route path="/my-papers"         element={<BYOPPage />} />
         <Route path="/notes"             element={<NotesPage />} />
         <Route path="/profile"           element={<ProfilePage />} />
+        <Route path="/help"              element={<HelpContactPage />} />
       </Route>
 
       {/* ── Fullscreen Exam (no sidebar) ── */}
@@ -107,6 +109,7 @@ export function AppRoutes() {
         <Route path="/admin/settings"                     element={<AdminSettingsPage />} />
         {/* Question Bank & Extracted Questions by Subject/Topic */}
         <Route path="/admin/questions"                    element={<AdminExtractedQuestionsPage />} />
+        <Route path="/admin/extracted-questions"          element={<AdminExtractedQuestionsPage />} />
       </Route>
 
       {/* Catch-all */}

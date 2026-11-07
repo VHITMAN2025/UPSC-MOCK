@@ -1,30 +1,124 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Zap, Clock, FileText, Play, Loader2, BookOpen, Sparkles, CheckCircle2, Sliders, Layers } from 'lucide-react'
+import {
+  Zap, Clock, FileText, Play, Loader2, BookOpen, Sparkles,
+  CheckCircle2, AlertTriangle, ShieldCheck, HelpCircle, ArrowRight,
+  Award, Check, ChevronRight
+} from 'lucide-react'
 import { useApp } from '../../contexts/AppContext'
 import { paperService } from '../../services/paperService'
 import { attemptService } from '../../services/attemptService'
 import { testGeneratorService } from '../../services/testGeneratorService'
 import { useAuth } from '../../hooks/useAuth'
 
+const SYLLABUS_QUOTAS_DISPLAY = {
+  'TNPSC Group 1': {
+    standard: 'Degree Standard (Part A: 175 GS + Part B: 25 Aptitude)',
+    parts: [
+      {
+        name: 'Part A — General Studies (175 Questions)',
+        units: [
+          { code: 'UNIT_I', title: 'General Science', count: 10 },
+          { code: 'UNIT_II', title: 'Geography of India', count: 10 },
+          { code: 'UNIT_III', title: 'History, Culture of India & INM', count: 25 },
+          { code: 'UNIT_IV', title: 'Indian Polity', count: 40 },
+          { code: 'UNIT_V', title: 'Indian Economy & Dev Admin in TN', count: 50 },
+          { code: 'UNIT_VI', title: 'History, Culture, Heritage & Movements in TN', count: 40 },
+        ]
+      },
+      {
+        name: 'Part B — Aptitude & Mental Ability (25 Questions)',
+        units: [
+          { code: 'APT_UNIT_I', title: 'Aptitude & Arithmetic', count: 15 },
+          { code: 'APT_UNIT_II', title: 'Mental Ability & Logical Reasoning', count: 10 },
+        ]
+      }
+    ]
+  },
+  'TNPSC Group 2/2A': {
+    standard: 'Degree GS + SSLC Standard Language',
+    parts: [
+      {
+        name: 'Part A — Language (100 Questions: User Selected)',
+        units: [
+          { code: 'LANG_A', title: 'Part A (இலக்கணம் / Grammar)', count: 35 },
+          { code: 'LANG_B', title: 'Part B (இலக்கியம் / Prescribed Poems)', count: 35 },
+          { code: 'LANG_C', title: 'Part C (தமிழ் அறிஞர்கள் / Authors & Works)', count: 30 },
+        ]
+      },
+      {
+        name: 'Part B — General Studies (75 Questions)',
+        units: [
+          { code: 'UNIT_I', title: 'General Science', count: 5 },
+          { code: 'UNIT_II', title: 'Current Events', count: 5 },
+          { code: 'UNIT_III', title: 'Geography of India', count: 10 },
+          { code: 'UNIT_IV', title: 'History and Culture of India', count: 15 },
+          { code: 'UNIT_V', title: 'Indian Polity & Economy', count: 20 },
+          { code: 'UNIT_VI', title: 'INM & Tamil Nadu Heritage / Dev Admin', count: 20 },
+        ]
+      },
+      {
+        name: 'Part C — Aptitude & Mental Ability (25 Questions)',
+        units: [
+          { code: 'APT_UNIT_I', title: 'Aptitude & Arithmetic', count: 15 },
+          { code: 'APT_UNIT_II', title: 'Mental Ability & Logical Reasoning', count: 10 },
+        ]
+      }
+    ]
+  },
+  'TNPSC Group 4': {
+    standard: 'SSLC Standard (Part A: 100 General Tamil + Part B: 75 GS + Part C: 25 Aptitude)',
+    parts: [
+      {
+        name: 'Part A — Compulsory General Tamil (100 Questions)',
+        units: [
+          { code: 'LANG_TA_A', title: 'பகுதி-அ (இலக்கணம்)', count: 35 },
+          { code: 'LANG_TA_B', title: 'பகுதி-ஆ (இலக்கியம்)', count: 35 },
+          { code: 'LANG_TA_C', title: 'பகுதி-இ (தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்)', count: 30 },
+        ]
+      },
+      {
+        name: 'Part B — General Studies (75 Questions)',
+        units: [
+          { code: 'UNIT_I', title: 'General Science (SSLC Standard)', count: 8 },
+          { code: 'UNIT_II', title: 'Current Events', count: 7 },
+          { code: 'UNIT_III', title: 'Geography of India', count: 12 },
+          { code: 'UNIT_IV', title: 'History and Culture of India', count: 15 },
+          { code: 'UNIT_V', title: 'Indian Polity & Economy', count: 18 },
+          { code: 'UNIT_VI', title: 'INM & Tamil Nadu Culture / Heritage', count: 15 },
+        ]
+      },
+      {
+        name: 'Part C — Aptitude & Mental Ability (25 Questions)',
+        units: [
+          { code: 'APT_UNIT_I', title: 'Aptitude & Arithmetic', count: 15 },
+          { code: 'APT_UNIT_II', title: 'Mental Ability & Logical Reasoning', count: 10 },
+        ]
+      }
+    ]
+  }
+}
+
 export function MockTestsPage() {
-  const { selectedExam, group2LanguagePref, setGroup2LanguagePref, toast } = useApp()
+  const { selectedExam, setSelectedExam, group2LanguagePref, setGroup2LanguagePref, toast } = useApp()
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [papers, setPapers]   = useState([])
+  const [papers, setPapers] = useState([])
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(null)
-
-  // Test Generator State
   const [generating, setGenerating] = useState(false)
+
+  // Language choice for Group 2
   const [selectedLanguage, setSelectedLanguage] = useState(group2LanguagePref || 'General Tamil')
 
   useEffect(() => {
     if (group2LanguagePref) setSelectedLanguage(group2LanguagePref)
   }, [group2LanguagePref])
 
-  useEffect(() => { loadPapers() }, [selectedExam])
+  useEffect(() => {
+    loadPapers()
+  }, [selectedExam])
 
   async function loadPapers() {
     setLoading(true)
@@ -33,12 +127,15 @@ export function MockTestsPage() {
         sort: 'year_desc',
         examName: selectedExam,
       })
-      setPapers(data)
-    } catch (err) { toast.error(err.message) }
-    finally { setLoading(false) }
+      setPapers(data || [])
+    } catch (err) {
+      toast.error('Failed to load papers: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  async function startMock(paper) {
+  async function startExistingMock(paper) {
     if (!user) {
       toast.error('Please log in to start a mock test.')
       navigate('/login')
@@ -46,15 +143,18 @@ export function MockTestsPage() {
     }
     setStarting(paper.id)
     try {
-      const attempt = await attemptService.startOrGetAttempt(user.id, paper.id)
+      await attemptService.startOrGetAttempt(user.id, paper.id)
       navigate(`/exam/${paper.id}`)
-    } catch (err) { toast.error(err.message) }
-    finally { setStarting(null) }
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setStarting(null)
+    }
   }
 
-  async function handleGenerateIntelligentTest() {
+  async function handleLaunchOfficialMock() {
     if (!user) {
-      toast.error('Please log in to generate an intelligent mock test.')
+      toast.error('Please log in to launch a mock test.')
       navigate('/login')
       return
     }
@@ -77,31 +177,24 @@ export function MockTestsPage() {
           strict: true,
           allowFallback: false,
         })
-      } else if (selectedExam === 'TNPSC Group 4') {
-        generatedTest = await testGeneratorService.generateGroup4Test({
-          languageSpecialization: selectedLanguage,
-          userId: user.id,
-          strict: true,
-          allowFallback: false,
-        })
       } else {
-        // Fallback test generation using Group 1 matrix standard
-        generatedTest = await testGeneratorService.generateGroup1Test({
-          quotaResolutionMode: 'normalize_to_200',
+        // Group 4 (default)
+        generatedTest = await testGeneratorService.generateGroup4Test({
+          languageSpecialization: 'General Tamil',
           userId: user.id,
           strict: true,
           allowFallback: false,
         })
       }
 
-      toast.info('Materializing 200 questions into test session…')
+      toast.info('Preparing official 200-question test session…')
       const result = await testGeneratorService.materializeGeneratedMockPaper(user.id, generatedTest)
 
-      toast.success(`Generated 200Q test with exact quotas! Launching exam…`)
+      toast.success('Exam session ready! Launching fullscreen exam…')
       navigate(`/exam/${result.paperId}`)
     } catch (err) {
-      console.error('[MockTestsPage] Generation error:', err)
-      toast.error(`Generation failed: ${err.message}`)
+      console.error('[MockTestsPage] Launch error:', err)
+      toast.error(`Mock launch error: ${err.message}`)
     } finally {
       setGenerating(false)
     }
@@ -111,197 +204,299 @@ export function MockTestsPage() {
   const isGroup2 = selectedExam === 'TNPSC Group 2/2A'
   const isGroup4 = selectedExam === 'TNPSC Group 4'
 
+  const syllabusBlueprint = SYLLABUS_QUOTAS_DISPLAY[selectedExam] || SYLLABUS_QUOTAS_DISPLAY['TNPSC Group 4']
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <Zap className="w-6 h-6 text-tnpsc-brand" />
-        <div>
-          <h1 className="text-xl font-bold text-body-text">Full Mock Tests</h1>
-          <p className="text-xs text-body-secondary">Timed exam simulation with detailed result analysis</p>
-        </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="bg-tnpsc-brand-light rounded-2xl border border-tnpsc-brand/20 p-4 flex items-start gap-3">
-        <Clock className="w-5 h-5 text-tnpsc-brand shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-bold text-tnpsc-brand">Exam-Mode Simulation</p>
-          <p className="text-xs text-body-secondary mt-0.5">
-            Questions run in real exam conditions. Your progress is auto-saved — you can resume if you lose connection.
-          </p>
-        </div>
-      </div>
-
-      {/* ─── Intelligent Test Generator Card ─────────────────────────── */}
-      <div className="bg-gradient-to-br from-[#111426] via-[#1a1f3c] to-[#0f1123] rounded-2xl p-6 text-white shadow-card border border-indigo-500/30">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
+    <div className="space-y-8 pb-16 animate-fade-in text-body-text max-w-6xl mx-auto">
+      {/* ── Page Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-surface-border pb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-tnpsc-brand flex items-center justify-center text-white shadow-brand">
+            <Zap className="w-6 h-6" />
+          </div>
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[11px] font-bold tracking-wide uppercase mb-2 border border-indigo-400/30">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-              Intelligent Dynamic Test Generator
-            </div>
-            <h2 className="text-lg font-bold tracking-tight">
-              {isGroup1 && 'TNPSC Group 1 · Full 200-Question Exam Simulation'}
-              {isGroup2 && 'TNPSC Group 2/2A · Specialized 200-Question Exam Simulation'}
-              {isGroup4 && 'TNPSC Group 4 · Full 200-Question Exam Simulation'}
-              {!isGroup1 && !isGroup2 && !isGroup4 && `${selectedExam} · 200-Question Blueprint Mock Test`}
-            </h2>
-            <p className="text-xs text-slate-300 mt-1 max-w-xl">
-              Strictly balances official syllabus quotas and difficulty distribution (30% Easy · 50% Medium · 20% Hard) without duplicate items.
+            <h1 className="text-2xl font-black tracking-tight text-body-text">
+              Official 200-Question Full Mock Tests
+            </h1>
+            <p className="text-xs text-body-secondary mt-0.5">
+              Exact TNPSC Syllabus Quotas · 300 Marks · 180 Minutes · Mandatory Option E · Zero Repetition
             </p>
           </div>
-
-          <button
-            onClick={handleGenerateIntelligentTest}
-            disabled={generating}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-bold text-xs tracking-wide shadow-lg shadow-indigo-500/25 transition-all transform active:scale-[0.98] disabled:opacity-60 shrink-0"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating 200 Questions…
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-white" />
-                Generate & Start Mock (200Q)
-              </>
-            )}
-          </button>
         </div>
 
-        {/* Blueprint Specifications */}
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {/* Left specification block */}
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2.5">
-            <div className="flex items-center gap-2 text-indigo-300 font-bold uppercase tracking-wider text-[11px]">
-              <Layers className="w-4 h-4" />
-              {(isGroup2 || isGroup4) ? 'Language Specialization (Part 1)' : 'Syllabus Weightage Quotas'}
+        {/* Exam Group Pills */}
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl">
+          {['TNPSC Group 4', 'TNPSC Group 2/2A', 'TNPSC Group 1'].map(g => (
+            <button
+              key={g}
+              onClick={() => setSelectedExam(g)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                selectedExam === g
+                  ? 'bg-white text-body-text shadow-subtle'
+                  : 'text-body-secondary hover:text-body-text'
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Pre-Exam Instruction Card ────────────────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-surface-border shadow-card overflow-hidden">
+        {/* Banner with Official Mark Allotment */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 md:p-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold tracking-wide uppercase border border-indigo-400/30">
+                <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                Official Examination Rules &amp; Allotment
+              </div>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight">
+                {selectedExam} Examination Simulation
+              </h2>
+              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                {syllabusBlueprint.standard}. Dynamically assembled from verified database questions matching official syllabus unit weightages.
+              </p>
             </div>
 
-            {isGroup1 && (
-              <div className="space-y-1.5 text-slate-300 text-[11px]">
-                <div className="flex justify-between border-b border-white/5 pb-1">
-                  <span>Part A (General Studies · 175 Qs):</span>
-                  <span className="font-mono text-white">U1(10), U2(10), U3(25), U4(40), U5(45), U6(45)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Part B (Aptitude & Mental Ability · 25 Qs):</span>
-                  <span className="font-mono text-white">U1 (15), U2 (10)</span>
-                </div>
+            {/* Metrics Chips */}
+            <div className="grid grid-cols-3 gap-3 bg-white/10 p-4 rounded-2xl border border-white/10 text-center shrink-0">
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-slate-300">Total Questions</span>
+                <span className="text-xl font-black text-white">200 Qs</span>
               </div>
-            )}
+              <div className="border-x border-white/10 px-2">
+                <span className="block text-[10px] uppercase font-bold text-amber-300">Total Marks</span>
+                <span className="text-xl font-black text-white">300 M</span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-indigo-300">Duration</span>
+                <span className="text-xl font-black text-white">180 Mins</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            {(isGroup2 || isGroup4) && (
-              <div className="space-y-2">
-                <p className="text-slate-300 text-[11px]">
-                  Select your optional subject preference for Part 1 (Questions 1–100):
-                </p>
-                <div className="flex gap-2">
-                  {[
-                    { value: 'General Tamil', label: 'பொதுத் தமிழ் (General Tamil)' },
-                    { value: 'General English', label: 'General English' },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        setSelectedLanguage(opt.value)
-                        setGroup2LanguagePref(opt.value)
-                      }}
-                      className={`flex-1 py-2 px-2.5 rounded-lg text-[11px] font-semibold border transition-all ${
-                        selectedLanguage === opt.value
-                          ? 'bg-indigo-600 text-white border-indigo-400 shadow'
-                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  {isGroup4
-                    ? 'Part 2 allocates 75 General Studies (SSLC Standard) + Part 3 allocates 25 Aptitude questions.'
-                    : 'Part 2 automatically allocates 75 General Studies + 25 Aptitude questions.'}
-                </p>
-              </div>
-            )}
+        {/* Rules & Option E Information */}
+        <div className="p-6 md:p-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-50 border border-surface-border rounded-2xl p-4 space-y-1.5">
+              <span className="text-xs font-bold text-body-text flex items-center gap-2">
+                <Award className="w-4 h-4 text-emerald-600" />
+                1.5 Marks per Correct Question
+              </span>
+              <p className="text-[11px] text-body-secondary leading-relaxed">
+                Every correctly answered question is awarded 1.5 marks. Total maximum attainable score is 300 marks.
+              </p>
+            </div>
 
-            {!isGroup1 && !isGroup2 && !isGroup4 && (
-              <div className="text-slate-300 text-[11px]">
-                Stratified across General Studies (100 Qs), General Tamil/English (75 Qs), and Aptitude (25 Qs).
-              </div>
-            )}
+            <div className="bg-slate-50 border border-surface-border rounded-2xl p-4 space-y-1.5">
+              <span className="text-xs font-bold text-body-text flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                Mandatory Option E (No Penalty)
+              </span>
+              <p className="text-[11px] text-body-secondary leading-relaxed">
+                Option E ("Answer not known" / "விடை தெரியவில்லை") is provided for every question. Selecting Option E scores 0 marks without any penalty.
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-surface-border rounded-2xl p-4 space-y-1.5">
+              <span className="text-xs font-bold text-body-text flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                180 Minutes (3.0 Hours)
+              </span>
+              <p className="text-[11px] text-body-secondary leading-relaxed">
+                54 seconds ideal pacing per question. Real-time timer auto-submits on completion. Answers autosave continuously.
+              </p>
+            </div>
           </div>
 
-          {/* Right specification block */}
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10 space-y-2.5">
-            <div className="flex items-center gap-2 text-indigo-300 font-bold uppercase tracking-wider text-[11px]">
-              <Sliders className="w-4 h-4" />
-              Difficulty Balancing Blueprint
+          {/* Group 2 Language Preference Selector */}
+          {isGroup2 && (
+            <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-950">Select Language Preference for Part A (Questions 1–100)</h3>
+                  <p className="text-xs text-indigo-700">Choose between General Tamil or General English for your 100 language questions.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedLanguage('General Tamil')
+                    setGroup2LanguagePref('General Tamil')
+                  }}
+                  className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold transition-all ${
+                    selectedLanguage === 'General Tamil'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                      : 'bg-white text-body-text border-indigo-200 hover:bg-indigo-50'
+                  }`}
+                >
+                  <span>பொதுத் தமிழ் (General Tamil) — 100 Qs</span>
+                  {selectedLanguage === 'General Tamil' && <Check className="w-4 h-4" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedLanguage('General English')
+                    setGroup2LanguagePref('General English')
+                  }}
+                  className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold transition-all ${
+                    selectedLanguage === 'General English'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                      : 'bg-white text-body-text border-indigo-200 hover:bg-indigo-50'
+                  }`}
+                >
+                  <span>General English — 100 Qs</span>
+                  {selectedLanguage === 'General English' && <Check className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center pt-1">
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2.5">
-                <span className="block text-[10px] uppercase font-bold text-emerald-400">Easy (30%)</span>
-                <span className="text-base font-extrabold text-white">60 Qs</span>
-              </div>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5">
-                <span className="block text-[10px] uppercase font-bold text-amber-400">Medium (50%)</span>
-                <span className="text-base font-extrabold text-white">100 Qs</span>
-              </div>
-              <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5">
-                <span className="block text-[10px] uppercase font-bold text-rose-400">Hard (20%)</span>
-                <span className="text-base font-extrabold text-white">40 Qs</span>
-              </div>
+          )}
+
+          {/* Syllabus Unit Breakdown & Question Quota Table */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-body-secondary flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-tnpsc-brand" />
+              Official Syllabus Breakdown &amp; Question Quota Distribution
+            </h3>
+
+            <div className="border border-surface-border rounded-2xl overflow-hidden divide-y divide-surface-border text-xs">
+              {syllabusBlueprint.parts.map((part, pIdx) => (
+                <div key={pIdx} className="p-4 space-y-3 bg-white">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-body-text">{part.name}</span>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                      {part.units.reduce((acc, u) => acc + u.count, 0)} Questions
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    {part.units.map(unit => (
+                      <div
+                        key={unit.code}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-surface-border"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 block">{unit.code}</span>
+                          <span className="text-[11px] font-medium text-body-text truncate block" title={unit.title}>
+                            {unit.title}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono font-extrabold text-body-text bg-white px-2 py-1 rounded-lg border border-surface-border shrink-0">
+                          {unit.count} Qs
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-[10px] text-slate-400 text-center">
-              Total 200 Questions · 300 Marks · Standard 180 Minutes (54s per question pacing benchmark)
-            </p>
+          </div>
+
+          {/* Launch Action */}
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-surface-border">
+            <div className="flex items-center gap-2 text-xs text-body-secondary">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Zero-repetition active: guarantees never-seen questions for this attempt.</span>
+            </div>
+
+            <button
+              onClick={handleLaunchOfficialMock}
+              disabled={generating}
+              className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-tnpsc-brand to-indigo-700 hover:from-tnpsc-brand-hover hover:to-indigo-800 text-white font-black text-sm rounded-xl shadow-brand transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Assembling 200 Questions…</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-white" />
+                  <span>Launch Official 200-Question Mock Test</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ─── Published Papers Grid ───────────────────────────────────── */}
-      <div>
-        <h2 className="text-sm font-bold text-body-text mb-3">Published Exam Papers ({selectedExam})</h2>
+      {/* ── Published Question Papers ────────────────────────────────────────── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-body-text">
+              Published Practice Papers ({selectedExam})
+            </h2>
+            <p className="text-xs text-body-secondary">
+              Pre-published official exam papers available for direct reattempt
+            </p>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="w-7 h-7 animate-spin text-tnpsc-brand" /></div>
+          <div className="py-12 text-center">
+            <Loader2 className="w-6 h-6 animate-spin text-tnpsc-brand mx-auto mb-2" />
+            <p className="text-xs text-body-secondary">Loading published papers…</p>
+          </div>
         ) : papers.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-surface-border">
-            <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-body-secondary font-semibold">No pre-published papers for {selectedExam} yet</p>
-            <p className="text-xs text-body-secondary mt-1">Use the Intelligent Test Generator above to start a customized 200-question test anytime.</p>
+          <div className="bg-white rounded-2xl border border-surface-border p-8 text-center space-y-2">
+            <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-xs font-bold text-body-text">No pre-published papers for {selectedExam}</p>
+            <p className="text-[11px] text-body-secondary">
+              Launch the 200-question full mock test above anytime to generate a complete exam paper.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {papers.map(paper => (
-              <div key={paper.id} className="bg-white rounded-2xl border border-surface-border shadow-subtle p-5 flex flex-col gap-3 hover:shadow-card transition-shadow">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-tnpsc-brand bg-tnpsc-brand-light rounded px-2 py-0.5">
-                    {paper.exam_type}
-                  </span>
-                  <h3 className="text-sm font-bold text-body-text mt-2 leading-snug line-clamp-2">{paper.title}</h3>
-                  <p className="text-xs text-body-secondary mt-1">{paper.year} · {paper.subject}</p>
+              <div
+                key={paper.id}
+                className="bg-white rounded-2xl border border-surface-border p-5 flex flex-col justify-between hover:shadow-card transition-all"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      {paper.exam_type || 'Full Mock'}
+                    </span>
+                    <span className="text-xs text-body-secondary font-mono">{paper.year || 2024}</span>
+                  </div>
+                  <h3 className="text-sm font-bold text-body-text leading-snug line-clamp-2" title={paper.title}>
+                    {paper.title}
+                  </h3>
+                  <p className="text-xs text-body-secondary">{paper.subject || 'General Studies'}</p>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-body-secondary">
-                  <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {paper.total_questions}Q</span>
-                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {paper.duration_minutes}m</span>
-                </div>
-                <div className="flex gap-2 mt-auto pt-2">
-                  <Link
-                    to={`/papers/${paper.id}`}
-                    className="flex-1 text-center py-2 border border-surface-border rounded-xl text-xs font-semibold text-body-secondary hover:bg-slate-50 transition-colors"
-                  >
-                    Details
-                  </Link>
-                  <button
-                    onClick={() => startMock(paper)}
-                    disabled={starting === paper.id}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-tnpsc-brand text-white rounded-xl text-xs font-bold hover:bg-tnpsc-brand-hover transition-colors disabled:opacity-60"
-                  >
-                    {starting === paper.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                    Start
-                  </button>
+
+                <div className="pt-4 border-t border-surface-border mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-xs text-body-secondary">
+                    <span>{paper.total_questions || 200} Qs</span>
+                    <span>·</span>
+                    <span>{paper.duration_minutes || 180} mins</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/papers/${paper.id}`}
+                      className="px-3 py-1.5 rounded-lg border border-surface-border text-xs font-bold hover:bg-slate-50 transition-colors"
+                    >
+                      Details
+                    </Link>
+                    <button
+                      onClick={() => startExistingMock(paper)}
+                      disabled={starting === paper.id}
+                      className="px-3 py-1.5 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-subtle disabled:opacity-60"
+                    >
+                      {starting === paper.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5 fill-white" />
+                      )}
+                      <span>Start</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

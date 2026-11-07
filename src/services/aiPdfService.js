@@ -4,6 +4,7 @@ import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabu
 import { normalizeUnitName } from '../components/admin/TopicSeparationSummary.jsx'
 import { supabase } from '../lib/supabase.js'
 import * as pdfjsLib from 'pdfjs-dist'
+import questionTranslations from '../data/question_translations.js'
 
 const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
   u.macro_topics.flatMap(mt =>
@@ -387,11 +388,11 @@ export async function fetchAvailableGeminiModels(apiKey) {
     console.error('Failed to fetch Gemini models', e)
   }
   return [
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite (Free Tier)' },
-    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Free Tier)' },
-    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Free Tier)' },
+    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite (Free Tier - Recommended)' },
     { id: 'gemini-flash-lite-latest', name: 'Gemini Flash Lite Latest (Free Tier)' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (Free Tier)' },
+    { id: 'gemini-flash-latest', name: 'Gemini Flash Latest' },
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
   ]
 }
 
@@ -452,22 +453,19 @@ function parseJsonQuestions(rawText) {
 }
 
 const SYSTEM_INSTRUCTION = `You are an expert educational assessment parser and quiz generator specialized in TNPSC and UPSC exams.
-Your role is to analyze examination papers (in Tamil, English, or bilingual printed papers) and convert the questions into structured interactive practice quiz items for students.
-CRITICAL GUIDELINES FOR BILINGUAL PAPERS (Tamil + English):
-1. Many TNPSC papers are bilingual: questions and options appear in BOTH English and Tamil.
-2. For every question:
-   - Extract the English text in "question_text_english".
-   - Extract the Tamil text in "question_text_tamil".
-   - In "question_text", format them cleanly as:
-     "<English Question>\nதமிழ்: <Tamil Question>"
-   - For options A, B, C, D:
-     If the question has Tamil translations for options, format option_a through option_d as "<English Option> / <Tamil Option>".
-     Also provide pure Tamil text in "option_a_tamil", "option_b_tamil", "option_c_tamil", "option_d_tamil".
-   - If the paper is strictly in a single language (only Tamil or only English), extract that language accurately.
+Your role is to analyze examination papers and convert the questions into structured interactive bilingual practice quiz items for students.
+CRITICAL MANDATORY BILINGUAL REQUIREMENTS (Both English AND Tamil MUST be provided for EVERY question):
+1. For every question:
+   - "question_text" / "question_text_english": Pure, clear English question stem. If paper is bilingual or English, extract the English stem. If the paper is only in Tamil (e.g. General Tamil), provide an accurate, high-quality English translation/meaning of the question stem here.
+   - "question_text_tamil": Authentic Tamil question stem. If paper is bilingual or Tamil, extract the Tamil text. If the paper is only in English, provide an accurate Tamil translation here.
+2. For Options (A, B, C, D):
+   - "option_a", "option_b", "option_c", "option_d": Pure English text for each option. Do NOT include Tamil text, slashes, or option labels like (A). If original options are in Tamil, translate each option to English.
+   - "option_a_tamil", "option_b_tamil", "option_c_tamil", "option_d_tamil": Pure Tamil text for each option. Do NOT include English text, slashes, or option labels. If original options are in English, translate each option to Tamil.
 3. Formulate clear, self-contained question stems. Do not reproduce document borders, page numbers, instructions to candidates, or official headers.
 4. Accurately capture all 4 options (A, B, C, D) and identify the correct option if indicated by tick marks, keys, or standard knowledge.
-5. Provide the output strictly as a JSON array of question objects.
-6. Categorize each question into the official TNPSC revised syllabus taxonomy provided in the APPROVED TAXONOMY (closed list):
+5. Provide explanations in both languages: "explanation" (in English) and "explanation_tamil" (in Tamil).
+6. Provide the output strictly as a JSON array of question objects.
+7. Categorize each question into the official TNPSC revised syllabus taxonomy provided in the APPROVED TAXONOMY (closed list):
    - Analyze the question topic and concept carefully.
    - For every question, select the EXACT "unit_name", "macro_topic_name", and "micro_topic_name" from the APPROVED TAXONOMY list.
    - Never invent, paraphrase, or create new unit, macro-topic, or micro-topic names. Pick the single closest matching entry from the list.`
@@ -477,7 +475,11 @@ CRITICAL MANDATORY INSTRUCTIONS:
 1. Scan and read EVERY SINGLE PAGE of this entire PDF from the first page through to the very last page.
 2. Extract ALL questions present across all pages (from Question 1 to the final question, e.g. Questions 1 through 100).
 3. DO NOT stop early or truncate after the first page! You MUST extract every single question in sequential order.
-4. For bilingual questions (English & Tamil), combine them in question_text ("<English>\\nதமிழ்: <Tamil>") and options ("<English> / <Tamil>"). For single-language questions (pure Tamil or pure English), preserve that language accurately.
+4. BILINGUAL EXTRACTION (CRITICAL): Provide BOTH English AND Tamil for EVERY question:
+   - "question_text": Clear English question stem (translate if original was Tamil-only).
+   - "question_text_tamil": Authentic Tamil question stem (translate if original was English-only).
+   - "option_a", "option_b", "option_c", "option_d": Pure English option texts (without leading (A)).
+   - "option_a_tamil", "option_b_tamil", "option_c_tamil", "option_d_tamil": Pure Tamil option texts.
 5. Identify the correct answer: Examine the document for hand-drawn pen tick marks, marks, or keys next to options (A, B, C, D). If indicated by a tick mark, set correct_option to 'A', 'B', 'C', or 'D'.
 6. Match each question to the closest unit_name, macro_topic_name, and micro_topic_name from the APPROVED TAXONOMY.
 
@@ -485,12 +487,19 @@ Return strictly a JSON array of objects with this schema:
 [
   {
     "question_number": 1,
-    "question_text": "<full question stem with English and Tamil if present>",
-    "option_a": "<option A text, without leading (A)>",
-    "option_b": "<option B text, without leading (B)>",
-    "option_c": "<option C text, without leading (C)>",
-    "option_d": "<option D text, without leading (D)>",
+    "question_text": "<clear English question stem>",
+    "question_text_tamil": "<authentic Tamil question stem>",
+    "option_a": "<option A text in English>",
+    "option_a_tamil": "<option A text in Tamil>",
+    "option_b": "<option B text in English>",
+    "option_b_tamil": "<option B text in Tamil>",
+    "option_c": "<option C text in English>",
+    "option_c_tamil": "<option C text in Tamil>",
+    "option_d": "<option D text in English>",
+    "option_d_tamil": "<option D text in Tamil>",
     "correct_option": "<'A', 'B', 'C', 'D' from tick mark/key or null>",
+    "explanation": "<concept explanation in English>",
+    "explanation_tamil": "<explanation in Tamil>",
     "unit_name": "<matching unit_name or null>",
     "macro_topic_name": "<matching macro_topic_name or null>",
     "micro_topic_name": "<matching micro_topic_name or null>"
@@ -543,10 +552,10 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
     'gemini-3.1-flash-lite',
     'gemini-flash-lite-latest',
     'gemini-3.5-flash-lite',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-flash',
+    'gemini-flash-latest',
+    'gemini-3.8-flash',
     ...availableModels.map((m) => m.id),
-  ].filter(m => m && !/tts|image|banana|clip|lyria|robotics|computer-use|argon|3\.8|3\.5-flash$|3\.6|3\.7|gemini-4|pro/i.test(m))
+  ].filter(m => m && !/tts|image|banana|clip|lyria|robotics|computer-use|argon|3\.5-flash$|3\.6|3\.7|gemini-4|pro/i.test(m))
 
   const modelsToTry = Array.from(new Set(candidateList.filter(Boolean)))
   let lastError = null
@@ -599,6 +608,15 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
 From the attached PDF exam document, extract Questions ${r.start} through ${r.end} with their options (A, B, C, D) and correct_option detected from pen tick marks as a JSON array.
 If the document has fewer questions and does not contain questions in this range, return [].
 
+CRITICAL MANDATORY BILINGUAL EXTRACTION:
+Every single question MUST have BOTH English and authentic Tamil:
+1. "question_text": Clear English question stem. If original was Tamil-only, translate it accurately to clear English here.
+2. "question_text_tamil": Authentic Tamil question stem. If original was English-only, translate it accurately to Tamil here.
+3. "option_a", "option_b", "option_c", "option_d": Pure English text for each option without (A) prefix or Tamil characters.
+4. "option_a_tamil", "option_b_tamil", "option_c_tamil", "option_d_tamil": Pure Tamil text for each option without (A) prefix or English letters.
+5. "explanation": English concept explanation.
+6. "explanation_tamil": Tamil concept explanation.
+
 MANDATORY TAXONOMY CLASSIFICATION:
 For each question, classify it into the approved syllabus units. Set "unit_name", "macro_topic_name", and "micro_topic_name" EXACTLY from the approved list below:
 ${taxonomyPrompt}
@@ -607,12 +625,19 @@ Schema:
 [
   {
     "question_number": ${r.start},
-    "question_text": "<full question stem with English and Tamil if present>",
-    "option_a": "<option A text, without leading (A)>",
-    "option_b": "<option B text, without leading (B)>",
-    "option_c": "<option C text, without leading (C)>",
-    "option_d": "<option D text, without leading (D)>",
+    "question_text": "<clear English question stem>",
+    "question_text_tamil": "<authentic Tamil question stem>",
+    "option_a": "<option A text in English>",
+    "option_a_tamil": "<option A text in Tamil>",
+    "option_b": "<option B text in English>",
+    "option_b_tamil": "<option B text in Tamil>",
+    "option_c": "<option C text in English>",
+    "option_c_tamil": "<option C text in Tamil>",
+    "option_d": "<option D text in English>",
+    "option_d_tamil": "<option D text in Tamil>",
     "correct_option": "<'A', 'B', 'C', 'D' from tick mark/key or null>",
+    "explanation": "<concept explanation in English>",
+    "explanation_tamil": "<explanation in Tamil>",
     "unit_name": "<EXACT matching unit_name from approved list above>",
     "macro_topic_name": "<EXACT matching macro_topic_name from approved list above>",
     "micro_topic_name": "<EXACT matching micro_topic_name from approved list above>"
@@ -715,35 +740,61 @@ Output valid JSON only.`
     throw new Error(lastError?.message || 'Failed to extract questions from PDF.')
   }
 
+  // Helper to cleanly separate English and Tamil text
+  const splitBilingualStem = (rawEn, rawTa) => {
+    let en = String(rawEn || '').trim()
+    let ta = String(rawTa || '').trim()
+
+    if (en.includes('தமிழ்:')) {
+      const parts = en.split('தமிழ்:')
+      en = parts[0].trim()
+      if (!ta) ta = parts[1].trim()
+    } else if (en.includes('\n') && /[a-zA-Z]/.test(en) && /[\u0B80-\u0BFF]/.test(en)) {
+      const lines = en.split('\n').map(l => l.trim()).filter(Boolean)
+      const enLines = lines.filter(l => /[a-zA-Z]/.test(l) && !/[\u0B80-\u0BFF]/.test(l))
+      const taLines = lines.filter(l => /[\u0B80-\u0BFF]/.test(l))
+      if (enLines.length > 0) en = enLines.join(' ')
+      if (!ta && taLines.length > 0) ta = taLines.join(' ')
+    } else if (/[\u0B80-\u0BFF]/.test(en) && !/[a-zA-Z]/.test(en)) {
+      // Input en was pure Tamil
+      if (!ta) ta = en
+    }
+
+    return { en, ta }
+  }
+
+  const splitBilingualOption = (rawEn, rawTa) => {
+    let en = String(rawEn || '').replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
+    let ta = String(rawTa || '').replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
+
+    if (en.includes(' / ')) {
+      const parts = en.split(' / ')
+      const p1 = parts[0].trim()
+      const p2 = parts[1].trim()
+      if (/[a-zA-Z]/.test(p1) && /[\u0B80-\u0BFF]/.test(p2)) {
+        en = p1
+        if (!ta) ta = p2
+      } else if (/[\u0B80-\u0BFF]/.test(p1) && /[a-zA-Z]/.test(p2)) {
+        en = p2
+        if (!ta) ta = p1
+      }
+    } else if (/[\u0B80-\u0BFF]/.test(en) && !/[a-zA-Z]/.test(en)) {
+      if (!ta) ta = en
+    }
+
+    return { en, ta }
+  }
+
   // Map all extracted questions into the unified application schema
   return rawExtractedQuestions.map((q, idx) => {
-    let text = (q.question_text || '').trim()
-    let eng = (q.question_text_english || q.english_question || '').trim()
-    let tam = (q.question_text_tamil || q.tamil_question || '').trim()
+    const rawStemEn = q.question_text || q.en_question_text || q.question_text_english || q.english_question || ''
+    const rawStemTa = q.question_text_tamil || q.ta_question_text || q.tamil_question || ''
+    const { en: stemEn, ta: stemTa } = splitBilingualStem(rawStemEn, rawStemTa)
 
-    if (!eng && !tam) {
-      if (text.includes('தமிழ்:')) {
-        const parts = text.split('தமிழ்:')
-        eng = parts[0].trim()
-        tam = parts[1].trim()
-      } else if (/[\u0B80-\u0BFF]/.test(text)) {
-        tam = text
-      } else {
-        eng = text
-      }
-    }
-
-    const combined = text || (eng && tam ? `${eng}\nதமிழ்: ${tam}` : (eng || tam || `Question ${idx + 1}`))
-
-    const cleanOpt = (opt) => {
-      if (!opt) return ''
-      return String(opt).replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
-    }
-
-    const optA = cleanOpt(q.option_a || q.options?.A || (Array.isArray(q.options) ? q.options[0] : ''))
-    const optB = cleanOpt(q.option_b || q.options?.B || (Array.isArray(q.options) ? q.options[1] : ''))
-    const optC = cleanOpt(q.option_c || q.options?.C || (Array.isArray(q.options) ? q.options[2] : ''))
-    const optD = cleanOpt(q.option_d || q.options?.D || (Array.isArray(q.options) ? q.options[3] : ''))
+    const optA = splitBilingualOption(q.option_a || q.options?.A || (Array.isArray(q.options) ? q.options[0] : ''), q.option_a_tamil || q.ta_option_a)
+    const optB = splitBilingualOption(q.option_b || q.options?.B || (Array.isArray(q.options) ? q.options[1] : ''), q.option_b_tamil || q.ta_option_b)
+    const optC = splitBilingualOption(q.option_c || q.options?.C || (Array.isArray(q.options) ? q.options[2] : ''), q.option_c_tamil || q.ta_option_c)
+    const optD = splitBilingualOption(q.option_d || q.options?.D || (Array.isArray(q.options) ? q.options[3] : ''), q.option_d_tamil || q.ta_option_d)
 
     const cleanCorrect = (key) => {
       if (!key) return null
@@ -755,32 +806,51 @@ Output valid JSON only.`
     const unitName = approved.unit_name
     const macroName = approved.macro_topic_name
     const microName = approved.micro_topic_name
-    const needsReview = false
 
-    let baseExplanation = (q.explanation || '').trim()
+    let baseExplanation = (q.explanation || q.en_explanation || '').trim()
     if (approved && !baseExplanation.includes('[Taxonomy:')) {
       const taxPrefix = `[Taxonomy: ${unitName} > ${macroName} > ${microName}]`
       baseExplanation = baseExplanation ? `${taxPrefix}\n\n${baseExplanation}` : taxPrefix
     }
 
+    // Check if this question exists in the pre-translated dictionary
+    const tr = (stemTa ? questionTranslations[stemTa.trim()] : null) ||
+               (stemEn ? questionTranslations[stemEn.trim()] : null) ||
+               (q.id ? questionTranslations[q.id] : null)
+
+    const finalEn = tr?.en_question_text || stemEn || (stemTa ? `[Tamil] ${stemTa}` : `Question ${idx + 1}`)
+    const finalTa = stemTa || stemEn || ''
+
     return {
       question_number: Number(q.question_number) || idx + 1,
-      question_text: combined,
-      question_text_english: eng || combined,
-      question_text_tamil: tam || (text.includes('தமிழ்:') ? text.split('தமிழ்:')[1].trim() : ''),
-      english_question: eng || combined,
-      tamil_question: tam || '',
-      option_a: optA,
-      option_b: optB,
-      option_c: optC,
-      option_d: optD,
-      option_a_tamil: /[\u0B80-\u0BFF]/.test(optA) ? optA : '',
-      option_b_tamil: /[\u0B80-\u0BFF]/.test(optB) ? optB : '',
-      option_c_tamil: /[\u0B80-\u0BFF]/.test(optC) ? optC : '',
-      option_d_tamil: /[\u0B80-\u0BFF]/.test(optD) ? optD : '',
+      question_text: finalEn,
+      question_text_english: finalEn,
+      en_question_text: finalEn,
+      english_question: finalEn,
+      question_text_tamil: finalTa,
+      ta_question_text: finalTa,
+      tamil_question: finalTa,
+      option_a: tr?.en_option_a || optA.en || optA.ta,
+      option_b: tr?.en_option_b || optB.en || optB.ta,
+      option_c: tr?.en_option_c || optC.en || optC.ta,
+      option_d: tr?.en_option_d || optD.en || optD.ta,
+      en_option_a: tr?.en_option_a || optA.en || optA.ta,
+      en_option_b: tr?.en_option_b || optB.en || optB.ta,
+      en_option_c: tr?.en_option_c || optC.en || optC.ta,
+      en_option_d: tr?.en_option_d || optD.en || optD.ta,
+      option_a_tamil: optA.ta || optA.en,
+      option_b_tamil: optB.ta || optB.en,
+      option_c_tamil: optC.ta || optC.en,
+      option_d_tamil: optD.ta || optD.en,
+      ta_option_a: optA.ta || optA.en,
+      ta_option_b: optB.ta || optB.en,
+      ta_option_c: optC.ta || optC.en,
+      ta_option_d: optD.ta || optD.en,
       correct_option: cleanCorrect(q.correct_option),
       explanation: baseExplanation,
-      explanation_tamil: q.explanation_tamil || '',
+      en_explanation: baseExplanation,
+      explanation_tamil: q.explanation_tamil || q.ta_explanation || '',
+      ta_explanation: q.explanation_tamil || q.ta_explanation || '',
       unit_name: unitName,
       macro_topic_name: macroName,
       micro_topic_name: microName,

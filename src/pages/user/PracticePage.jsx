@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { practiceService } from '../../services/tnpscService'
 import { formatTimeRemaining } from '../../lib/utils'
 import { useCountdown } from '../../hooks/useCountdown'
+import questionTranslations from '../../data/question_translations.js'
 
 const Q_COUNTS    = [10, 25, 50, 100]
 const TIMER_MODES = ['strict', 'untimed']
@@ -393,13 +394,49 @@ function PracticeSession({ session, questions, onComplete }) {
   const isPyq = Boolean(currentQ.is_pyq || currentQ.question_type === 'PYQ')
   const examYear = currentQ.exam_year || (isPyq ? 'Official PYQ' : null)
 
-  const questionText = activeLang === 'tamil' && (currentQ.question_text_tamil || currentQ.tamil_question)
-    ? (currentQ.question_text_tamil || currentQ.tamil_question)
-    : currentQ.question_text
+  const qTr = (currentQ.id || currentQ.question_id) ? questionTranslations[currentQ.id || currentQ.question_id] : null
 
-  const secondaryText = activeLang === 'tamil' && currentQ.question_text
-    ? currentQ.question_text
-    : (activeLang === 'english' && (currentQ.question_text_tamil || currentQ.tamil_question) ? (currentQ.question_text_tamil || currentQ.tamil_question) : null)
+  const parseStem = (enRaw, taRaw) => {
+    let en = qTr?.en_question_text || String(enRaw || '').trim()
+    let ta = String(taRaw || '').trim()
+    if (en.includes('தமிழ்:')) {
+      const parts = en.split('தமிழ்:')
+      en = parts[0].trim()
+      if (!ta) ta = parts[1].trim()
+    } else if (en.includes('\n') && /[a-zA-Z]/.test(en) && /[\u0B80-\u0BFF]/.test(en)) {
+      const lines = en.split('\n').map(l => l.trim()).filter(Boolean)
+      const enLines = lines.filter(l => /[a-zA-Z]/.test(l) && !/[\u0B80-\u0BFF]/.test(l))
+      const taLines = lines.filter(l => /[\u0B80-\u0BFF]/.test(l))
+      if (enLines.length > 0) en = enLines.join(' ')
+      if (!ta && taLines.length > 0) ta = taLines.join(' ')
+    }
+    return { en: en || ta, ta: ta || en }
+  }
+
+  const parseOpt = (rawEn, rawTa, letter) => {
+    let en = (qTr && qTr[`en_option_${letter}`]) || String(rawEn || '').replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
+    let ta = String(rawTa || '').replace(/^\(?[A-Da-d]\)?\s*[-.:]?\s*/, '').trim()
+    if (en.includes(' / ')) {
+      const parts = en.split(' / ')
+      if (/[a-zA-Z]/.test(parts[0]) && /[\u0B80-\u0BFF]/.test(parts[1])) {
+        en = parts[0].trim()
+        if (!ta) ta = parts[1].trim()
+      } else if (/[\u0B80-\u0BFF]/.test(parts[0]) && /[a-zA-Z]/.test(parts[1])) {
+        en = parts[1].trim()
+        if (!ta) ta = parts[0].trim()
+      }
+    }
+    return { en: en || ta, ta: ta || en }
+  }
+
+  const parsedStem = parseStem(
+    currentQ.en_question_text || currentQ.question_text,
+    currentQ.ta_question_text || currentQ.question_text_tamil || currentQ.tamil_question
+  )
+  const questionText = activeLang === 'tamil' ? parsedStem.ta : parsedStem.en
+  const secondaryText = activeLang === 'tamil'
+    ? (parsedStem.en !== parsedStem.ta ? parsedStem.en : null)
+    : (parsedStem.ta !== parsedStem.en ? parsedStem.ta : null)
 
   async function handleSubmit() {
     setSaving(true)
@@ -533,10 +570,15 @@ function PracticeSession({ session, questions, onComplete }) {
         <div className="space-y-2.5">
           {OPTS.map(opt => {
             const letter = opt.toLowerCase()
-            const textEn = currentQ[`option_${letter}`]
-            const textTa = currentQ[`option_${letter}_tamil`]
-            const primaryOptionText = activeLang === 'tamil' && textTa ? textTa : textEn
-            const secondaryOptionText = activeLang === 'tamil' && textTa ? textEn : (activeLang === 'english' && textTa ? textTa : null)
+            const { en: optEn, ta: optTa } = parseOpt(
+              currentQ[`option_${letter}`] || currentQ[`en_option_${letter}`],
+              currentQ[`option_${letter}_tamil`] || currentQ[`ta_option_${letter}`],
+              letter
+            )
+            const primaryOptionText = activeLang === 'tamil' ? optTa : optEn
+            const secondaryOptionText = activeLang === 'tamil'
+              ? (optEn !== optTa ? optEn : null)
+              : (optTa !== optEn ? optTa : null)
 
             if (!textEn && !textTa) return null
             const isSelected = answers[currentQ.id] === opt

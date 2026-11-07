@@ -143,6 +143,15 @@ export const attemptService = {
         })
 
       if (!rpcErr && rpcResult) {
+        try {
+          const { data: att } = await supabase.from('attempts').select('user_id, paper_id, papers(exam_name)').eq('id', attemptId).maybeSingle()
+          if (att?.user_id) {
+            const examTag = att.papers?.exam_name?.includes('Group 1') ? 'TNPSC_GROUP_1' : att.papers?.exam_name?.includes('Group 2') ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4'
+            await questionHistoryService.recordMockQuestionsSeen(att.user_id, examTag, formattedAnswers)
+          }
+        } catch (e) {
+          console.warn('[attemptService] recordMockQuestionsSeen note:', e)
+        }
         window.dispatchEvent(new CustomEvent('tnpsc-attempt-submitted', { detail: { attemptId } }))
         return {
           success: true,
