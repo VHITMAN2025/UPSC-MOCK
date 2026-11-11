@@ -498,6 +498,40 @@ export function generateMasterTaxonomyCsv(taxonomyList) {
   return [headers.join(','), ...rows].join('\n')
 }
 
+// ─── 8. Approved Catalog Mapping (question_taxonomy, migration 00013) ────────
+// The database trigger only accepts Unit > Macro > Micro names exactly as they
+// appear in the approved question_taxonomy catalog (English names for Group 2 &
+// Group 4 Tamil). Validated Tamil rows are mapped to those names before import.
+// Keys are the Tamil micro_topic strings from GROUP2_MASTER_TAXONOMY.
+// Topics not listed here have no approved catalog row and are rejected.
+const APPROVED_TAMIL_UNIT = 'Part A: General Tamil'
+
+const TAMIL_MICRO_TO_APPROVED_CATALOG = {
+  // LANG_TA_A (Grammar)
+  'பொருத்துதல் & பொருத்தமான பொருளைத் தெரிவு செய்தல்': { macro_topic: 'Ilakkanam (Grammar)', micro_topic: 'Pizhai Thiruththam & Sol Porul' },
+  'பிரித்தெழுதுக & சேர்த்தெழுதுக': { macro_topic: 'Ilakkanam (Grammar)', micro_topic: 'Poruthuthal & Pirithu Ezhudhuthal' },
+  'சந்திப்பிழை நீக்குதல், ஒருமை பன்மை பிழை நீக்குதல்': { macro_topic: 'Ilakkanam (Grammar)', micro_topic: 'Pizhai Thiruththam & Sol Porul' },
+  // LANG_TA_B (Literature)
+  'திருக்குறள் தொடர்பான செய்திகள், மேற்கோள்கள்': { macro_topic: 'Ilakkaiyam (Literature)', micro_topic: 'Thirukkural & Ettuthogai' },
+  'எட்டுத்தொகை & பத்துப்பாட்டு நூல்கள்': { macro_topic: 'Ilakkaiyam (Literature)', micro_topic: 'Thirukkural & Ettuthogai' },
+  'சிலப்பதிகாரம், மணிமேகலை & ஐம்பெருங்காப்பியங்கள்': { macro_topic: 'Ilakkaiyam (Literature)', micro_topic: 'Paththuppaattu & Iymperum Kaapiyangal' },
+  // LANG_TA_C (Scholars)
+  'பாரதியார், பாரதிதாசன், நாமக்கல் கவிஞர், கவிமணி தேசிக விநாயகம் பிள்ளை': { macro_topic: 'Tamil Arignargal (Scholars)', micro_topic: 'Tamil Thondu & Bharathiyar/Bharathidasan' },
+  'தேவநேயப் பாவாணர், ஜி.யு. போப், வீரமாமுனிவர் தமிழ்த் தொண்டு': { macro_topic: 'Tamil Arignargal (Scholars)', micro_topic: 'Tamil Thondu & Bharathiyar/Bharathidasan' },
+  'பெரியார், அண்ணா, முத்துராமலிங்கத் தேவர், காமராசர் சமுதாயத் தொண்டு': { macro_topic: 'Tamil Arignargal (Scholars)', micro_topic: 'Urainadai & Samudhaya Thondu' },
+}
+
+/**
+ * Returns the approved catalog { unit_name, macro_topic, micro_topic } for a
+ * validated Tamil row, or null when the topic has no approved catalog row.
+ */
+export function mapToApprovedCatalog(row) {
+  const key = String(row.micro_topic || '').trim()
+  const mapped = TAMIL_MICRO_TO_APPROVED_CATALOG[key]
+  if (!mapped) return null
+  return { unit_name: APPROVED_TAMIL_UNIT, ...mapped }
+}
+
 export function generate29ColumnTemplateCsv() {
   const headers = [
     'question_id', 'content_hash', 'exam_tag', 'source_type', 'year',

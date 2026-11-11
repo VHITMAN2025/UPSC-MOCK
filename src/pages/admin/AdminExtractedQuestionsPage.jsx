@@ -22,6 +22,7 @@ import {
   generateMasterTaxonomyCsv,
   generate29ColumnTemplateCsv,
   normalizeExamTag,
+  mapToApprovedCatalog,
 } from '../../services/masterTaxonomyService'
 import AiPdfTab from '../../components/admin/AiPdfTab'
 import { TextPdfTab } from '../../components/admin/TextPdfTab'
@@ -334,6 +335,18 @@ export function AdminExtractedQuestionsPage() {
           duplicateCount++
           valRes.errors.push('Deduplication Gate: This VINA synthetic question matches an official PYQ question text.')
           valRes.isValid = false
+        }
+
+        // 3. Map to the approved question_taxonomy catalog the database enforces
+        const approved = mapToApprovedCatalog(normalized)
+        if (!approved) {
+          valRes.errors.push(`No approved catalog mapping for micro_topic '${normalized.micro_topic}'.`)
+          valRes.isValid = false
+        } else {
+          normalized.unit_name = approved.unit_name
+          normalized.unit_tag = approved.unit_name
+          normalized.macro_topic = approved.macro_topic
+          normalized.micro_topic = approved.micro_topic
         }
 
         if (valRes.isValid) {
