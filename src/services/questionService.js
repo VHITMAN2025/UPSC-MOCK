@@ -648,7 +648,7 @@ export const questionService = {
     // 2. Query questions from database
     let query = supabase
       .from('questions')
-      .select('id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, created_at')
+      .select('id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, exam_year, is_pyq, difficulty_level, unit_tag, unit_name, macro_topic, macro_topic_name, micro_topic, micro_topic_name, created_at')
       .order('created_at', { ascending: false })
 
     if (paperId && paperId !== 'all') {
@@ -665,9 +665,10 @@ export const questionService = {
     // 3. Enrich each question with Level 1, 2, and 3 taxonomy
     const enriched = (rawQuestions || []).map((q) => {
       const linkedPaper = papersMap.get(q.paper_id)
-      let unitName = null
-      let macroName = null
-      let microName = null
+      // Prefer the taxonomy saved on the row; fall back to parsing or classification.
+      let unitName = q.unit_name || null
+      let macroName = q.macro_topic_name || q.macro_topic || null
+      let microName = q.micro_topic_name || q.micro_topic || null
 
       if (q.explanation && q.explanation.includes('[Taxonomy:')) {
         const m = q.explanation.match(/\[Taxonomy:\s*([^>]+)\s*>\s*([^>]+)\s*>\s*([^\]]+)\]/)

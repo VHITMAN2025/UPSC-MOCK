@@ -84,7 +84,8 @@ export function AdminExtractedQuestionsPage() {
     try {
       const res = await questionService.getAllExtractedQuestionsForAdmin({ limit: 4000 })
       const rawList = res.questions || []
-      const normalizedList = rawList.map((q, idx) => normalizeTo29Columns(q, idx + 1))
+      // Keep the database id so inline edits can be saved with updateQuestion
+      const normalizedList = rawList.map((q, idx) => ({ ...normalizeTo29Columns(q, idx + 1), id: q.id }))
       setQuestions(normalizedList)
       setPapers(res.papers || [])
       if (res.papers?.length > 0 && !selectedTargetPaperId) {
