@@ -567,20 +567,23 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
     }
   }
 
-  // Progressive range extraction on the full undivided PDF.
-  // This solves Gemini's 8,192 output token limit per turn and ensures all 100 questions are captured.
-  const ranges = [
-    { start: 1, end: 35 },
-    { start: 36, end: 70 },
-    { start: 71, end: 105 },
-  ]
-
+  // Papers are not all 100 questions long, and they do not all start at question 1: a
+  // General Studies booklet may run 101-200. So instead of fixed number ranges, ask for
+  // the next batch of questions in the order they appear, continuing after the last one
+  // captured, until a batch brings nothing new. Batches stay at 35 questions to fit
+  // Gemini's output limit for one turn.
+  const BATCH_SIZE = 35
+  const MAX_BATCHES = 12
   const rawExtractedQuestions = []
   const seenNumbers = new Set()
+  let lastCapturedNumber = null
+  let stoppedEarly = false
 
-  for (let rIdx = 0; rIdx < ranges.length; rIdx++) {
-    const r = ranges[rIdx]
-    notify(`Extracting questions ${r.start} to ${Math.min(r.end, 100)}...`)
+  for (let rIdx = 0; rIdx < MAX_BATCHES; rIdx++) {
+    const startAfter = lastCapturedNumber
+    notify(startAfter === null
+      ? 'Extracting the first questions...'
+      : `Extracting the questions after number ${startAfter}...`)
 
     let batchParsed = null
 
@@ -604,9 +607,14 @@ export async function extractQuestionsWithAi(base64Data, preferredModel = 'gemin
           ],
         })
 
+        const scopeLine = startAfter === null
+          ? `the first ${BATCH_SIZE} questions of the paper, in the order they appear`
+          : `the next ${BATCH_SIZE} questions of the paper, in the order they appear, starting with the question that comes immediately after question number ${startAfter}`
+
         const rangePrompt = `You are a high-precision TNPSC and competitive exam question paper extractor.
-From the attached PDF exam document, extract Questions ${r.start} through ${r.end} with their options (A, B, C, D) and correct_option detected from pen tick marks as a JSON array.
-If the document has fewer questions and does not contain questions in this range, return [].
+From the attached PDF exam document, extract ${scopeLine}, with their options (A, B, C, D) and correct_option detected from pen tick marks as a JSON array.
+Use the question number printed in the paper for "question_number". The paper may start at a number other than 1, so do not renumber the questions.
+If the paper has no further questions, return [].
 
 CRITICAL MANDATORY BILINGUAL EXTRACTION:
 Every single question MUST have BOTH English and authentic Tamil:
@@ -624,7 +632,7 @@ ${taxonomyPrompt}
 Schema:
 [
   {
-    "question_number": ${r.start},
+    "question_number": <the number printed next to the question in the paper>,
     "question_text": "<clear English question stem>",
     "question_text_tamil": "<authentic Tamil question stem>",
     "option_a": "<option A text in English>",
@@ -708,32 +716,58 @@ Output valid JSON only.`
           batchParsed = parsed
           break
         }
+        // After the first batch, an explicit empty list is the model saying the paper has
+        // ended. Accept it instead of retrying other models, which would resend the whole PDF.
+        if (rIdx > 0 && /^\s*(?:```(?:json)?)?\s*\[\s*\]\s*(?:```)?\s*$/i.test(rawText || '')) {
+          batchParsed = []
+          break
+        }
       } catch (err) {
         lastError = err
-        console.warn(`[Gemini] Range ${r.start}-${r.end} attempt failed on ${currentModelId}:`, err.message)
+        console.warn(`[Gemini] Batch ${rIdx + 1} attempt failed on ${currentModelId}:`, err.message)
         if (nextModelId) {
           await delay(1000)
         }
       }
     }
 
-    if (Array.isArray(batchParsed) && batchParsed.length > 0) {
+    let addedThisBatch = 0
+    if (Array.isArray(batchParsed)) {
       for (const q of batchParsed) {
-        const qNum = Number(q.question_number) || (rawExtractedQuestions.length + 1)
+        const printed = Number(q.question_number)
+        const qNum = Number.isFinite(printed) && printed > 0 ? printed : (rawExtractedQuestions.length + 1)
         if (!seenNumbers.has(qNum)) {
           seenNumbers.add(qNum)
           rawExtractedQuestions.push(q)
+          addedThisBatch++
+          if (lastCapturedNumber === null || qNum > lastCapturedNumber) lastCapturedNumber = qNum
         }
       }
-      notify(`Captured ${rawExtractedQuestions.length} questions so far...`)
-      // If higher range returned fewer than 5 questions, the paper has concluded
-      if (batchParsed.length < 5 && rIdx > 0) {
-        break
-      }
     } else if (rIdx > 0) {
-      // No more questions found in higher range, document ended
+      // Every model failed on a later batch: keep what was captured, but say so below
+      stoppedEarly = true
+    }
+
+    if (addedThisBatch > 0) {
+      notify(`Captured ${rawExtractedQuestions.length} questions so far...`)
+    } else {
+      // Nothing new: the paper has ended (or the batch failed, handled above)
       break
     }
+  }
+
+  // Tell the admin what was captured and whether any question numbers are missing
+  if (rawExtractedQuestions.length > 0) {
+    const numbers = Array.from(seenNumbers).sort((x, y) => x - y)
+    const low = numbers[0]
+    const high = numbers[numbers.length - 1]
+    const missing = []
+    for (let n = low; n <= high; n++) if (!seenNumbers.has(n)) missing.push(n)
+    const missingNote = missing.length > 0
+      ? ` Not found: ${missing.slice(0, 25).join(', ')}${missing.length > 25 ? ', ...' : ''}.`
+      : ''
+    const earlyNote = stoppedEarly ? ' Extraction stopped early because a batch failed; run it again to continue.' : ''
+    notify(`Captured ${rawExtractedQuestions.length} questions (numbers ${low}-${high}).${missingNote}${earlyNote}`)
   }
 
   if (rawExtractedQuestions.length === 0) {
