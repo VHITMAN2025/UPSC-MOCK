@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   HelpCircle, FileText, Sparkles, Filter, Search, Layers,
   RefreshCw, Download, Plus, CheckCircle2, AlertCircle, ChevronDown,
@@ -81,8 +81,28 @@ const RESET_FIELDS_BY_COLUMN = {
 
 const rowKeyOf = (q) => q.id || q.question_id
 
-// The grid opens on the newest rows; a search or filter queries the whole database.
-const DEFAULT_ROW_LIMIT = 400
+// A paper needs only a name. Its exam group comes from the group tab being viewed,
+// and its year from the name (falling back to this year).
+const EXAM_NAME_BY_GROUP = {
+  TNPSC_GROUP_1: 'TNPSC Group 1',
+  TNPSC_GROUP_2: 'TNPSC Group 2/2A',
+  TNPSC_GROUP_4: 'TNPSC Group 4',
+}
+
+function paperPayloadFromName(name, examName) {
+  const yearInName = String(name).match(/\b(20\d{2})\b/)
+  return {
+    title: name,
+    exam_name: examName,
+    year: yearInName ? Number(yearInName[1]) : new Date().getFullYear(),
+    subject: 'General Studies',
+    status: 'draft',
+  }
+}
+
+// The grid opens on a small page of rows so it stays fast however many questions are
+// stored; a search or filter queries the whole database.
+const DEFAULT_ROW_LIMIT = 200
 const SEARCH_RESULT_LIMIT = 5000
 
 // The canonical 29 columns, in order. filterKey links a column to its sort and
@@ -163,9 +183,6 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   // Top Three-Way Group Switcher: 'TNPSC_GROUP_1' | 'TNPSC_GROUP_2' | 'TNPSC_GROUP_4'
   const [selectedGroupTag, setSelectedGroupTag] = useState('TNPSC_GROUP_1')
 
-  // Language columns view filter: 'all' | 'en' | 'ta'
-  const [languageColumnView, setLanguageColumnView] = useState('all')
-
   // Search & Pagination
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -206,6 +223,24 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   // Papers panel (publish/unpublish lives inside this tab)
   const [showPapersPanel, setShowPapersPanel] = useState(false)
   const [togglingPaperId, setTogglingPaperId] = useState(null)
+  const [deletingPaperId, setDeletingPaperId] = useState(null)
+  // { mode: 'create' | 'rename', name, paper? } while the name dialog is open
+  const [paperDialog, setPaperDialog] = useState(null)
+  const [savingPaper, setSavingPaper] = useState(false)
+  // PDF ingestion: the paper name is asked first, then the paper is created
+  const [ingestName, setIngestName] = useState('')
+  const [ingestPaper, setIngestPaper] = useState(null)
+  const [creatingIngestPaper, setCreatingIngestPaper] = useState(false)
+
+  // The dashboard's "+ Paper" shortcut opens this page with the name dialog ready
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (!isRecall && searchParams.get('newPaper')) {
+      setShowPapersPanel(true)
+      setPaperDialog({ mode: 'create', name: '' })
+      setSearchParams({}, { replace: true })
+    }
+  }, [])
 
   // Guards against an older, slower request overwriting a newer one
   const loadRequestRef = useRef(0)
@@ -670,9 +705,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
 
   // ── Inline Cell Editing ─────────────────────────────────────────────────────
   // Columns shown for the current language view
-  const visibleColumns = GRID_COLUMNS.filter(
-    col => !col.lang || languageColumnView === 'all' || col.lang === languageColumnView
-  )
+  const visibleColumns = GRID_COLUMNS
 
   function headerClassFor(col) {
     const tone = col.lang === 'en'
@@ -786,6 +819,89 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
     } finally {
       setTogglingPaperId(null)
     }
+  }
+
+  // ── Papers: create, rename and delete ──────────────────────────────────────
+  async function handleSavePaperDialog() {
+    const name = (paperDialog?.name || '').trim()
+    if (name.length < 3) {
+      toast.error('Enter a paper name (at least 3 characters).')
+      return
+    }
+    setSavingPaper(true)
+    try {
+      if (paperDialog.mode === 'rename') {
+        await paperService.updatePaper(paperDialog.paper.id, { title: name })
+        toast.success('Paper renamed.')
+      } else {
+        await paperService.createPaper(paperPayloadFromName(name, EXAM_NAME_BY_GROUP[selectedGroupTag]))
+        toast.success('Paper created.')
+      }
+      setPaperDialog(null)
+      await loadData()
+    } catch (err) {
+      toast.error(err.message || 'Could not save the paper.')
+    } finally {
+      setSavingPaper(false)
+    }
+  }
+
+  async function handleDeletePaper(paper) {
+    const count = paper.total_questions || 0
+    const questionsNote = count ? ` and its ${count} question${count === 1 ? '' : 's'}` : ''
+    const attemptsNote = paper.status === 'published' ? "\n\nStudents' attempts on this paper are removed too." : ''
+    if (!window.confirm(`Delete "${paper.title}"${questionsNote}? This cannot be undone.${attemptsNote}`)) return
+
+    setDeletingPaperId(paper.id)
+    try {
+      await paperService.deletePaper(paper.id)
+      if (selectedTargetPaperId === paper.id) setSelectedTargetPaperId('')
+      setSelectedKeys(new Set())
+      toast.success('Paper deleted.')
+      await loadData()
+      refreshGroupMeta()
+    } catch (err) {
+      toast.error(err.message || 'Could not delete the paper.')
+    } finally {
+      setDeletingPaperId(null)
+    }
+  }
+
+  // ── PDF ingestion: name the paper, then extract into it ─────────────────────
+  function closeUploadModal() {
+    setShowUploadModal(false)
+    setIngestPaper(null)
+    setIngestName('')
+  }
+
+  async function handleStartIngest() {
+    const name = ingestName.trim()
+    if (name.length < 3) {
+      toast.error('Enter a paper name (at least 3 characters).')
+      return
+    }
+    setCreatingIngestPaper(true)
+    try {
+      const examName = EXAM_NAME_BY_GROUP[selectedGroupTag]
+      // The same name in the same group adds to that paper instead of making a second one
+      const existing = papers.find(p =>
+        String(p.title || '').trim().toLowerCase() === name.toLowerCase() && (p.exam_name || '') === examName
+      )
+      const paper = existing || await paperService.createPaper(paperPayloadFromName(name, examName))
+      setIngestPaper({ id: paper.id, title: paper.title, reused: Boolean(existing) })
+      if (!existing) await loadData()
+    } catch (err) {
+      toast.error(err.message || 'Could not create the paper.')
+    } finally {
+      setCreatingIngestPaper(false)
+    }
+  }
+
+  async function handleIngestSuccess(count) {
+    toast.success(`${count} questions added. Refreshing the grid...`)
+    closeUploadModal()
+    await loadData()
+    refreshGroupMeta()
   }
 
   function renderCellEditor(q, col) {
@@ -1164,13 +1280,14 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
             <FileText className="w-4 h-4 text-tnpsc-brand" />
             Papers ({papers.length})
           </button>
-          <Link
-            to="/admin/papers/create"
+          <button
+            type="button"
+            onClick={() => { setShowPapersPanel(true); setPaperDialog({ mode: 'create', name: '' }) }}
             className="px-3 py-1.5 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-lg text-xs font-bold flex items-center gap-1"
           >
             <Plus className="w-3.5 h-3.5" />
             Create Paper
-          </Link>
+          </button>
         </div>
 
         {showPapersPanel && (
@@ -1206,12 +1323,13 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                           </span>
                         </td>
                         <td className="py-2 px-4 text-right whitespace-nowrap">
-                          <Link
-                            to={`/admin/papers/${paper.id}/edit`}
+                          <button
+                            type="button"
+                            onClick={() => setPaperDialog({ mode: 'rename', name: paper.title || '', paper })}
                             className="px-2 py-1 mr-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 font-bold text-slate-700"
                           >
-                            Edit
-                          </Link>
+                            Rename
+                          </button>
                           <button
                             type="button"
                             disabled={togglingPaperId === paper.id}
@@ -1223,6 +1341,15 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                             }`}
                           >
                             {togglingPaperId === paper.id ? '…' : isPublished ? 'Unpublish' : 'Publish'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingPaperId === paper.id}
+                            onClick={() => handleDeletePaper(paper)}
+                            title="Delete paper"
+                            className="ml-1.5 px-2 py-1 rounded border border-red-200 bg-white hover:bg-red-50 text-red-600 font-bold disabled:opacity-50"
+                          >
+                            {deletingPaperId === paper.id ? '…' : <Trash2 className="w-3.5 h-3.5 inline" />}
                           </button>
                         </td>
                       </tr>
@@ -1345,43 +1472,6 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Bilingual Column Focus Switcher */}
-            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px] font-bold">
-              <button
-                type="button"
-                onClick={() => setLanguageColumnView('all')}
-                className={`px-2.5 py-1 rounded-md transition-all ${
-                  languageColumnView === 'all'
-                    ? 'bg-white text-indigo-700 shadow-sm border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                🌐 Complete 29-Col Grid
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguageColumnView('en')}
-                className={`px-2.5 py-1 rounded-md transition-all ${
-                  languageColumnView === 'en'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-blue-700'
-                }`}
-              >
-                🇬🇧 English Focus
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguageColumnView('ta')}
-                className={`px-2.5 py-1 rounded-md transition-all font-tamil ${
-                  languageColumnView === 'ta'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-emerald-700'
-                }`}
-              >
-                🇮🇳 தமிழ் Focus
-              </button>
-            </div>
-
             <div className="text-xs text-body-secondary font-semibold">
               Page {currentPage} of {totalPages}
             </div>
@@ -1401,7 +1491,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
             <span className="text-slate-300">|</span>
             <span className="text-slate-500">
               {loadInfo.mode === 'latest'
-                ? `Showing the latest ${DEFAULT_ROW_LIMIT}. Search or filter to look through all ${groupInventory.total}.`
+                ? `Showing ${Math.min(DEFAULT_ROW_LIMIT, groupInventory.total || DEFAULT_ROW_LIMIT)} of ${groupInventory.total} questions. Use the column filters or search to find others.`
                 : loadInfo.capped
                   ? `Showing the first ${SEARCH_RESULT_LIMIT} matches. Narrow the search to see the rest.`
                   : 'Showing every match in the database.'}
@@ -1563,6 +1653,52 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
           </div>
         </div>
       </div>
+
+      {/* ── Paper name dialog: create or rename ─────────────────────────────── */}
+      {paperDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-body-text">
+                {paperDialog.mode === 'rename' ? 'Rename paper' : 'Create paper'}
+              </h3>
+              {paperDialog.mode === 'create' && (
+                <p className="text-xs text-body-secondary">
+                  Added to {EXAM_NAME_BY_GROUP[selectedGroupTag]}. Put the group and year in the name,
+                  such as "TNPSC Group 1 Previous Year Paper 2024", if students should find it under Previous Year Papers.
+                </p>
+              )}
+            </div>
+            <input
+              autoFocus
+              value={paperDialog.name}
+              onChange={e => setPaperDialog(d => ({ ...d, name: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') handleSavePaperDialog() }}
+              placeholder="Paper name"
+              aria-label="Paper name"
+              className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPaperDialog(null)}
+                disabled={savingPaper}
+                className="px-3 py-1.5 text-xs font-bold bg-white border border-surface-border rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePaperDialog}
+                disabled={savingPaper}
+                className="px-3 py-1.5 text-xs font-bold bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-lg disabled:opacity-50"
+              >
+                {savingPaper ? 'Saving…' : paperDialog.mode === 'rename' ? 'Save' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Bulk Delete Confirmation ─────────────────────────────────────── */}
       {showDeleteConfirm && (
@@ -1866,7 +2002,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                 Import Questions from PDF / Vision Pipeline
               </h3>
               <button
-                onClick={() => setShowUploadModal(false)}
+                onClick={closeUploadModal}
                 className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
               >
                 <X className="w-4 h-4" />
@@ -1888,24 +2024,60 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
               </button>
             </div>
 
-            {uploadTab === 'ai' ? (
-              <AiPdfTab
-                onQuestionsExtracted={async (qs) => {
-                  toast.success(`Extracted ${qs.length} questions! Refreshing spreadsheet...`)
-                  setShowUploadModal(false)
-                  await loadData()
-                  refreshGroupMeta()
-                }}
-              />
+            {!ingestPaper ? (
+              <div className="space-y-3">
+                <label htmlFor="ingest-paper-name" className="block text-xs font-bold text-body-text">
+                  Paper name
+                </label>
+                <input
+                  id="ingest-paper-name"
+                  autoFocus
+                  value={ingestName}
+                  onChange={e => setIngestName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleStartIngest() }}
+                  placeholder="e.g. TNPSC Group 1 Previous Year Paper 2024"
+                  className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
+                />
+                <p className="text-[11px] text-body-secondary">
+                  Questions are added to <b>{EXAM_NAME_BY_GROUP[selectedGroupTag]}</b>. Switch the group tab first to use another group.
+                  Using a name that already exists adds to that paper.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleStartIngest}
+                  disabled={creatingIngestPaper}
+                  className="px-4 py-2 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold disabled:opacity-50"
+                >
+                  {creatingIngestPaper ? 'Please wait…' : 'Continue'}
+                </button>
+              </div>
             ) : (
-              <TextPdfTab
-                onQuestionsExtracted={async (qs) => {
-                  toast.success(`Extracted ${qs.length} questions! Refreshing spreadsheet...`)
-                  setShowUploadModal(false)
-                  await loadData()
-                  refreshGroupMeta()
-                }}
-              />
+              <>
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 border border-surface-border px-3 py-2 text-xs">
+                  <span>
+                    Saving into <b>{ingestPaper.title}</b> · {EXAM_NAME_BY_GROUP[selectedGroupTag]}
+                    {ingestPaper.reused ? ' (existing paper, new questions are added)' : ''}
+                  </span>
+                  <button type="button" onClick={() => setIngestPaper(null)} className="font-bold text-tnpsc-brand shrink-0">
+                    Change
+                  </button>
+                </div>
+                {uploadTab === 'ai' ? (
+                  <AiPdfTab
+                    paperId={ingestPaper.id}
+                    paperTitle={ingestPaper.title}
+                    examTag={selectedGroupTag}
+                    onImportSuccess={handleIngestSuccess}
+                  />
+                ) : (
+                  <TextPdfTab
+                    paperId={ingestPaper.id}
+                    paperTitle={ingestPaper.title}
+                    examTag={selectedGroupTag}
+                    onImportSuccess={handleIngestSuccess}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>

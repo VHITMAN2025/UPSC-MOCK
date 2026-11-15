@@ -24,7 +24,7 @@ const QUICK_ACTIONS = [
   { label: '+ Current Affair',    path: '/admin/current-affairs?action=new', color: 'bg-tnpsc-brand text-white hover:bg-tnpsc-brand-hover' },
   { label: '+ Notification',      path: '/admin/notifications?action=new',   color: 'bg-green-600 text-white hover:bg-green-700' },
   { label: '+ Recall Question',   path: '/admin/recall?action=new',          color: 'bg-orange-600 text-white hover:bg-orange-700' },
-  { label: '+ Paper',             path: '/admin/papers/create',              color: 'bg-blue-600 text-white hover:bg-blue-700' },
+  { label: '+ Paper',             path: '/admin/questions?newPaper=1',        color: 'bg-blue-600 text-white hover:bg-blue-700' },
   { label: 'Pricing & Plans',     path: '/admin/pricing',                    color: 'bg-white border border-surface-border text-body-text hover:bg-slate-50' },
 ]
 

@@ -233,7 +233,7 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
 }
 
 // ─── Main Text PDF Tab ─────────────────────────────────────────────────────────
-export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
+export function TextPdfTab({ paperId, paperTitle, examTag, onImportSuccess }) {
   const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const fileRef = useRef(null)
 
@@ -482,6 +482,8 @@ export function TextPdfTab({ paperId, paperTitle, onImportSuccess }) {
           micro_topic_name: miName,
           explanation: expl || null,
           explanation_tamil: q.explanation_tamil || q.ta_explanation || null,
+          // The exam group chosen in the grid decides where these questions are listed
+          ...(examTag ? { exam_tag: examTag } : {}),
           source_pdf: file?.name || paperTitle || null,
           page_number: q.page_number || 1,
         }

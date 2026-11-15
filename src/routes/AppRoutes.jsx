@@ -35,7 +35,6 @@ import { HelpContactPage }    from '../pages/user/HelpContactPage'
 
 // ── Admin Pages ───────────────────────────────────────────────────────────────
 import { AdminDashboard }         from '../pages/admin/AdminDashboard'
-import { CreateEditPaperPage }    from '../pages/admin/CreateEditPaperPage'
 import { QuestionManagementPage } from '../pages/admin/QuestionManagementPage'
 import { ImportQuestionsPage }    from '../pages/admin/ImportQuestionsPage'
 import { AdminPricingPage }       from '../pages/admin/AdminPricingPage'
@@ -93,8 +92,9 @@ export function AppRoutes() {
         <Route path="/admin"                              element={<AdminDashboard />} />
         {/* The papers list now lives inside the Extracted Questions tab */}
         <Route path="/admin/papers"                       element={<Navigate to="/admin/questions" replace />} />
-        <Route path="/admin/papers/create"                element={<CreateEditPaperPage />} />
-        <Route path="/admin/papers/:paperId/edit"         element={<CreateEditPaperPage />} />
+        {/* A paper now needs only a name, so creating and renaming happen in the Papers panel */}
+        <Route path="/admin/papers/create"                element={<Navigate to="/admin/questions?newPaper=1" replace />} />
+        <Route path="/admin/papers/:paperId/edit"         element={<Navigate to="/admin/questions" replace />} />
         <Route path="/admin/papers/:paperId/questions"    element={<QuestionManagementPage />} />
         <Route path="/admin/papers/:paperId/import"       element={<ImportQuestionsPage />} />
         {/* Attempts was replaced by Pricing & Plans; Syllabus was removed from the admin panel */}

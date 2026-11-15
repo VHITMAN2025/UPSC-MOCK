@@ -358,6 +358,20 @@ export const questionService = {
       if (delErr) throw delErr
     }
 
+    // Adding to a paper that already has questions must not overwrite them. Questions
+    // are stored under (paper_id, question_number), so new ones continue after the
+    // highest existing number. Replacing a paper starts again from 1.
+    let numberOffset = 0
+    if (!replaceExisting) {
+      const { data: lastRows } = await supabase
+        .from('questions')
+        .select('question_number')
+        .eq('paper_id', paperId)
+        .order('question_number', { ascending: false })
+        .limit(1)
+      numberOffset = Number(lastRows?.[0]?.question_number) || 0
+    }
+
     // Fetch linked paper metadata to extract exam group and year
     let paperMeta = null
     try {
@@ -560,7 +574,7 @@ export const questionService = {
     // Deduplicate formatted list by question_number to ensure PostgreSQL ON CONFLICT DO UPDATE never encounters duplicate keys in a single batch
     const uniqueMap = new Map()
     formattedList.forEach((q, idx) => {
-      const qNum = isNaN(q.question_number) || !q.question_number ? idx + 1 : q.question_number
+      const qNum = (isNaN(q.question_number) || !q.question_number ? idx + 1 : q.question_number) + numberOffset
       q.question_number = qNum
       uniqueMap.set(qNum, q)
     })
