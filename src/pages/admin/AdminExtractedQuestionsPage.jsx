@@ -33,6 +33,52 @@ const GROUP_CONFIGS = [
   { id: 'TNPSC_GROUP_4', label: 'TNPSC Group 4', tag: 'Group 4', blueprintKey: 'TNPSC_GROUP_4', totalMocksQuota: 200 },
 ]
 
+// Column sort/filter configuration for the spreadsheet grid
+const SORT_CONFIG = {
+  source: { type: 'text', get: q => q.source_type || '' },
+  year: { type: 'year', get: q => Number(q.year) || 0 },
+  unit: { type: 'text', get: q => q.unit_code || '' },
+  macro: { type: 'text', get: q => q.macro_topic || '' },
+  micro: { type: 'text', get: q => q.micro_topic || '' },
+  key: { type: 'text', get: q => q.answer_key || '' },
+  difficulty: { type: 'text', get: q => q.difficulty_level || '' },
+  ideal: { type: 'number', get: q => Number(q.ideal_time_seconds) || 0 },
+  text: { type: 'text', get: q => q.en_question_text || '' },
+}
+
+const SORT_OPTIONS = {
+  number: [['asc', 'Low to High'], ['desc', 'High to Low']],
+  text: [['asc', 'A to Z'], ['desc', 'Z to A']],
+  year: [['asc', 'Oldest to Newest'], ['desc', 'Newest to Oldest']],
+}
+
+const EMPTY_COLUMN_FILTERS = {
+  source: 'all',
+  years: [],
+  yearFrom: '',
+  yearTo: '',
+  unit: [],
+  macro: [],
+  micro: [],
+  key: [],
+  difficulty: [],
+  text: '',
+}
+
+const RESET_FIELDS_BY_COLUMN = {
+  source: { source: 'all' },
+  year: { years: [], yearFrom: '', yearTo: '' },
+  unit: { unit: [] },
+  macro: { macro: [] },
+  micro: { micro: [] },
+  key: { key: [] },
+  difficulty: { difficulty: [] },
+  text: { text: '' },
+  ideal: {},
+}
+
+const rowKeyOf = (q) => q.id || q.question_id
+
 export function AdminExtractedQuestionsPage() {
   const { toast } = useApp()
 
@@ -74,10 +120,28 @@ export function AdminExtractedQuestionsPage() {
   const [csvValidationResults, setCsvValidationResults] = useState(null)
   const [csvImporting, setCsvImporting] = useState(false)
 
+  // Grid selection, column sort/filter, and bulk delete state
+  const [selectedKeys, setSelectedKeys] = useState(() => new Set())
+  const [columnFilters, setColumnFilters] = useState(EMPTY_COLUMN_FILTERS)
+  const [sortState, setSortState] = useState({ key: null, dir: 'asc' })
+  const [openColumnMenu, setOpenColumnMenu] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
   // Load questions and papers
   useEffect(() => {
     loadData()
   }, [])
+
+  // Selection belongs to one group; clear it when the group tab changes
+  useEffect(() => {
+    setSelectedKeys(new Set())
+  }, [selectedGroupTag])
+
+  // Return to the first page whenever the visible rows change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [columnFilters, sortState, searchQuery, selectedGroupTag, sourceFilter])
 
   async function loadData() {
     setLoading(true)
@@ -85,7 +149,11 @@ export function AdminExtractedQuestionsPage() {
       const res = await questionService.getAllExtractedQuestionsForAdmin({ limit: 4000 })
       const rawList = res.questions || []
       // Keep the database id so inline edits can be saved with updateQuestion
-      const normalizedList = rawList.map((q, idx) => ({ ...normalizeTo29Columns(q, idx + 1), id: q.id }))
+      const normalizedList = rawList.map((q, idx) => ({
+        ...normalizeTo29Columns(q, idx + 1),
+        id: q.id,
+        paper_id: q.paper_id,
+      }))
       setQuestions(normalizedList)
       setPapers(res.papers || [])
       if (res.papers?.length > 0 && !selectedTargetPaperId) {
@@ -150,13 +218,307 @@ export function AdminExtractedQuestionsPage() {
     })
   }, [groupFilteredQuestions, searchQuery])
 
+  // Distinct values offered by the column filter menus (current group only)
+  const facetOptions = useMemo(() => {
+    const distinct = (getter) => Array.from(new Set(groupFilteredQuestions.map(getter).filter(Boolean))).sort()
+    return {
+      years: Array.from(new Set(groupFilteredQuestions.map(q => String(q.year)).filter(Boolean)))
+        .sort((a, b) => Number(a) - Number(b)),
+      unit: distinct(q => q.unit_code),
+      macro: distinct(q => q.macro_topic),
+      micro: distinct(q => q.micro_topic),
+      key: ['A', 'B', 'C', 'D', 'E'],
+      difficulty: ['EASY', 'MEDIUM', 'HARD'],
+    }
+  }, [groupFilteredQuestions])
+
+  // Column filters (AND across columns) followed by the active column sort
+  const tableQuestions = useMemo(() => {
+    const f = columnFilters
+    const text = f.text.trim().toLowerCase()
+    let rows = searchFilteredQuestions.filter(q => {
+      if (f.source !== 'all' && q.source_type !== f.source) return false
+      if (f.years.length && !f.years.includes(String(q.year))) return false
+      if (f.yearFrom && Number(q.year) < Number(f.yearFrom)) return false
+      if (f.yearTo && Number(q.year) > Number(f.yearTo)) return false
+      if (f.unit.length && !f.unit.includes(q.unit_code)) return false
+      if (f.macro.length && !f.macro.includes(q.macro_topic)) return false
+      if (f.micro.length && !f.micro.includes(q.micro_topic)) return false
+      if (f.key.length && !f.key.includes(q.answer_key)) return false
+      if (f.difficulty.length && !f.difficulty.includes(q.difficulty_level)) return false
+      if (text) {
+        const haystack = `${q.en_question_text || ''} ${q.ta_question_text || ''}`.toLowerCase()
+        if (!haystack.includes(text)) return false
+      }
+      return true
+    })
+
+    if (sortState.key && SORT_CONFIG[sortState.key]) {
+      const { get } = SORT_CONFIG[sortState.key]
+      const sign = sortState.dir === 'desc' ? -1 : 1
+      rows = [...rows].sort((a, b) => {
+        const va = get(a)
+        const vb = get(b)
+        const cmp = typeof va === 'number'
+          ? va - vb
+          : String(va).localeCompare(String(vb), undefined, { numeric: true })
+        return cmp * sign
+      })
+    }
+    return rows
+  }, [searchFilteredQuestions, columnFilters, sortState])
+
+  const hasActiveColumnFilters = useMemo(() => {
+    const f = columnFilters
+    return f.source !== 'all' || f.years.length > 0 || Boolean(f.yearFrom || f.yearTo) ||
+      f.unit.length > 0 || f.macro.length > 0 || f.micro.length > 0 ||
+      f.key.length > 0 || f.difficulty.length > 0 || Boolean(f.text.trim())
+  }, [columnFilters])
+
   // Paginated questions for grid
   const paginatedQuestions = useMemo(() => {
     const start = (currentPage - 1) * pageSize
-    return searchFilteredQuestions.slice(start, start + pageSize)
-  }, [searchFilteredQuestions, currentPage, pageSize])
+    return tableQuestions.slice(start, start + pageSize)
+  }, [tableQuestions, currentPage, pageSize])
 
-  const totalPages = Math.ceil(searchFilteredQuestions.length / pageSize) || 1
+  const totalPages = Math.ceil(tableQuestions.length / pageSize) || 1
+
+  // Selection is stored by key so it survives pagination, filters and sorting
+  const pageKeys = paginatedQuestions.map(rowKeyOf)
+  const allPageSelected = pageKeys.length > 0 && pageKeys.every(k => selectedKeys.has(k))
+  const selectedQuestions = useMemo(
+    () => questions.filter(q => selectedKeys.has(rowKeyOf(q))),
+    [questions, selectedKeys]
+  )
+
+  function togglePageSelection() {
+    setSelectedKeys(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) pageKeys.forEach(k => next.delete(k))
+      else pageKeys.forEach(k => next.add(k))
+      return next
+    })
+  }
+
+  function toggleRowSelection(key) {
+    setSelectedKeys(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function selectAllMatching() {
+    setSelectedKeys(new Set(tableQuestions.map(rowKeyOf)))
+  }
+
+  function toggleFilterValue(field, value) {
+    setColumnFilters(prev => ({
+      ...prev,
+      [field]: prev[field].includes(value)
+        ? prev[field].filter(v => v !== value)
+        : [...prev[field], value],
+    }))
+  }
+
+  function isColumnFiltered(colKey) {
+    const f = columnFilters
+    if (colKey === 'source') return f.source !== 'all'
+    if (colKey === 'year') return f.years.length > 0 || Boolean(f.yearFrom || f.yearTo)
+    if (colKey === 'text') return Boolean(f.text)
+    if (colKey === 'ideal') return false
+    return f[colKey].length > 0
+  }
+
+  function clearColumn(colKey) {
+    setColumnFilters(prev => ({ ...prev, ...RESET_FIELDS_BY_COLUMN[colKey] }))
+  }
+
+  function clearAllFilters() {
+    setColumnFilters(EMPTY_COLUMN_FILTERS)
+    setSortState({ key: null, dir: 'asc' })
+  }
+
+  // Header cell with a filter button that opens the sort and filter menu
+  function renderSortFilterHeader(colKey, label, className = '') {
+    const config = SORT_CONFIG[colKey]
+    const isOpen = openColumnMenu === colKey
+    const isSorted = sortState.key === colKey
+    const isFiltered = isColumnFiltered(colKey)
+    const sortOptions = SORT_OPTIONS[config.type]
+
+    return (
+      <th className={`py-2.5 px-3 border-r ${className}`}>
+        <div className="relative flex items-center gap-1 whitespace-nowrap">
+          <span>{label}</span>
+          <button
+            type="button"
+            onClick={() => setOpenColumnMenu(isOpen ? null : colKey)}
+            title="Sort and filter"
+            className={`p-0.5 rounded hover:bg-black/5 transition-colors ${
+              isFiltered || isSorted ? 'text-tnpsc-brand' : 'text-slate-400'
+            }`}
+          >
+            <Filter className="w-3 h-3" />
+          </button>
+
+          {isOpen && (
+            <div
+              onClick={e => e.stopPropagation()}
+              className="absolute top-full left-0 mt-1 z-40 w-60 max-h-80 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg p-2.5 space-y-2.5 normal-case tracking-normal text-[11px] font-medium text-slate-700 text-left"
+            >
+              <div className="space-y-1">
+                <div className="text-[10px] font-black uppercase text-slate-500">Sort</div>
+                <div className="grid grid-cols-2 gap-1">
+                  {sortOptions.map(([dir, text]) => {
+                    const active = isSorted && sortState.dir === dir
+                    return (
+                      <button
+                        key={dir}
+                        type="button"
+                        onClick={() => setSortState({ key: colKey, dir })}
+                        className={`px-2 py-1 rounded border text-[11px] font-bold ${
+                          active ? 'bg-tnpsc-brand text-white border-tnpsc-brand' : 'bg-white border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {text}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {colKey !== 'ideal' && (
+                <div className="space-y-1 border-t border-slate-100 pt-2">
+                  <div className="text-[10px] font-black uppercase text-slate-500">Filter</div>
+
+                  {colKey === 'source' && (
+                    <div className="flex flex-col gap-1">
+                      {[['all', 'All sources'], ['PYQ', 'PYQ'], ['VINA', 'VINA Synthetic']].map(([value, text]) => (
+                        <label key={value} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="filter-source"
+                            checked={columnFilters.source === value}
+                            onChange={() => setColumnFilters(prev => ({ ...prev, source: value }))}
+                          />
+                          {text}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {colKey === 'year' && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-1 max-h-24 overflow-y-auto">
+                        {facetOptions.years.map(y => (
+                          <label key={y} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={columnFilters.years.includes(y)}
+                              onChange={() => toggleFilterValue('years', y)}
+                            />
+                            {y}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          placeholder="From"
+                          value={columnFilters.yearFrom}
+                          onChange={e => setColumnFilters(prev => ({ ...prev, yearFrom: e.target.value }))}
+                          className="w-full px-1.5 py-1 border border-slate-200 rounded text-[11px]"
+                        />
+                        <span>–</span>
+                        <input
+                          type="number"
+                          placeholder="To"
+                          value={columnFilters.yearTo}
+                          onChange={e => setColumnFilters(prev => ({ ...prev, yearTo: e.target.value }))}
+                          className="w-full px-1.5 py-1 border border-slate-200 rounded text-[11px]"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {(colKey === 'unit' || colKey === 'macro' || colKey === 'micro' || colKey === 'key' || colKey === 'difficulty') && (
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {facetOptions[colKey].map(value => (
+                        <label key={value} className="flex items-start gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={columnFilters[colKey].includes(value)}
+                            onChange={() => toggleFilterValue(colKey, value)}
+                          />
+                          <span className="break-words">{value}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {colKey === 'text' && (
+                    <input
+                      type="text"
+                      placeholder="Search question text"
+                      value={columnFilters.text}
+                      onChange={e => setColumnFilters(prev => ({ ...prev, text: e.target.value }))}
+                      className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] font-normal normal-case"
+                    />
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                <button
+                  type="button"
+                  onClick={() => clearColumn(colKey)}
+                  disabled={!isFiltered && !isSorted}
+                  className="text-[11px] font-bold text-slate-500 hover:text-slate-800 disabled:opacity-40"
+                >
+                  Clear column
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenColumnMenu(null)}
+                  className="text-[11px] font-bold text-tnpsc-brand"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </th>
+    )
+  }
+
+  async function handleBulkDelete() {
+    const items = selectedQuestions
+      .filter(q => q.id)
+      .map(q => ({ id: q.id, paper_id: q.paper_id }))
+    const skipped = selectedQuestions.length - items.length
+    if (items.length === 0) {
+      toast.error('The selected questions have no database id, so they cannot be deleted.')
+      return
+    }
+
+    setBulkDeleting(true)
+    try {
+      const removed = await questionService.deleteQuestionsBulk(items)
+      toast.success(`Deleted ${removed} question(s)${skipped ? `; ${skipped} skipped` : ''}.`)
+      setSelectedKeys(new Set())
+      setShowDeleteConfirm(false)
+      await loadData()
+    } catch (err) {
+      console.error('Bulk delete error:', err)
+      toast.error('Failed to delete questions: ' + err.message)
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   // ── Inventory & Blueprint Health Monitor Calculations ───────────────────────
   const healthMonitor = useMemo(() => {
@@ -672,7 +1034,7 @@ export function AdminExtractedQuestionsPage() {
         <div className="p-4 border-b border-surface-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs font-black text-body-text uppercase tracking-wider">
-              29-Column Master Spreadsheet Grid ({searchFilteredQuestions.length} Questions)
+              29-Column Master Spreadsheet Grid ({tableQuestions.length} Questions)
             </span>
             <span className="text-[11px] text-body-secondary font-medium">
               Double-click any cell to edit inline · Press Enter to save automatically
@@ -723,12 +1085,65 @@ export function AdminExtractedQuestionsPage() {
           </div>
         </div>
 
+        {/* ── Bulk action toolbar ─────────────────────────────────────────── */}
+        <div className="px-4 py-2.5 border-b border-surface-border bg-slate-50/60 flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-600">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>
+              <strong className="text-body-text">{tableQuestions.length}</strong> of {groupFilteredQuestions.length} shown
+            </span>
+            <span className="text-slate-300">|</span>
+            <span className={selectedKeys.size > 0 ? 'text-tnpsc-brand font-bold' : ''}>
+              {selectedKeys.size} selected
+            </span>
+            {tableQuestions.length > 0 && selectedKeys.size < tableQuestions.length && (
+              <button
+                type="button"
+                onClick={selectAllMatching}
+                className="px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-50 font-bold text-slate-700"
+              >
+                Select all {tableQuestions.length} matching
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {hasActiveColumnFilters && (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 font-bold text-slate-700"
+              >
+                Clear All Filters
+              </button>
+            )}
+            {selectedKeys.size > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelectedKeys(new Set())}
+                  className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 font-bold text-slate-700"
+                >
+                  Clear selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-700 text-white font-bold flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete Selected ({selectedKeys.size})
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
         {loading ? (
           <div className="p-16 text-center">
             <Loader2 className="w-8 h-8 text-tnpsc-brand animate-spin mx-auto mb-3" />
             <p className="text-xs text-body-secondary font-medium">Loading 29-column question spreadsheet...</p>
           </div>
-        ) : searchFilteredQuestions.length === 0 ? (
+        ) : tableQuestions.length === 0 ? (
           <div className="p-16 text-center text-body-secondary text-xs">
             No questions found matching your filter criteria. Click "Bulk Upload CSV" to import questions.
           </div>
@@ -737,19 +1152,29 @@ export function AdminExtractedQuestionsPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead className="sticky top-0 z-20 bg-slate-100 text-body-secondary uppercase font-bold text-[10px] border-b border-surface-border shadow-2xs">
                 <tr>
-                  <th className="py-2.5 px-3 border-r border-slate-200 sticky left-0 z-30 bg-slate-100 min-w-[90px]"># / ID</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[70px]">Source</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[60px]">Year</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[90px]">Unit Code</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[140px]">Macro Topic</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[160px]">Micro Topic</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[60px]">Key</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[70px]">Diff</th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 min-w-[70px]">Ideal Sec</th>
+                  <th className="py-2.5 px-2 border-r border-slate-200 sticky left-0 z-30 bg-slate-100 w-[40px] text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all on this page"
+                      checked={allPageSelected}
+                      onChange={togglePageSelection}
+                      disabled={pageKeys.length === 0}
+                      className="cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-2.5 px-3 border-r border-slate-200 sticky left-[40px] z-30 bg-slate-100 min-w-[90px]"># / ID</th>
+                  {renderSortFilterHeader('source', 'Source', 'border-slate-200 min-w-[70px]')}
+                  {renderSortFilterHeader('year', 'Year', 'border-slate-200 min-w-[60px]')}
+                  {renderSortFilterHeader('unit', 'Unit Code', 'border-slate-200 min-w-[90px]')}
+                  {renderSortFilterHeader('macro', 'Macro Topic', 'border-slate-200 min-w-[140px]')}
+                  {renderSortFilterHeader('micro', 'Micro Topic', 'border-slate-200 min-w-[160px]')}
+                  {renderSortFilterHeader('key', 'Key', 'border-slate-200 min-w-[60px]')}
+                  {renderSortFilterHeader('difficulty', 'Diff', 'border-slate-200 min-w-[70px]')}
+                  {renderSortFilterHeader('ideal', 'Ideal Sec', 'border-slate-200 min-w-[70px]')}
                   {/* English Columns (15-20) */}
                   {(languageColumnView === 'all' || languageColumnView === 'en') && (
                     <>
-                      <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[280px]">🇬🇧 15. en_question_text</th>
+                      {renderSortFilterHeader('text', '🇬🇧 15. en_question_text', 'border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[280px]')}
                       <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 16. en_option_a</th>
                       <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 17. en_option_b</th>
                       <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 18. en_option_c</th>
@@ -783,10 +1208,23 @@ export function AdminExtractedQuestionsPage() {
               <tbody className="divide-y divide-slate-200">
                 {paginatedQuestions.map((q, idx) => {
                   const isPyq = q.source_type === 'PYQ'
+                  const key = rowKeyOf(q)
+                  const isSelected = selectedKeys.has(key)
                   return (
-                    <tr key={q.question_id || idx} className="hover:bg-slate-50/70 transition-colors">
-                      {/* 1. ID (Sticky Left) */}
-                      <td className="py-2 px-3 border-r border-slate-200 sticky left-0 z-10 bg-white font-mono font-bold text-[11px] text-slate-800">
+                    <tr key={key || idx} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-indigo-50/60' : ''}`}>
+                      {/* 0. Row selection (Sticky Left) */}
+                      <td className="py-2 px-2 border-r border-slate-200 sticky left-0 z-10 bg-white text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select question ${q.question_id}`}
+                          checked={isSelected}
+                          onChange={() => toggleRowSelection(key)}
+                          className="cursor-pointer"
+                        />
+                      </td>
+
+                      {/* 1. ID (Sticky Left, after the checkbox) */}
+                      <td className="py-2 px-3 border-r border-slate-200 sticky left-[40px] z-10 bg-white font-mono font-bold text-[11px] text-slate-800">
                         {q.question_id}
                       </td>
 
@@ -934,7 +1372,7 @@ export function AdminExtractedQuestionsPage() {
                 <option key={s} value={s}>{s} rows</option>
               ))}
             </select>
-            <span>of {searchFilteredQuestions.length} questions</span>
+            <span>of {tableQuestions.length} questions</span>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -958,6 +1396,40 @@ export function AdminExtractedQuestionsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Bulk Delete Confirmation ─────────────────────────────────────── */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-5 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-black text-body-text">
+                Delete {selectedKeys.size} selected question{selectedKeys.size === 1 ? '' : 's'}?
+              </h3>
+              <p className="text-xs text-body-secondary">
+                These questions will be permanently removed from the database. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={bulkDeleting}
+                className="px-3 py-1.5 text-xs font-bold bg-white border border-surface-border rounded-lg disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="px-3 py-1.5 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 6. Bulk CSV Upload & Validation Modal ────────────────────────────── */}
       {showBulkCsvModal && (

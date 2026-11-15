@@ -525,11 +525,28 @@ const TAMIL_MICRO_TO_APPROVED_CATALOG = {
  * Returns the approved catalog { unit_name, macro_topic, micro_topic } for a
  * validated Tamil row, or null when the topic has no approved catalog row.
  */
+// Group 1 micro_topic strings from GROUP1_MASTER_TAXONOMY, mapped to the
+// approved catalog rows (ALL_GROUPS). Each entry carries its own unit_name.
+const GROUP1_MICRO_TO_APPROVED_CATALOG = {
+  'Mechanics, Force, Motion & Properties of Matter': { unit_name: 'Unit 1: General Science', macro_topic: 'Physics', micro_topic: 'Mechanics & Properties of Matter' },
+  'Light, Sound, Heat, Electricity & Magnetism': { unit_name: 'Unit 1: General Science', macro_topic: 'Physics', micro_topic: 'Light, Sound, Heat & Magnetism' },
+  'Monsoon Mechanism, Rainfall Patterns & Weather Phenomena': { unit_name: 'Unit 3: Geography of India', macro_topic: 'Climate & Weather', micro_topic: 'Monsoon, Rainfall & Weather Patterns' },
+  'Indus Valley Civilization & Vedic Period': { unit_name: 'Unit 4: History & Culture', macro_topic: 'Ancient India', micro_topic: 'Indus Valley Civilization' },
+  'Preamble, Salient Features, Union, States & Citizenship': { unit_name: 'Unit 5: Indian Polity', macro_topic: 'Constitution Basics', micro_topic: 'Preamble, Citizenship, Union & Territories' },
+  'Fundamental Rights, Directive Principles of State Policy & Fundamental Duties': { unit_name: 'Unit 5: Indian Polity', macro_topic: 'Rights & Duties', micro_topic: 'Fundamental Duties & Directive Principles (DPSP)' },
+  'Reserve Bank of India, Monetary Policy, Commercial Banking & Financial Inclusion': { unit_name: 'Unit 6: Indian Economy', macro_topic: 'Finance & Banking', micro_topic: 'Reserve Bank of India (RBI) & Monetary Policy' },
+  'Thirukkural: Secular Nature, Compassion, Good Governance & Universal Values': { unit_name: 'Unit 8: TN History & Culture', macro_topic: 'Thirukkural', micro_topic: 'Significance as Secular Literature & Everyday Relevance' },
+  'Simplification & Percentage': { unit_name: 'Unit 10: Aptitude', macro_topic: 'Quantitative Aptitude', micro_topic: 'Percentage, Simple & Compound Interest' },
+  'Logical Reasoning & Syllogism': { unit_name: 'Unit 10: Aptitude', macro_topic: 'Logical Reasoning', micro_topic: 'Logical Reasoning & Puzzles' },
+}
+
 export function mapToApprovedCatalog(row) {
   const key = String(row.micro_topic || '').trim()
-  const mapped = TAMIL_MICRO_TO_APPROVED_CATALOG[key]
-  if (!mapped) return null
-  return { unit_name: APPROVED_TAMIL_UNIT, ...mapped }
+  const tamil = TAMIL_MICRO_TO_APPROVED_CATALOG[key]
+  if (tamil) return { unit_name: APPROVED_TAMIL_UNIT, ...tamil }
+  const group1 = GROUP1_MICRO_TO_APPROVED_CATALOG[key]
+  if (group1) return { ...group1 }
+  return null
 }
 
 export function generate29ColumnTemplateCsv() {

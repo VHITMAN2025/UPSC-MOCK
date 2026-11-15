@@ -291,6 +291,29 @@ export const questionService = {
     return data
   },
 
+  // Permanently deletes the given questions ({ id, paper_id }) and refreshes
+  // the question count on every affected paper.
+  async deleteQuestionsBulk(items) {
+    const list = (items || []).filter(item => item && item.id)
+    if (list.length === 0) return 0
+
+    const CHUNK_SIZE = 200
+    for (let i = 0; i < list.length; i += CHUNK_SIZE) {
+      const ids = list.slice(i, i + CHUNK_SIZE).map(item => item.id)
+      const { error } = await supabase
+        .from('questions')
+        .delete()
+        .in('id', ids)
+      if (error) throw error
+    }
+
+    const paperIds = Array.from(new Set(list.map(item => item.paper_id).filter(Boolean)))
+    for (const paperId of paperIds) {
+      await this.updatePaperTotalQuestions(paperId)
+    }
+    return list.length
+  },
+
   async deleteQuestion(questionId, paperId) {
     const { error } = await supabase
       .from('questions')
