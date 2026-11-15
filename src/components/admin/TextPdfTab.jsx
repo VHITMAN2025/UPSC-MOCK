@@ -233,11 +233,12 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
 }
 
 // ─── Main Text PDF Tab ─────────────────────────────────────────────────────────
-export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear, onImportSuccess }) {
+export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear, getTarget, onFileSelected, onImportSuccess }) {
   const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const fileRef = useRef(null)
 
   const [file, setFile] = useState(null)
+  const [savedPaperId, setSavedPaperId] = useState(null)
   const [processing, setProcessing] = useState(false)
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
@@ -262,6 +263,7 @@ export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear,
       return
     }
     setFile(f)
+    onFileSelected?.(f)
     setResult(null)
     setQuestions([])
     setSelectedTopic(null)
@@ -427,10 +429,6 @@ export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear,
   }
 
   async function handleSave() {
-    if (!paperId) {
-      toast.error('No paper ID.')
-      return
-    }
     if (!questions.length) {
       toast.error('No questions to save.')
       return
@@ -455,6 +453,12 @@ export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear,
     setSaving(true)
 
     try {
+      // The destination (group, PYQ or VINA, year, paper) is confirmed in the dialog above
+      // the tabs and resolved here, at the moment of saving.
+      const resolved = getTarget ? await getTarget() : { paperId, paperTitle, examTag, sourceType, examYear }
+      if (!resolved) return
+      setSavedPaperId(resolved.paperId)
+
       const toSave = questionsToSave.map((q, idx) => {
         const uName = q.unit_name ? normalizeUnitName(q.unit_name) : null
         const mName = q.macro_topic_name || null
@@ -482,34 +486,34 @@ export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear,
           micro_topic_name: miName,
           explanation: expl || null,
           explanation_tamil: q.explanation_tamil || q.ta_explanation || null,
-          // The exam group chosen in the grid decides where these questions are listed
-          ...(examTag ? { exam_tag: examTag } : {}),
+          // The exam group chosen in the upload dialog decides where these questions are listed
+          ...(resolved.examTag ? { exam_tag: resolved.examTag } : {}),
           // PYQ or VINA, and the exam year, decide which papers and banks they reach
-          ...(sourceType ? { source_type: sourceType, is_pyq: sourceType === 'PYQ' } : {}),
-          ...(examYear ? { exam_year: String(examYear), year: Number(examYear) } : {}),
-          source_pdf: file?.name || paperTitle || null,
+          ...(resolved.sourceType ? { source_type: resolved.sourceType, is_pyq: resolved.sourceType === 'PYQ' } : {}),
+          ...(resolved.examYear ? { exam_year: String(resolved.examYear), year: Number(resolved.examYear) } : {}),
+          source_pdf: file?.name || resolved.paperTitle || null,
           page_number: q.page_number || 1,
         }
       })
 
-      const existing = await questionService.getExistingQuestionCount(paperId)
+      const existing = await questionService.getExistingQuestionCount(resolved.paperId)
       if (existing > 0) {
         const replace = confirm(
           `This paper already has ${existing} question(s).\n\n` +
           `Click OK to REPLACE them, or Cancel to merge.`
         )
-        const inserted = await questionService.saveQuestionsToSupabase(paperId, toSave, replace)
+        const inserted = await questionService.saveQuestionsToSupabase(resolved.paperId, toSave, replace)
         setImportMsg(
           replace
             ? `Replaced with ${inserted.length} questions.`
             : `Merged ${inserted.length} questions into the paper.`
         )
-        toast.success(`${inserted.length} questions saved to "${paperTitle}"`)
+        toast.success(`${inserted.length} questions saved to "${resolved.paperTitle}"`)
         onImportSuccess?.(inserted.length)
       } else {
-        const inserted = await questionService.saveQuestionsToSupabase(paperId, toSave, false)
+        const inserted = await questionService.saveQuestionsToSupabase(resolved.paperId, toSave, false)
         setImportMsg(`Successfully saved ${inserted.length} questions!`)
-        toast.success(`${inserted.length} questions saved to "${paperTitle}"`)
+        toast.success(`${inserted.length} questions saved to "${resolved.paperTitle}"`)
         onImportSuccess?.(inserted.length)
       }
     } catch (err) {
@@ -692,7 +696,7 @@ export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear,
           <div>
             <p className="text-sm font-bold text-emerald-800">{importMsg}</p>
             <Link
-              to={`/admin/papers/${paperId}/questions`}
+              to={`/admin/papers/${savedPaperId || paperId}/questions`}
               className="text-xs text-emerald-700 underline mt-0.5 inline-block"
             >
               View questions list →

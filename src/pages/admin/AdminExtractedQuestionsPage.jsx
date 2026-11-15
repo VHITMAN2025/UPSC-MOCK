@@ -10,6 +10,7 @@ import {
 import Papa from 'papaparse'
 import { questionService } from '../../services/questionService'
 import { recallGridService } from '../../services/recallGridService'
+import { detectFromFileName } from '../../lib/pdfNameDetect'
 import { paperService, EXAM_NAME_BY_TAG as EXAM_NAME_BY_GROUP } from '../../services/paperService'
 import { supabase } from '../../lib/supabase'
 import { useApp } from '../../contexts/AppContext'
@@ -235,13 +236,15 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   // { mode: 'create' | 'rename', name, paper? } while the name dialog is open
   const [paperDialog, setPaperDialog] = useState(null)
   const [savingPaper, setSavingPaper] = useState(false)
-  // PDF ingestion: the paper name is asked first, then the paper is created
-  const [ingestName, setIngestName] = useState('')
-  const [ingestPaper, setIngestPaper] = useState(null)
+  // PDF ingestion: where the extracted questions go. Choosing the PDF fills these in
+  // from its file name, and the admin confirms them before saving.
+  const [ingestGroup, setIngestGroup] = useState('TNPSC_GROUP_1')
   // 'PYQ' (official paper, filed by group and year) or 'VINA' (practice questions)
   const [ingestSource, setIngestSource] = useState('')
   const [ingestYear, setIngestYear] = useState('')
-  const [creatingIngestPaper, setCreatingIngestPaper] = useState(false)
+  const [ingestName, setIngestName] = useState('')
+  const [ingestNote, setIngestNote] = useState('')
+  const ingestTargetRef = useRef(null)
 
   // The dashboard's "+ Paper" shortcut opens this page with the name dialog ready
   const [searchParams, setSearchParams] = useSearchParams()
@@ -883,74 +886,110 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
     }
   }
 
-  // ── PDF ingestion: name the paper, then extract into it ─────────────────────
-  function closeUploadModal() {
-    setShowUploadModal(false)
-    setIngestPaper(null)
-    setIngestName('')
+  // ── PDF ingestion: confirm where the questions go, then extract into it ─────
+  function openUploadModal() {
+    setIngestGroup(selectedGroupTag)
     setIngestSource('')
     setIngestYear('')
+    setIngestName('')
+    setIngestNote('')
+    ingestTargetRef.current = null
+    setShowUploadModal(true)
   }
 
-  async function handleStartIngest() {
-    if (!ingestSource) {
-      toast.error('Choose whether this is an official previous year paper or practice questions.')
-      return
-    }
-    setCreatingIngestPaper(true)
-    try {
-      const examName = EXAM_NAME_BY_GROUP[selectedGroupTag]
+  function closeUploadModal() {
+    setShowUploadModal(false)
+  }
 
+  // The pages of an exam paper rarely say which group or year they are from, but the
+  // file name usually does. Fill in what it says; the admin confirms or corrects it.
+  function handleIngestFileSelected(file) {
+    const found = detectFromFileName(file?.name)
+    const filled = []
+    if (found.examTag) {
+      setIngestGroup(found.examTag)
+      filled.push(EXAM_NAME_BY_GROUP[found.examTag])
+    }
+    if (found.year) {
+      setIngestYear(String(found.year))
+      filled.push(String(found.year))
+    }
+    if (found.source) {
+      setIngestSource(found.source)
+      filled.push(found.source === 'PYQ' ? 'official previous year paper' : 'practice questions')
+    }
+    const baseName = String(file?.name || '').replace(/\.pdf$/i, '')
+    if (found.source !== 'PYQ' && baseName) setIngestName(baseName)
+
+    setIngestNote(filled.length > 0
+      ? `Read from the file name "${file.name}": ${filled.join(', ')}. Please check this before saving.`
+      : `The file name "${file?.name}" does not say which group, year or kind of paper it is. Choose them below.`)
+  }
+
+  // Called by the PDF tabs when Save is clicked. Checks the choices above, finds or
+  // creates the paper, and tells the tab where and how to save.
+  async function resolveIngestTarget() {
+    if (!ingestSource) {
+      toast.error('Choose whether this PDF is an official previous year paper or practice questions.')
+      return null
+    }
+    const examName = EXAM_NAME_BY_GROUP[ingestGroup]
+    try {
+      let target
       if (ingestSource === 'PYQ') {
-        // Official questions go to the Previous Year paper for this group and year
         const year = Number.parseInt(ingestYear, 10)
         const thisYear = new Date().getFullYear()
         if (!Number.isInteger(year) || year < 2000 || year > thisYear) {
           toast.error(`Enter the exam year (2000-${thisYear}).`)
-          return
+          return null
         }
-        const paper = await paperService.ensurePyqPaper({ examTag: selectedGroupTag, year })
-        setIngestPaper({ id: paper.id, title: paper.title, sourceType: 'PYQ', year })
-        await loadData()
-        return
+        // Official questions go to the Previous Year paper for this group and year
+        const paper = await paperService.ensurePyqPaper({ examTag: ingestGroup, year })
+        target = { paperId: paper.id, paperTitle: paper.title, examTag: ingestGroup, sourceType: 'PYQ', examYear: year }
+      } else {
+        const name = ingestName.trim()
+        if (name.length < 3) {
+          toast.error('Enter a paper name (at least 3 characters).')
+          return null
+        }
+        // The same name in the same group adds to that paper instead of making a second one
+        const existing = papers.find(p =>
+          String(p.title || '').trim().toLowerCase() === name.toLowerCase() && (p.exam_name || '') === examName
+        )
+        const paper = existing || await paperService.createPaper(paperPayloadFromName(name, examName))
+        target = { paperId: paper.id, paperTitle: paper.title, examTag: ingestGroup, sourceType: 'VINA' }
       }
-
-      const name = ingestName.trim()
-      if (name.length < 3) {
-        toast.error('Enter a paper name (at least 3 characters).')
-        return
-      }
-      // The same name in the same group adds to that paper instead of making a second one
-      const existing = papers.find(p =>
-        String(p.title || '').trim().toLowerCase() === name.toLowerCase() && (p.exam_name || '') === examName
-      )
-      const paper = existing || await paperService.createPaper(paperPayloadFromName(name, examName))
-      setIngestPaper({ id: paper.id, title: paper.title, reused: Boolean(existing), sourceType: 'VINA' })
-      if (!existing) await loadData()
+      ingestTargetRef.current = target
+      return target
     } catch (err) {
       toast.error(err.message || 'Could not prepare the paper.')
-    } finally {
-      setCreatingIngestPaper(false)
+      return null
     }
   }
 
   async function handleIngestSuccess(count) {
-    const paper = ingestPaper
+    const target = ingestTargetRef.current
     closeUploadModal()
 
     let message = `${count} questions added.`
-    if (paper?.sourceType === 'PYQ') {
+    if (target?.sourceType === 'PYQ') {
       // Official questions go live under Previous Year Papers once they can be scored
       try {
-        const outcome = await paperService.publishIfReady(paper.id)
-        message = describePyqOutcome(paper.title, count, outcome)
+        const outcome = await paperService.publishIfReady(target.paperId)
+        message = describePyqOutcome(target.paperTitle, count, outcome)
       } catch (err) {
         message += ` The paper could not be published: ${err.message}`
       }
     }
     toast.success(message)
-    await loadData()
-    refreshGroupMeta()
+
+    if (target && target.examTag !== selectedGroupTag) {
+      // Show the group the questions went to; changing the tab reloads the grid
+      setSelectedGroupTag(target.examTag)
+    } else {
+      await loadData()
+      refreshGroupMeta()
+    }
   }
 
   function renderCellEditor(q, col) {
@@ -1305,7 +1344,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
 
           {!isRecall && (
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={openUploadModal}
             className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle transition-all"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
@@ -2113,10 +2152,32 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
               </button>
             </div>
 
-            {!ingestPaper ? (
-              <div className="space-y-4">
-                <fieldset className="space-y-2">
-                  <legend className="text-xs font-bold text-body-text mb-1">What is in this PDF?</legend>
+            <div className="space-y-3 rounded-2xl border border-surface-border bg-slate-50/60 p-4">
+              <div>
+                <p className="text-xs font-bold text-body-text">Where should these questions go?</p>
+                <p className="text-[11px] text-body-secondary">
+                  Choosing the PDF fills this in from its file name. Check it, then save.
+                </p>
+                {ingestNote && <p className="text-[11px] text-emerald-700 font-semibold mt-1">{ingestNote}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label htmlFor="ingest-group" className="block text-xs font-bold text-body-text">Exam group</label>
+                  <select
+                    id="ingest-group"
+                    value={ingestGroup}
+                    onChange={e => setIngestGroup(e.target.value)}
+                    className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-tnpsc-brand"
+                  >
+                    {Object.entries(EXAM_NAME_BY_GROUP).map(([tag, label]) => (
+                      <option key={tag} value={tag}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <fieldset className="space-y-1.5">
+                  <legend className="text-xs font-bold text-body-text">What is in this PDF?</legend>
                   <label className="flex items-start gap-2 text-xs cursor-pointer">
                     <input
                       type="radio"
@@ -2125,10 +2186,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                       onChange={() => setIngestSource('PYQ')}
                       className="mt-0.5"
                     />
-                    <span>
-                      <b>An official previous year paper (PYQ)</b>. It is filed under Previous Year Papers by group and
-                      year, and added to the mock test bank.
-                    </span>
+                    <span><b>Official previous year paper (PYQ)</b></span>
                   </label>
                   <label className="flex items-start gap-2 text-xs cursor-pointer">
                     <input
@@ -2138,92 +2196,61 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                       onChange={() => setIngestSource('VINA')}
                       className="mt-0.5"
                     />
-                    <span>
-                      <b>Practice questions (VINA)</b>. They are saved to a paper you name, and added to the mock test bank.
-                    </span>
+                    <span><b>Practice questions (VINA)</b></span>
                   </label>
                 </fieldset>
-
-                {ingestSource === 'PYQ' && (
-                  <div className="space-y-1">
-                    <label htmlFor="ingest-year" className="block text-xs font-bold text-body-text">Exam year</label>
-                    <input
-                      id="ingest-year"
-                      type="number"
-                      min="2000"
-                      max={new Date().getFullYear()}
-                      value={ingestYear}
-                      onChange={e => setIngestYear(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleStartIngest() }}
-                      placeholder="e.g. 2024"
-                      className="w-40 px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
-                    />
-                    {ingestYear && (
-                      <p className="text-[11px] text-body-secondary">
-                        Paper: {EXAM_NAME_BY_GROUP[selectedGroupTag]} Previous Year Paper {ingestYear}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {ingestSource === 'VINA' && (
-                  <div className="space-y-1">
-                    <label htmlFor="ingest-paper-name" className="block text-xs font-bold text-body-text">Paper name</label>
-                    <input
-                      id="ingest-paper-name"
-                      value={ingestName}
-                      onChange={e => setIngestName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleStartIngest() }}
-                      placeholder="e.g. Group 1 Practice Set 5"
-                      className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
-                    />
-                    <p className="text-[11px] text-body-secondary">Using a name that already exists adds to that paper.</p>
-                  </div>
-                )}
-
-                <p className="text-[11px] text-body-secondary">
-                  Questions are added to <b>{EXAM_NAME_BY_GROUP[selectedGroupTag]}</b>. Switch the group tab first to use another group.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleStartIngest}
-                  disabled={creatingIngestPaper || !ingestSource}
-                  className="px-4 py-2 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold disabled:opacity-50"
-                >
-                  {creatingIngestPaper ? 'Please wait…' : 'Continue'}
-                </button>
               </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 border border-surface-border px-3 py-2 text-xs">
-                  <span>
-                    Saving into <b>{ingestPaper.title}</b> · {EXAM_NAME_BY_GROUP[selectedGroupTag]}
-                    {ingestPaper.reused ? ' (existing paper, new questions are added)' : ''}
-                  </span>
-                  <button type="button" onClick={() => setIngestPaper(null)} className="font-bold text-tnpsc-brand shrink-0">
-                    Change
-                  </button>
+
+              {ingestSource === 'PYQ' && (
+                <div className="space-y-1">
+                  <label htmlFor="ingest-year" className="block text-xs font-bold text-body-text">Exam year</label>
+                  <input
+                    id="ingest-year"
+                    type="number"
+                    min="2000"
+                    max={new Date().getFullYear()}
+                    value={ingestYear}
+                    onChange={e => setIngestYear(e.target.value)}
+                    placeholder="e.g. 2014"
+                    className="w-40 px-3 py-2 border border-surface-border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-tnpsc-brand"
+                  />
+                  <p className="text-[11px] text-body-secondary">
+                    {ingestYear
+                      ? `Filed under: ${EXAM_NAME_BY_GROUP[ingestGroup]} Previous Year Paper ${ingestYear}, and added to the mock test bank.`
+                      : 'Official papers are filed under Previous Year Papers by group and year, and added to the mock test bank.'}
+                  </p>
                 </div>
-                {uploadTab === 'ai' ? (
-                  <AiPdfTab
-                    paperId={ingestPaper.id}
-                    paperTitle={ingestPaper.title}
-                    examTag={selectedGroupTag}
-                    sourceType={ingestPaper.sourceType}
-                    examYear={ingestPaper.year}
-                    onImportSuccess={handleIngestSuccess}
+              )}
+
+              {ingestSource === 'VINA' && (
+                <div className="space-y-1">
+                  <label htmlFor="ingest-paper-name" className="block text-xs font-bold text-body-text">Paper name</label>
+                  <input
+                    id="ingest-paper-name"
+                    value={ingestName}
+                    onChange={e => setIngestName(e.target.value)}
+                    placeholder="e.g. Group 1 Practice Set 5"
+                    className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-tnpsc-brand"
                   />
-                ) : (
-                  <TextPdfTab
-                    paperId={ingestPaper.id}
-                    paperTitle={ingestPaper.title}
-                    examTag={selectedGroupTag}
-                    sourceType={ingestPaper.sourceType}
-                    examYear={ingestPaper.year}
-                    onImportSuccess={handleIngestSuccess}
-                  />
-                )}
-              </>
+                  <p className="text-[11px] text-body-secondary">
+                    Saved to this paper and added to the mock test bank. A name that already exists adds to that paper.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {uploadTab === 'ai' ? (
+              <AiPdfTab
+                getTarget={resolveIngestTarget}
+                onFileSelected={handleIngestFileSelected}
+                onImportSuccess={handleIngestSuccess}
+              />
+            ) : (
+              <TextPdfTab
+                getTarget={resolveIngestTarget}
+                onFileSelected={handleIngestFileSelected}
+                onImportSuccess={handleIngestSuccess}
+              />
             )}
           </div>
         </div>

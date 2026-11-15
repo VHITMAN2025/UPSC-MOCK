@@ -12,9 +12,10 @@ import { TopicSeparationSummary, normalizeUnitName } from './TopicSeparationSumm
 
 const taxonomyId = (item) => [item.unit_name, item.macro_topic_name, item.micro_topic_name].join('\u001f')
 
-export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, examYear, onImportSuccess }) {
+export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, examYear, getTarget, onFileSelected, onImportSuccess }) {
   const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const [file, setFile] = useState(null)
+  const [savedPaperId, setSavedPaperId] = useState(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
@@ -63,6 +64,7 @@ export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, exa
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0])
+      onFileSelected?.(e.target.files[0])
       setResult(null)
       setQuestions([])
       setSelectedTopic(null)
@@ -173,17 +175,23 @@ export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, exa
     setImportMsg('')
 
     try {
-      const existing = await questionService.getExistingQuestionCount(paperId)
+      // The destination (group, PYQ or VINA, year, paper) is confirmed in the dialog above
+      // the tabs and resolved here, at the moment of saving.
+      const resolved = getTarget ? await getTarget() : { paperId, paperTitle, examTag, sourceType, examYear }
+      if (!resolved) return
+      setSavedPaperId(resolved.paperId)
+
+      const existing = await questionService.getExistingQuestionCount(resolved.paperId)
       
       const toSave = questions.map((q, idx) => ({
         ...q,
         question_number: idx + 1,
-        // The exam group chosen in the grid decides where these questions are listed
-        ...(examTag ? { exam_tag: examTag } : {}),
+        // The exam group chosen in the upload dialog decides where these questions are listed
+        ...(resolved.examTag ? { exam_tag: resolved.examTag } : {}),
         // PYQ or VINA, and the exam year, decide which papers and banks they reach
-        ...(sourceType ? { source_type: sourceType, is_pyq: sourceType === 'PYQ' } : {}),
-        ...(examYear ? { exam_year: String(examYear), year: Number(examYear) } : {}),
-        source_pdf: file?.name || paperTitle || null,
+        ...(resolved.sourceType ? { source_type: resolved.sourceType, is_pyq: resolved.sourceType === 'PYQ' } : {}),
+        ...(resolved.examYear ? { exam_year: String(resolved.examYear), year: Number(resolved.examYear) } : {}),
+        source_pdf: file?.name || resolved.paperTitle || null,
         page_number: q.page_number || q.source_page || 1,
       }))
 
@@ -192,18 +200,18 @@ export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, exa
           `This paper already has ${existing} question(s).\n\n` +
           `Click OK to REPLACE them, or Cancel to merge.`
         )
-        const inserted = await questionService.saveQuestionsToSupabase(paperId, toSave, replace)
+        const inserted = await questionService.saveQuestionsToSupabase(resolved.paperId, toSave, replace)
         setImportMsg(
           replace
             ? `Replaced with ${inserted.length} questions.`
             : `Merged ${inserted.length} questions into the paper.`
         )
-        toast.success(`${inserted.length} questions saved to "${paperTitle}"`)
+        toast.success(`${inserted.length} questions saved to "${resolved.paperTitle}"`)
         onImportSuccess?.(inserted.length)
       } else {
-        const inserted = await questionService.saveQuestionsToSupabase(paperId, toSave, false)
+        const inserted = await questionService.saveQuestionsToSupabase(resolved.paperId, toSave, false)
         setImportMsg(`Successfully saved ${inserted.length} questions!`)
-        toast.success(`${inserted.length} questions saved to "${paperTitle}"`)
+        toast.success(`${inserted.length} questions saved to "${resolved.paperTitle}"`)
         onImportSuccess?.(inserted.length)
       }
     } catch (err) {
@@ -339,7 +347,7 @@ export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, exa
           <div>
             <p className="text-sm font-bold text-emerald-800">{importMsg}</p>
             <Link
-              to={`/admin/papers/${paperId}/questions`}
+              to={`/admin/papers/${savedPaperId || paperId}/questions`}
               className="text-xs text-emerald-700 underline mt-0.5 inline-block"
             >
               View questions list &rarr;
