@@ -373,6 +373,12 @@ export const questionService = {
     const defaultGroupTag = paperExam.includes('Group 1') ? 'Group 1' : paperExam.includes('Group 2') ? 'Group 2' : 'Group 4'
     const defaultYear = String(paperMeta?.year || '2024')
 
+    const EXAM_TAG_TO_GROUP_LABEL = {
+      TNPSC_GROUP_1: 'Group 1',
+      TNPSC_GROUP_2: 'Group 2',
+      TNPSC_GROUP_4: 'Group 4',
+    }
+
     // 2. Map frontend fields to actual Supabase database schema with automatic 3-level taxonomy classification
     const formattedList = questionsList.map((q, idx) => {
       const opt = q.correct_option || q.marked_answer ? String(q.correct_option || q.marked_answer).toUpperCase().trim() : null
@@ -413,7 +419,9 @@ export const questionService = {
       macroName = macroName || 'General Studies'
       microName = microName || 'General Concepts'
 
-      const groupTag = q.group_tag || defaultGroupTag
+      // The row's own exam_tag (from the CSV or extractor) decides its group;
+      // the target paper's group is only a fallback.
+      const groupTag = q.group_tag || EXAM_TAG_TO_GROUP_LABEL[q.exam_tag] || defaultGroupTag
       const groupName = q.group_name || `TNPSC ${groupTag}`
       const unitTag = q.unit_tag || (unitName.startsWith('Unit') ? unitName.split('—')[0].trim() : 'Unit 1')
       const examYear = String(q.exam_year || q.year || defaultYear)
@@ -671,7 +679,7 @@ export const questionService = {
     // 2. Query questions from database
     let query = supabase
       .from('questions')
-      .select('id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, exam_year, is_pyq, difficulty_level, unit_tag, unit_name, macro_topic, macro_topic_name, micro_topic, micro_topic_name, created_at')
+      .select('id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, exam_tag, group_tag, group_name, exam_year, is_pyq, difficulty_level, unit_tag, unit_name, macro_topic, macro_topic_name, micro_topic, micro_topic_name, created_at')
       .order('created_at', { ascending: false })
 
     if (paperId && paperId !== 'all') {
