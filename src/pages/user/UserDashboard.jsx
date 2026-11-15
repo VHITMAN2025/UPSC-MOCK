@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase'
 import { paperService } from '../../services/paperService'
 import { attemptService } from '../../services/attemptService'
 import { formatDate } from '../../lib/utils'
+import { isNotificationExpired } from '../../services/tnpscService'
 import { QuickRecall } from '../../components/tnpsc/QuickRecall'
 import { InteractiveSyllabus } from '../../components/tnpsc/InteractiveSyllabus'
 
@@ -45,8 +46,9 @@ export function UserDashboard() {
         attemptService.getUserAttemptsByExam(user.id, selectedExam),
         supabase.from('current_affairs').select('id,title,category,published_at,read_time')
           .eq('is_active', true).order('published_at', { ascending: false }).limit(4),
-        supabase.from('government_notifications').select('id,title,department,status,application_end')
-          .order('published_at', { ascending: false }).limit(3),
+        // Fetch a few extra: expired notices are dropped below, and three should still be left
+        supabase.from('government_notifications').select('id,title,department,status,application_end,exam_date')
+          .order('published_at', { ascending: false }).limit(15),
         supabase.from('user_notes').select('*').eq('user_id', user.id)
           .eq('is_pinned', true).order('updated_at', { ascending: false }).limit(3),
         supabase.from('exam_sessions').select('*').eq('user_id', user.id)
@@ -57,7 +59,10 @@ export function UserDashboard() {
       if (streakRes.status === 'fulfilled') setStreak(streakRes.value.data)
       if (attemptsRes.status === 'fulfilled') setRecentAttempts(attemptsRes.value.slice(0, 5))
       if (affairsRes.status === 'fulfilled')  setRecentAffairs(affairsRes.value.data ?? [])
-      if (notifsRes.status === 'fulfilled')   setRecentNotifs(notifsRes.value.data ?? [])
+      if (notifsRes.status === 'fulfilled') {
+        // Notices past their last date (apply-by or exam date) disappear automatically
+        setRecentNotifs((notifsRes.value.data ?? []).filter(n => !isNotificationExpired(n)).slice(0, 3))
+      }
       if (notesRes.status === 'fulfilled')    setPinnedNotes(notesRes.value.data ?? [])
       if (sessionRes.status === 'fulfilled')  setActiveSession(sessionRes.value.data?.[0] ?? null)
     } catch (err) {

@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, FileText, HelpCircle, BookMarked, Newspaper,
+  LayoutDashboard, HelpCircle, Newspaper,
   BellRing, Users, BarChart3, Brain, LogOut, Settings,
-  ChevronDown, ChevronRight, BookOpen, Upload, Zap,
-  ShieldCheck, ClipboardList, Menu, X,
+  ChevronDown, ChevronRight, Tag, ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useApp } from '../../contexts/AppContext'
@@ -21,9 +20,7 @@ const SECTIONS = [
   {
     label: 'CONTENT',
     items: [
-      { label: 'Papers / PYQs',         path: '/admin/papers',        icon: FileText },
       { label: 'Extracted Questions',   path: '/admin/questions',     icon: HelpCircle },
-      { label: 'Syllabus',              path: '/admin/syllabus',       icon: BookMarked },
       { label: 'Quick Recall',          path: '/admin/recall',         icon: Brain },
     ],
   },
@@ -37,9 +34,9 @@ const SECTIONS = [
   {
     label: 'PLATFORM',
     items: [
-      { label: 'Users',          path: '/admin/users',      icon: Users },
-      { label: 'Analytics',      path: '/admin/analytics',  icon: BarChart3 },
-      { label: 'Attempts',       path: '/admin/attempts',   icon: ClipboardList },
+      { label: 'Users & Subscriptions', path: '/admin/users',      icon: Users },
+      { label: 'Executive Overview',    path: '/admin/analytics',  icon: BarChart3 },
+      { label: 'Pricing & Plans',       path: '/admin/pricing',    icon: Tag },
       { label: 'Settings',       path: '/admin/settings',   icon: Settings, isSettings: true },
     ],
   },

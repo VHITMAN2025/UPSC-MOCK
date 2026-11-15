@@ -7,6 +7,15 @@ import { quickRecallService } from '../../services/tnpscService'
 const TOTAL = 5
 const OPTION_LABELS = ['A', 'B', 'C', 'D']
 
+// "05:42:09" style countdown, never negative
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return [hours, minutes, seconds].map(n => String(n).padStart(2, '0')).join(':')
+}
+
 /**
  * Quick Recall — Daily 5-Question Revision Activity
  * - Mix of ~50% PYQ + ~50% Synthetic questions
@@ -33,12 +42,31 @@ export function QuickRecall({ onClose }) {
   const [isResume, setIsResume]       = useState(false)
   const [isCompletedToday, setIsCompletedToday] = useState(false)
   const [recallLang, setRecallLang]   = useState(language || 'en')
+  // When this user's next set unlocks (24 hours after they finished the last one)
+  const [nextUnlockAt, setNextUnlockAt] = useState(null)
+  const [nowMs, setNowMs]             = useState(() => Date.now())
 
   const isTa = recallLang === 'ta'
 
   useEffect(() => {
     if (user?.id) initDailyRecall()
   }, [user?.id, selectedExam])
+
+  // Tick once a second while locked; load the new set the moment it unlocks
+  useEffect(() => {
+    if (!nextUnlockAt) return undefined
+    const timer = setInterval(() => {
+      const current = Date.now()
+      setNowMs(current)
+      if (current >= new Date(nextUnlockAt).getTime()) {
+        clearInterval(timer)
+        setNextUnlockAt(null)
+        setIsCompletedToday(false)
+        if (user?.id) initDailyRecall()
+      }
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [nextUnlockAt])
 
   async function initDailyRecall() {
     setPhase('loading')
@@ -62,6 +90,8 @@ export function QuickRecall({ onClose }) {
           recall_points: statusData.points ?? (statusData.score ?? 0) * 10,
         })
         setIsCompletedToday(true)
+        setNextUnlockAt(statusData.nextUnlockAt || null)
+        setNowMs(Date.now())
         setPhase('result')
         return
       }
@@ -459,11 +489,15 @@ export function QuickRecall({ onClose }) {
                 <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-left">
                   <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Daily Revision Completed for Today!</span>
+                    <span>{isTa ? 'இந்த 5 கேள்விகளும் முடிந்தன!' : 'Your 5 questions are done!'}</span>
                   </div>
-                  <p className="text-[11px] text-emerald-700 mt-0.5">
-                    You have already finished today's 5 questions. To keep streak progression fair and deterministic, new questions generate tomorrow.
-                  </p>
+                  {nextUnlockAt && (
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      {isTa ? 'அடுத்த 5 கேள்விகள் திறக்க: ' : 'Next 5 questions unlock in '}
+                      <strong className="tabular-nums">{formatCountdown(new Date(nextUnlockAt).getTime() - nowMs)}</strong>
+                      {' '}({new Date(nextUnlockAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })})
+                    </p>
+                  )}
                 </div>
               )}
 

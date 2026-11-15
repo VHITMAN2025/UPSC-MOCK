@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   FileText, HelpCircle, Users, BarChart3, Newspaper, BellRing,
-  Brain, BookMarked, PlusCircle, Loader2, AlertCircle,
+  Brain, PlusCircle, Loader2, AlertCircle,
   CheckCircle2, Info, AlertTriangle, TrendingUp, Zap,
 } from 'lucide-react'
 import { adminStatsService } from '../../services/adminService'
@@ -15,19 +15,17 @@ const STAT_CARDS = (s) => [
   { label: 'Questions',       value: s.totalQuestions, sub: 'In question bank & extracted PDFs',                        icon: HelpCircle, color: 'text-indigo-700 bg-indigo-50', path: '/admin/questions' },
   { label: 'Current Affairs', value: s.totalAffairs,   sub: `${s.publishedAffairs} published`,                          icon: Newspaper,  color: 'text-tnpsc-brand bg-tnpsc-brand-light', path: '/admin/current-affairs' },
   { label: 'Notifications',   value: s.totalNotifs,    sub: `${s.activeNotifs} active`,                                  icon: BellRing,   color: 'text-green-700 bg-green-50', path: '/admin/notifications' },
-  { label: 'Syllabus Topics', value: s.totalTopics,    sub: `${s.totalUnits} units`,                                     icon: BookMarked, color: 'text-purple-700 bg-purple-50', path: '/admin/syllabus' },
   { label: 'Recall Questions',value: s.totalRecall,    sub: `${s.activeRecall} active`,                                  icon: Brain,      color: 'text-orange-700 bg-orange-50', path: '/admin/recall' },
   { label: 'Total Users',     value: s.totalUsers,     sub: `${s.newUsersWeek} new this week`,                           icon: Users,      color: 'text-emerald-700 bg-emerald-50', path: '/admin/users' },
-  { label: 'Attempts',        value: s.totalAttempts,  sub: `${s.completedAttempts} completed · avg ${s.avgScore}%`,     icon: BarChart3,  color: 'text-slate-700 bg-slate-100', path: '/admin/attempts' },
+  { label: 'Attempts',        value: s.totalAttempts,  sub: `${s.completedAttempts} completed · avg ${s.avgScore}%`,     icon: BarChart3,  color: 'text-slate-700 bg-slate-100', path: '/admin/analytics' },
 ]
 
 const QUICK_ACTIONS = [
   { label: '+ Current Affair',    path: '/admin/current-affairs?action=new', color: 'bg-tnpsc-brand text-white hover:bg-tnpsc-brand-hover' },
   { label: '+ Notification',      path: '/admin/notifications?action=new',   color: 'bg-green-600 text-white hover:bg-green-700' },
   { label: '+ Recall Question',   path: '/admin/recall?action=new',          color: 'bg-orange-600 text-white hover:bg-orange-700' },
-  { label: '+ Syllabus Unit',     path: '/admin/syllabus',                   color: 'bg-purple-600 text-white hover:bg-purple-700' },
   { label: '+ Paper',             path: '/admin/papers/create',              color: 'bg-blue-600 text-white hover:bg-blue-700' },
-  { label: 'Attempt Reports',     path: '/admin/attempts',                   color: 'bg-white border border-surface-border text-body-text hover:bg-slate-50' },
+  { label: 'Pricing & Plans',     path: '/admin/pricing',                    color: 'bg-white border border-surface-border text-body-text hover:bg-slate-50' },
 ]
 
 const ALERT_ICON = { error: <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />, warning: <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />, info: <Info className="w-4 h-4 text-blue-500 shrink-0" /> }
@@ -143,11 +141,10 @@ export function AdminDashboard() {
           { title: 'Questions',        path: '/admin/questions',       icon: HelpCircle,desc: 'Manage the full question bank' },
           { title: 'Current Affairs',  path: '/admin/current-affairs', icon: Newspaper, desc: 'Add and publish current affairs articles' },
           { title: 'Govt Notifications',path: '/admin/notifications',  icon: BellRing,  desc: 'Manage vacancies and official notifications' },
-          { title: 'Syllabus',         path: '/admin/syllabus',        icon: BookMarked,desc: 'Build the exam syllabus hierarchy' },
           { title: 'Quick Recall',     path: '/admin/recall',          icon: Brain,     desc: 'Manage recall question bank' },
           { title: 'Users',            path: '/admin/users',           icon: Users,     desc: 'View users, manage roles' },
           { title: 'Analytics',        path: '/admin/analytics',       icon: BarChart3, desc: 'Platform-wide performance analytics' },
-          { title: 'Attempt Reports',  path: '/admin/attempts',        icon: TrendingUp,desc: 'Inspect all user exam attempts' },
+          { title: 'Pricing & Plans',  path: '/admin/pricing',         icon: TrendingUp,desc: 'Edit plan prices, offers and coupon codes' },
         ].map(({ title, path, icon: Icon, desc }) => (
           <Link key={path} to={path}
             className="bg-white p-5 rounded-2xl border border-surface-border shadow-subtle hover:shadow-card hover:border-tnpsc-brand/30 transition-all group"

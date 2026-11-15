@@ -488,6 +488,7 @@ export const questionService = {
       ].filter(Boolean)))
 
       // CRITICAL: Sanitize all text fields to remove null bytes before database insert
+      /** @type {Record<string, any>} */
       const sanitized = {
         paper_id: paperId,
         question_number: parseInt(q.question_number, 10),
@@ -532,6 +533,18 @@ export const questionService = {
         tags: qTags,
       }
 
+      // Optional 29-column fields. They are only written when the row has a value,
+      // so a missing value keeps the column's database default.
+      const parsedIdealTime = Number.parseInt(q.ideal_time_seconds, 10)
+      const parsedYear = Number.parseInt(q.year || q.exam_year, 10)
+      if (q.content_hash) sanitized.content_hash = q.content_hash
+      if (q.subject_name) sanitized.subject_name = sanitizeDatabaseText(q.subject_name)
+      if (q.sub_topic) sanitized.sub_topic = sanitizeDatabaseText(q.sub_topic)
+      if (q.question_type) sanitized.question_type = q.question_type
+      if (q.cognitive_skill) sanitized.cognitive_skill = q.cognitive_skill
+      if (Number.isFinite(parsedIdealTime)) sanitized.ideal_time_seconds = parsedIdealTime
+      if (Number.isFinite(parsedYear)) sanitized.year = parsedYear
+
       // Log null byte removal for first few questions
       if (idx < 3) {
         const hadNullBytes = [q.question_text, optA, optB, optC, optD, q.explanation]
@@ -575,7 +588,9 @@ export const questionService = {
         const strippedBatch = batch.map(({
           group_tag, group_name, unit_tag, unit_name,
           macro_topic, macro_topic_name, micro_topic, micro_topic_name,
-          micro_topic_id, exam_year, is_pyq, difficulty_level, tags, ...rest
+          micro_topic_id, exam_year, is_pyq, difficulty_level, tags,
+          unit_code, content_hash, subject_name, sub_topic, question_type,
+          cognitive_skill, ideal_time_seconds, year, ...rest
         }) => rest)
         const retryRes = await supabase
           .from('questions')
@@ -670,7 +685,13 @@ export const questionService = {
     return data || []
   },
 
-  async getAllExtractedQuestionsForAdmin({ search = '', unit = '', paperId = '', limit = 2000 } = {}) {
+  // Loads questions for the admin grid.
+  //  - examTag limits results to one group.
+  //  - search / filters are applied by the database, so they reach every row,
+  //    not just the rows already loaded in the browser.
+  //  - limit caps the rows returned (the grid asks for 400 by default, and a
+  //    larger cap when a search or filter is active).
+  async getAllExtractedQuestionsForAdmin({ search = '', paperId = '', limit = 2000, examTag = '', filters = null } = {}) {
     // 1. Fetch papers for title and metadata lookup
     const { data: papersData, error: pErr } = await supabase
       .from('papers')
@@ -681,21 +702,73 @@ export const questionService = {
     const papersMap = new Map((papersData || []).map(p => [p.id, p]))
 
     // 2. Query questions from database
-    let query = supabase
-      .from('questions')
-      .select('id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, exam_tag, group_tag, group_name, exam_year, is_pyq, difficulty_level, unit_tag, unit_name, macro_topic, macro_topic_name, micro_topic, micro_topic_name, created_at')
-      .order('created_at', { ascending: false })
+    const BASE_COLUMNS = 'id, paper_id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, source_pdf, page_number, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, exam_tag, group_tag, group_name, exam_year, is_pyq, source_type, difficulty_level, unit_tag, unit_name, macro_topic, macro_topic_name, micro_topic, micro_topic_name, created_at'
+    const EXTRA_COLUMNS = 'unit_code, content_hash, subject_name, sub_topic, question_type, cognitive_skill, ideal_time_seconds'
 
-    if (paperId && paperId !== 'all') {
-      query = query.eq('paper_id', paperId)
+    // PostgREST filter syntax uses commas and parentheses, so strip them from user text.
+    const cleanTerm = (value) => String(value || '').trim().replace(/[,()%*\\]/g, ' ').trim()
+    const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+    const applyFilters = (query) => {
+      const f = filters || {}
+      if (examTag) query = query.eq('exam_tag', examTag)
+      if (paperId && paperId !== 'all') query = query.eq('paper_id', paperId)
+      if (f.source && f.source !== 'all') query = query.eq('source_type', f.source)
+      if (f.years?.length) query = query.in('exam_year', f.years.map(String))
+      if (f.yearFrom) query = query.gte('exam_year', String(f.yearFrom))
+      if (f.yearTo) query = query.lte('exam_year', String(f.yearTo))
+      if (f.unit?.length) query = query.in('unit_code', f.unit)
+      if (f.macro?.length) query = query.in('macro_topic', f.macro)
+      if (f.micro?.length) query = query.in('micro_topic', f.micro)
+      if (f.key?.length) query = query.in('correct_option', f.key.filter(k => k !== 'E'))
+      if (f.difficulty?.length) {
+        query = query.or(f.difficulty.map(d => `difficulty_level.ilike.${cleanTerm(d)}`).join(','))
+      }
+      const columnText = cleanTerm(f.text)
+      if (columnText) {
+        query = query.or(`question_text.ilike.%${columnText}%,question_text_tamil.ilike.%${columnText}%`)
+      }
+      const term = cleanTerm(search)
+      if (term) {
+        const parts = [
+          `question_text.ilike.%${term}%`,
+          `question_text_tamil.ilike.%${term}%`,
+          `unit_code.ilike.%${term}%`,
+          `macro_topic.ilike.%${term}%`,
+          `micro_topic.ilike.%${term}%`,
+        ]
+        if (UUID_PATTERN.test(term)) parts.push(`id.eq.${term}`)
+        query = query.or(parts.join(','))
+      }
+      return query
     }
 
-    if (limit) {
-      query = query.limit(limit)
+    // Supabase returns at most 1000 rows per request, so page through the result.
+    const fetchRows = async (columns) => {
+      const CHUNK = 1000
+      const cap = limit || CHUNK
+      const rows = []
+      while (rows.length < cap) {
+        const from = rows.length
+        const to = Math.min(from + CHUNK, cap) - 1
+        const { data, error } = await applyFilters(supabase.from('questions').select(columns))
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (error) return { error }
+        rows.push(...(data || []))
+        if (!data || data.length < to - from + 1) break
+      }
+      return { rows }
     }
 
-    const { data: rawQuestions, error: qErr } = await query
-    if (qErr) throw qErr
+    let result = await fetchRows(`${BASE_COLUMNS}, ${EXTRA_COLUMNS}`)
+    if (result.error && (result.error.code === '42703' || String(result.error.message).toLowerCase().includes('column'))) {
+      console.warn('[questionService] Optional columns missing, loading base columns only:', result.error.message)
+      result = await fetchRows(BASE_COLUMNS)
+    }
+    if (result.error) throw result.error
+    const rawQuestions = result.rows
 
     // 3. Enrich each question with Level 1, 2, and 3 taxonomy
     const enriched = (rawQuestions || []).map((q) => {
@@ -747,6 +820,92 @@ export const questionService = {
       questions: enriched,
       papers: papersData || [],
       totalCount: enriched.length,
+    }
+  },
+
+  // Saves exactly the given columns for one question. Used by inline grid edits,
+  // so nothing else on the row (explanation metadata, taxonomy) is rewritten.
+  async updateQuestionFields(questionId, fields) {
+    if (!questionId) throw new Error('Question ID is required')
+    const payload = { ...fields, updated_at: new Date().toISOString() }
+    const { data, error } = await supabase
+      .from('questions')
+      .update(payload)
+      .eq('id', questionId)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  // True when an official PYQ question with this SHA-256 hash already exists
+  // (optionally ignoring one question, such as the one being edited).
+  async hasPyqDuplicate(contentHash, excludeId) {
+    if (!contentHash) return false
+    let query = supabase
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('content_hash', contentHash)
+      .eq('source_type', 'PYQ')
+    if (excludeId) query = query.neq('id', excludeId)
+    const { count, error } = await query
+    if (error) {
+      console.warn('[questionService] PYQ duplicate check failed:', error.message)
+      return false
+    }
+    return (count || 0) > 0
+  },
+
+  // Real question counts stored for one exam group: the group total and the
+  // number per unit_code.
+  async getGroupInventory(examTag, unitCodes = []) {
+    const countFor = async (narrow) => {
+      let query = supabase
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .eq('exam_tag', examTag)
+      if (narrow) query = narrow(query)
+      const { count, error } = await query
+      if (error) throw error
+      return count || 0
+    }
+
+    const total = await countFor()
+    const byUnit = {}
+    await Promise.all(unitCodes.map(async (code) => {
+      byUnit[code] = await countFor(query => query.eq('unit_code', code))
+    }))
+    return { total, byUnit }
+  },
+
+  // Distinct values for the grid's filter menus, taken from the whole group
+  // (not only the rows currently loaded).
+  async getGridFacets(examTag) {
+    const sets = { unit: new Set(), macro: new Set(), micro: new Set(), years: new Set() }
+    const CHUNK = 1000
+    const MAX_ROWS = 10000
+    for (let from = 0; from < MAX_ROWS; from += CHUNK) {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('unit_code, macro_topic, micro_topic, exam_year')
+        .eq('exam_tag', examTag)
+        .order('id', { ascending: true })
+        .range(from, from + CHUNK - 1)
+      if (error) throw error
+      ;(data || []).forEach(row => {
+        if (row.unit_code) sets.unit.add(row.unit_code)
+        if (row.macro_topic) sets.macro.add(row.macro_topic)
+        if (row.micro_topic) sets.micro.add(row.micro_topic)
+        if (row.exam_year) sets.years.add(String(row.exam_year))
+      })
+      if (!data || data.length < CHUNK) break
+    }
+    const sorted = (set) => Array.from(set).sort()
+    return {
+      unit: sorted(sets.unit),
+      macro: sorted(sets.macro),
+      micro: sorted(sets.micro),
+      years: sorted(sets.years),
     }
   },
 

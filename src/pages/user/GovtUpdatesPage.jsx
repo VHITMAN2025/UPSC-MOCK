@@ -8,7 +8,8 @@ import { govtNotificationService } from '../../services/tnpscService'
 import { Drawer } from '../../components/ui/Drawer'
 import { formatDate } from '../../lib/utils'
 
-const DEPTS = ['all', 'TNPSC', 'TRB', 'TNEB', 'TNUSRB']
+// Same departments the admin form offers, so every tag can be filtered here
+const DEPTS = ['all', 'TNPSC', 'TRB', 'TNEB', 'TNUSRB', 'Other']
 const STATUSES = ['all', 'active', 'upcoming', 'closed', 'results_out']
 
 const STATUS_BADGE = {

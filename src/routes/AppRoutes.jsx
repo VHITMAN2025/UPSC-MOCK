@@ -35,15 +35,13 @@ import { HelpContactPage }    from '../pages/user/HelpContactPage'
 
 // ── Admin Pages ───────────────────────────────────────────────────────────────
 import { AdminDashboard }         from '../pages/admin/AdminDashboard'
-import { AdminPapersPage }        from '../pages/admin/AdminPapersPage'
 import { CreateEditPaperPage }    from '../pages/admin/CreateEditPaperPage'
 import { QuestionManagementPage } from '../pages/admin/QuestionManagementPage'
 import { ImportQuestionsPage }    from '../pages/admin/ImportQuestionsPage'
-import { AdminAttemptsPage }      from '../pages/admin/AdminAttemptsPage'
+import { AdminPricingPage }       from '../pages/admin/AdminPricingPage'
 // TNPSC Admin CMS pages
 import { AdminCurrentAffairsPage } from '../pages/admin/AdminCurrentAffairsPage'
 import { AdminNotificationsPage }  from '../pages/admin/AdminNotificationsPage'
-import { AdminSyllabusPage }       from '../pages/admin/AdminSyllabusPage'
 import { AdminRecallPage }         from '../pages/admin/AdminRecallPage'
 import { AdminUsersPage }          from '../pages/admin/AdminUsersPage'
 import { AdminAnalyticsPage }      from '../pages/admin/AdminAnalyticsPage'
@@ -93,16 +91,19 @@ export function AppRoutes() {
       {/* ── Admin ── */}
       <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
         <Route path="/admin"                              element={<AdminDashboard />} />
-        <Route path="/admin/papers"                       element={<AdminPapersPage />} />
+        {/* The papers list now lives inside the Extracted Questions tab */}
+        <Route path="/admin/papers"                       element={<Navigate to="/admin/questions" replace />} />
         <Route path="/admin/papers/create"                element={<CreateEditPaperPage />} />
         <Route path="/admin/papers/:paperId/edit"         element={<CreateEditPaperPage />} />
         <Route path="/admin/papers/:paperId/questions"    element={<QuestionManagementPage />} />
         <Route path="/admin/papers/:paperId/import"       element={<ImportQuestionsPage />} />
-        <Route path="/admin/attempts"                     element={<AdminAttemptsPage />} />
+        {/* Attempts was replaced by Pricing & Plans; Syllabus was removed from the admin panel */}
+        <Route path="/admin/attempts"                     element={<Navigate to="/admin/pricing" replace />} />
+        <Route path="/admin/syllabus"                     element={<Navigate to="/admin/questions" replace />} />
+        <Route path="/admin/pricing"                      element={<AdminPricingPage />} />
         {/* TNPSC CMS */}
         <Route path="/admin/current-affairs"              element={<AdminCurrentAffairsPage />} />
         <Route path="/admin/notifications"                element={<AdminNotificationsPage />} />
-        <Route path="/admin/syllabus"                     element={<AdminSyllabusPage />} />
         <Route path="/admin/recall"                       element={<AdminRecallPage />} />
         <Route path="/admin/users"                        element={<AdminUsersPage />} />
         <Route path="/admin/analytics"                    element={<AdminAnalyticsPage />} />

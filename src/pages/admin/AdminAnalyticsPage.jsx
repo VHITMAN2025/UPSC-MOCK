@@ -1,151 +1,191 @@
 import React, { useState, useEffect } from 'react'
-import { BarChart3, TrendingUp, Users, CheckCircle2, XCircle, Minus, Loader2 } from 'lucide-react'
+import { IndianRupee, UserPlus, Activity, Database, Loader2 } from 'lucide-react'
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
-import { adminAnalyticsService } from '../../services/adminService'
-import { useApp } from '../../contexts/AppContext'
+import { executiveService } from '../../services/subscriptionService'
+
+const rupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
+const percent = (part, whole) => (whole > 0 ? (100 * part) / whole : 0)
+
+const RANGES = [
+  { days: 7, label: 'Last 7 Days' },
+  { days: 30, label: 'This Month' },
+  { days: 180, label: 'Last 6 Months' },
+]
+
+// Targets the question bank is measured against. These are placeholders until
+// the real per-group goals are confirmed.
+const QUESTION_BANK_TARGETS = [
+  { tag: 'TNPSC_GROUP_1', label: 'Group 1', target: 5000 },
+  { tag: 'TNPSC_GROUP_2', label: 'Group 2 / 2A', target: 5000 },
+  { tag: 'TNPSC_GROUP_4', label: 'Group 4 & VAO', target: 5000 },
+]
+
+function KpiCard({ label, value, hint, icon: Icon }) {
+  return (
+    <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-5">
+      <div className="flex items-start justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-body-secondary">{label}</p>
+        <span className="w-8 h-8 rounded-lg bg-tnpsc-brand-light text-tnpsc-brand flex items-center justify-center">
+          <Icon className="w-4 h-4" />
+        </span>
+      </div>
+      <p className="mt-2 text-3xl font-black text-body-text">{value}</p>
+      <p className="mt-1 text-xs text-body-secondary">{hint}</p>
+    </div>
+  )
+}
 
 export function AdminAnalyticsPage() {
-  const { toast } = useApp()
-  const [data, setData]     = useState(null)
+  const [days, setDays] = useState(30)
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [days])
 
   async function load() {
     setLoading(true)
-    try { setData(await adminAnalyticsService.get()) }
-    catch (err) { toast.error(err.message) }
-    finally { setLoading(false) }
+    setError(null)
+    try {
+      setData(await executiveService.getOverview(days))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-tnpsc-brand" /></div>
+  if (error) {
+    return (
+      <div className="max-w-xl mx-auto mt-10 p-5 rounded-2xl border border-amber-200 bg-amber-50 text-sm text-amber-900">
+        <p className="font-bold mb-1">The overview could not be loaded</p>
+        <p>{error}</p>
+        <button onClick={load} className="mt-3 px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-xs font-bold">Try again</button>
+      </div>
+    )
+  }
 
-  if (!data?.hasData) return (
-    <div className="space-y-4 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <BarChart3 className="w-6 h-6 text-tnpsc-brand" />
-        <h1 className="text-xl font-bold text-body-text">Platform Analytics</h1>
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-surface-border p-5 shadow-subtle">
-          <p className="text-2xl font-bold text-body-text">{data?.totalUsers ?? 0}</p>
-          <p className="text-sm text-body-secondary mt-1">Total Students</p>
-        </div>
-        <div className="bg-white rounded-xl border border-surface-border p-5 shadow-subtle">
-          <p className="text-2xl font-bold text-body-text">{data?.newUsersWeek ?? 0}</p>
-          <p className="text-sm text-body-secondary mt-1">New This Week</p>
-        </div>
-      </div>
-      <div className="bg-white rounded-2xl border border-surface-border p-12 text-center">
-        <BarChart3 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-        <p className="text-sm text-body-secondary font-semibold">No attempt data yet</p>
-        <p className="text-xs text-body-secondary mt-1">Analytics will populate once students complete attempts.</p>
-      </div>
-    </div>
-  )
+  const d = data || {}
+  const totalUsers = Number(d.total_users || 0)
+  const paying = Number(d.paying_subscribers || 0)
+  const withTest = Number(d.users_with_a_test || 0)
+  const questionsTotal = Number(d.questions_total || 0)
+  const bilingualPct = percent(Number(d.questions_bilingual || 0), questionsTotal)
+  const byGroup = d.questions_by_group || {}
+  const chartData = (d.series || []).map(row => ({
+    month: row.label,
+    'Free signups': Number(row.signups),
+    'Paid upgrades': Number(row.upgrades),
+    mrrAdded: Number(row.mrr_added),
+  }))
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BarChart3 className="w-6 h-6 text-tnpsc-brand" />
-          <div>
-            <h1 className="text-xl font-bold text-body-text">Platform Analytics</h1>
-            <p className="text-xs text-body-secondary">Based on {data.totalAttempts} completed attempts</p>
-          </div>
+    <div className="space-y-5 animate-fade-in">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-body-text">Executive SaaS Overview</h1>
+          <p className="text-xs text-body-secondary">Revenue, signups, conversion and question bank at a glance.</p>
         </div>
-        <button onClick={load} className="text-xs text-tnpsc-brand hover:underline font-semibold">Refresh</button>
-      </div>
-
-      {/* Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Students',  value: data.totalUsers,     icon: Users,         color: 'text-tnpsc-brand bg-tnpsc-brand-light' },
-          { label: 'New This Week',   value: data.newUsersWeek,   icon: TrendingUp,    color: 'text-emerald-700 bg-emerald-50' },
-          { label: 'Total Attempts',  value: data.totalAttempts,  icon: BarChart3,     color: 'text-blue-700 bg-blue-50' },
-          { label: 'Avg Accuracy',    value: `${data.avgAccuracy}%`, icon: CheckCircle2, color: 'text-purple-700 bg-purple-50' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-surface-border p-4 shadow-subtle">
-            <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-3`}>
-              <Icon className="w-4 h-4" />
-            </div>
-            <p className="text-2xl font-bold text-body-text">{value}</p>
-            <p className="text-xs text-body-secondary mt-0.5">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Error breakdown */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Correct',  value: data.totalCorrect,  color: 'bg-emerald-50 border-emerald-200', textColor: 'text-emerald-700', icon: CheckCircle2 },
-          { label: 'Wrong',    value: data.totalWrong,    color: 'bg-red-50 border-red-200',         textColor: 'text-red-600',     icon: XCircle },
-          { label: 'Skipped',  value: data.totalSkipped,  color: 'bg-slate-50 border-slate-200',     textColor: 'text-slate-600',   icon: Minus },
-        ].map(({ label, value, color, textColor, icon: Icon }) => (
-          <div key={label} className={`rounded-xl border p-4 text-center ${color}`}>
-            <Icon className={`w-6 h-6 mx-auto mb-2 ${textColor}`} />
-            <p className="text-xl font-bold text-body-text">{value.toLocaleString()}</p>
-            <p className="text-xs text-body-secondary">{label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Daily trend */}
-      {data.trend?.length > 1 && (
-        <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-5">
-          <h3 className="text-sm font-bold text-body-text mb-4 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-tnpsc-brand" /> Daily Attempt Trend (Last 14 days)
-          </h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={data.trend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={d => d.slice(5)} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="right" orientation="right" domain={[0,100]} tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Legend />
-              <Bar yAxisId="left" dataKey="attempts" fill="#635BFF" opacity={0.7} name="Attempts" />
-              <Line yAxisId="right" type="monotone" dataKey="accuracy" stroke="#16a34a" strokeWidth={2} dot={false} name="Accuracy %" />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="inline-flex rounded-xl border border-surface-border bg-white p-0.5 text-xs font-bold">
+          {RANGES.map(r => (
+            <button key={r.days} onClick={() => setDays(r.days)}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                days === r.days ? 'bg-tnpsc-brand text-white' : 'text-body-secondary hover:text-body-text'
+              }`}>
+              {r.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Subject breakdown */}
-      {data.subjects?.length > 0 && (
-        <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-5">
-          <h3 className="text-sm font-bold text-body-text mb-4">Subject Accuracy Breakdown</h3>
-          <div className="space-y-3">
-            {data.subjects.map(s => (
-              <div key={s.subject}>
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-medium text-body-text">{s.subject}</span>
-                  <span className="text-body-secondary">{s.accuracy}% · {s.attempts.toLocaleString()} attempts</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${s.accuracy}%`,
-                      background: Number(s.accuracy) >= 70 ? '#16a34a' : Number(s.accuracy) >= 50 ? '#635BFF' : '#dc2626',
-                    }}
-                  />
-                </div>
+      {loading && !data ? (
+        <div className="flex justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-tnpsc-brand" /></div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <KpiCard icon={IndianRupee} label="Monthly Recurring Rev"
+              value={rupees(d.mrr)} hint={`${paying} paying subscriber${paying === 1 ? '' : 's'}`} />
+            <KpiCard icon={UserPlus} label="New User Signups"
+              value={Number(d.new_signups || 0).toLocaleString('en-IN')}
+              hint={`${totalUsers.toLocaleString('en-IN')} total · ${Number(d.daily_active_users || 0)} active in the last 24 hours`} />
+            <KpiCard icon={Activity} label="Free-to-Paid Conversion"
+              value={`${percent(paying, totalUsers).toFixed(1)}%`}
+              hint={`${Number(d.tests_completed || 0).toLocaleString('en-IN')} mock exam attempts completed`} />
+            <KpiCard icon={Database} label="Master Question Bank"
+              value={questionsTotal.toLocaleString('en-IN')}
+              hint={`${bilingualPct.toFixed(1)}% bilingual (EN + TA)`} />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            {/* Growth chart + funnel */}
+            <div className="xl:col-span-2 bg-white rounded-2xl border border-surface-border shadow-subtle p-5 space-y-4">
+              <div>
+                <h2 className="text-sm font-black text-body-text">User Acquisition &amp; MRR Growth</h2>
+                <p className="text-xs text-body-secondary">New free signups vs. paid upgrades, last 6 months.</p>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(value, name, item) => (
+                      name === 'Paid upgrades'
+                        ? [`${value} (${rupees(item.payload.mrrAdded)} MRR added)`, name]
+                        : [value, name]
+                    )} />
+                    <Legend />
+                    <Bar dataKey="Free signups" fill="#c7d2fe" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Paid upgrades" fill="#635bff" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
 
-      {/* Avg score */}
-      <div className="bg-tnpsc-brand-light rounded-2xl border border-tnpsc-brand/20 p-5">
-        <h3 className="text-sm font-bold text-tnpsc-brand mb-1">Platform Average Score</h3>
-        <p className="text-4xl font-black text-tnpsc-brand">{data.avgScore}%</p>
-        <p className="text-xs text-body-secondary mt-1">Across all {data.totalAttempts} completed attempts</p>
-      </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {[
+                  { step: '1. Registered Users', value: totalUsers, note: 'All accounts' },
+                  { step: '2. Free Test Taken', value: withTest, note: `${percent(withTest, totalUsers).toFixed(1)}% of registered` },
+                  { step: '3. Paid Subscribers', value: paying, note: `${percent(paying, withTest).toFixed(1)}% of test takers` },
+                ].map(item => (
+                  <div key={item.step} className="rounded-xl border border-surface-border bg-slate-50 p-3 text-center">
+                    <p className="text-[11px] text-body-secondary font-semibold">{item.step}</p>
+                    <p className="text-xl font-black text-body-text">{item.value.toLocaleString('en-IN')}</p>
+                    <p className="text-[11px] text-body-secondary">{item.note}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Question bank progress */}
+            <div className="bg-white rounded-2xl border border-surface-border shadow-subtle p-5 space-y-4">
+              <div>
+                <h2 className="text-sm font-black text-body-text">Question Bank Targets</h2>
+                <p className="text-xs text-body-secondary">Questions stored per exam group.</p>
+              </div>
+              {QUESTION_BANK_TARGETS.map(row => {
+                const count = Number(byGroup[row.tag] || 0)
+                const pct = Math.min(100, percent(count, row.target))
+                return (
+                  <div key={row.tag}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-body-text">{row.label}</span>
+                      <span className="text-body-secondary">{count.toLocaleString('en-IN')} / {row.target.toLocaleString('en-IN')} ({pct.toFixed(0)}%)</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-tnpsc-brand" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+              {Number(byGroup.UNTAGGED || 0) > 0 && (
+                <p className="text-[11px] text-amber-700">{Number(byGroup.UNTAGGED)} questions have no exam group.</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

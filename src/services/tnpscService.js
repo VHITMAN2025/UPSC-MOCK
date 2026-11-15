@@ -1175,7 +1175,36 @@ export const currentAffairsService = {
 }
 
 // ─── Government Notifications ────────────────────────────────────────────────
+
+// A plain "YYYY-MM-DD" date is read as a local calendar day (not UTC), so the
+// "Apply by" day itself still counts as open all the way to midnight.
+function endOfDay(value) {
+  const text = String(value)
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T00:00:00`) : new Date(text)
+  date.setHours(23, 59, 59, 999)
+  return date
+}
+
+/**
+ * A notification expires automatically once its last date has passed: the later
+ * of "Apply by" and the exam date. One with no dates never expires by date.
+ */
+export function isNotificationExpired(notification, now = new Date()) {
+  const dates = [notification?.application_end, notification?.exam_date].filter(Boolean)
+  if (dates.length === 0) return false
+  const lastDay = Math.max(...dates.map(d => endOfDay(d).getTime()))
+  return lastDay < now.getTime()
+}
+
 export const govtNotificationService = {
+  /**
+   * Notifications for the student feed. Anything past its last date is hidden
+   * automatically, so students only see notices they can still act on:
+   *  - All / Active / Upcoming: live notices only.
+   *  - Closed: notices an admin closed, plus those that expired by date.
+   *  - Results Out: shown as the admin set them.
+   * Pass includeExpired for admin screens.
+   */
   async getAll(filters = {}) {
     let q = supabase
       .from('government_notifications')
@@ -1185,15 +1214,24 @@ export const govtNotificationService = {
     if (filters.department && filters.department !== 'all') {
       q = q.eq('department', filters.department)
     }
-    if (filters.status && filters.status !== 'all') {
-      q = q.eq('status', filters.status)
-    }
     if (filters.search) {
       q = q.ilike('title', `%${filters.search}%`)
     }
     const { data, error } = await q
     if (error) throw error
-    return data ?? []
+
+    const rows = data ?? []
+    if (filters.includeExpired) {
+      return filters.status && filters.status !== 'all' ? rows.filter(n => n.status === filters.status) : rows
+    }
+
+    const status = filters.status && filters.status !== 'all' ? filters.status : null
+    if (status === 'results_out') return rows.filter(n => n.status === 'results_out')
+    if (status === 'closed') {
+      return rows.filter(n => n.status === 'closed' || (isNotificationExpired(n) && n.status !== 'results_out'))
+    }
+    const live = rows.filter(n => !isNotificationExpired(n))
+    return status ? live.filter(n => n.status === status) : live
   },
 
   async getById(id) {
@@ -1273,6 +1311,27 @@ export const syllabusService = {
 }
 
 // ─── Quick Recall ────────────────────────────────────────────────────────────
+// Each user waits exactly 24 hours after finishing a set before the next one unlocks.
+const QUICK_RECALL_COOLDOWN_MS = 24 * 60 * 60 * 1000
+
+// Unbiased random pick of `count` items (Fisher-Yates with a secure random source).
+function pickRandom(list, count) {
+  const items = [...list]
+  const randomBelow = (max) => {
+    if (globalThis.crypto?.getRandomValues) {
+      const buffer = new Uint32Array(1)
+      globalThis.crypto.getRandomValues(buffer)
+      return buffer[0] % max
+    }
+    return Math.floor(Math.random() * max)
+  }
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = randomBelow(i + 1)
+    ;[items[i], items[j]] = [items[j], items[i]]
+  }
+  return items.slice(0, count)
+}
+
 export const quickRecallService = {
   getTodayDateStr() {
     const d = new Date()
@@ -1289,295 +1348,179 @@ export const quickRecallService = {
    */
   async getDailyStatus(userId, examContext) {
     if (!userId) return { status: 'NOT_STARTED' }
-    const todayStr = this.getTodayDateStr()
-    const todayStart = `${todayStr}T00:00:00.000`
-
-    const localKey = `qr_daily_${userId}_${todayStr}`
-    let cached = null
-    try {
-      const item = localStorage.getItem(localKey)
-      if (item) cached = JSON.parse(item)
-    } catch (e) {}
 
     try {
+      // The newest session decides the state. Every user has their own rolling
+      // 24-hour cooldown, counted from the moment THEY finished their last set
+      // (not from midnight, and not shared between users).
       const { data: sessions } = await supabase
         .from('quick_recall_sessions')
         .select('*')
         .eq('user_id', userId)
-        .gte('started_at', todayStart)
         .order('started_at', { ascending: false })
         .limit(1)
 
       const session = sessions?.[0]
+      if (!session) return { status: 'NOT_STARTED' }
 
-      if (session) {
+      const loadAnswers = async () => {
         const { data: answers } = await supabase
           .from('quick_recall_answers')
           .select('*')
           .eq('session_id', session.id)
           .order('question_index', { ascending: true })
+        return answers || []
+      }
 
-        if (session.completed) {
-          return {
-            status: 'COMPLETED_TODAY',
-            session,
-            questions: session.questions_json || [],
-            answers: answers || [],
-            score: session.final_score ?? (answers || []).filter(a => a.is_correct).length,
-            streakAtEnd: session.streak_at_end,
-            points: session.recall_points,
-          }
-        }
+      if (session.completed) {
+        // Sessions closed without a completion time (expired or abandoned) never lock the user.
+        if (!session.completed_at) return { status: 'NOT_STARTED' }
 
-        // Check if session started > 24 hours ago (expired)
-        const ageMs = Date.now() - new Date(session.started_at).getTime()
-        if (ageMs > 24 * 60 * 60 * 1000) {
-          await supabase
-            .from('quick_recall_sessions')
-            .update({ completed: true, final_score: 0 })
-            .eq('id', session.id)
-          return { status: 'EXPIRED' }
-        }
+        const nextUnlockAt = new Date(new Date(session.completed_at).getTime() + QUICK_RECALL_COOLDOWN_MS)
+        if (nextUnlockAt.getTime() <= Date.now()) return { status: 'NOT_STARTED' }
 
+        const answers = await loadAnswers()
         return {
-          status: 'IN_PROGRESS',
+          status: 'COMPLETED_TODAY',
           session,
           questions: session.questions_json || [],
-          answers: answers || [],
-          resumeIndex: (answers || []).length,
+          answers,
+          score: session.final_score ?? answers.filter(a => a.is_correct).length,
+          streakAtEnd: session.streak_at_end,
+          points: session.recall_points,
+          nextUnlockAt: nextUnlockAt.toISOString(),
         }
       }
 
-      // Expire old hanging open sessions from past days
-      const { data: oldOpen } = await supabase
-        .from('quick_recall_sessions')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('completed', false)
-        .lt('started_at', todayStart)
-        .limit(5)
-
-      if (oldOpen && oldOpen.length > 0) {
+      // Started but never finished: resume it, unless it has been open for over 24 hours.
+      const ageMs = Date.now() - new Date(session.started_at).getTime()
+      if (ageMs > QUICK_RECALL_COOLDOWN_MS) {
         await supabase
           .from('quick_recall_sessions')
           .update({ completed: true, final_score: 0 })
-          .in('id', oldOpen.map(o => o.id))
+          .eq('id', session.id)
+        return { status: 'EXPIRED' }
+      }
+
+      const answers = await loadAnswers()
+      return {
+        status: 'IN_PROGRESS',
+        session,
+        questions: session.questions_json || [],
+        answers,
+        resumeIndex: answers.length,
       }
     } catch (err) {
       throw new Error(`Could not load Quick Recall from database: ${err.message}`)
     }
-
-    return { status: 'NOT_STARTED' }
   },
 
   /**
-   * Generates 5 personalized questions:
-   * - Mix: ~50% PYQ + ~50% Synthetic (2-3 PYQ + 3-2 Synthetic)
-   * - Personalization:
-   *   1. Spaced Repetition: Previous wrong answers prioritized
-   *   2. Long-unseen questions prioritized over recently seen
-   *   3. Topic performance: weak topics given boost
+   * Picks 5 random questions the user has never been served before.
+   * - One common pool for every exam group (the recall_questions table).
+   * - Questions already in this user's history are excluded.
+   * - Each call shuffles on its own, so two users opening Quick Recall at the
+   *   same moment receive different sets.
+   * - Only when the user has seen the whole pool are least-recently-seen
+   *   questions served again.
    */
   async fetchPersonalizedRecallQuestions(userId, examContext) {
-    const wrongTexts = new Set()
-    const recentTexts = new Set()
-    const weakTopics = new Set()
-    const examTag = examContext?.includes('Group 1') ? 'TNPSC_GROUP_1' : examContext?.includes('Group 2') ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4'
+    const PAGE = 1000
+    const MAX_PAGES = 50
 
-    // Fetch quick recall history for zero repetition
-    let recallHistoryMap = new Map()
-    if (userId) {
-      try {
-        recallHistoryMap = await questionHistoryService.getQuickRecallHistory(userId, examTag)
-      } catch (e) {
-        console.warn('Quick recall history fetch fallback:', e)
-      }
-
-      try {
-        const [wrongRes, recentRes, weakRes] = await Promise.allSettled([
-          supabase
-            .from('quick_recall_answers')
-            .select('question_text')
-            .eq('is_correct', false)
-            .limit(50),
-          supabase
-            .from('quick_recall_answers')
-            .select('question_text')
-            .order('answered_at', { ascending: false })
-            .limit(30),
-          supabase
-            .from('user_syllabus_progress')
-            .select('topic_id, syllabus_topics(topic_name)')
-            .eq('user_id', userId)
-            .in('status', ['needs_revision', 'not_started'])
-            .limit(10),
-        ])
-
-        if (wrongRes.status === 'fulfilled' && wrongRes.value.data) {
-          wrongRes.value.data.forEach(w => {
-            if (w.question_text) wrongTexts.add(w.question_text.trim().toLowerCase())
-          })
-        }
-        if (recentRes.status === 'fulfilled' && recentRes.value.data) {
-          recentRes.value.data.forEach(r => {
-            if (r.question_text) recentTexts.add(r.question_text.trim().toLowerCase())
-          })
-        }
-        if (weakRes.status === 'fulfilled' && weakRes.value.data) {
-          weakRes.value.data.forEach(wt => {
-            const name = wt.syllabus_topics?.topic_name
-            if (name) weakTopics.add(name.toLowerCase())
-          })
-        }
-      } catch (e) {
-        console.warn('Personalization signals fetch fallback:', e)
-      }
-    }
-
-    // 1. Fetch PYQ pool candidates
-    let pyqCandidates = []
-    try {
-      const { data: dbPyq } = await supabase
-        .from('questions')
-        .select('id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, papers!inner(title, is_pyq, exam_name)')
-        .eq('papers.is_pyq', true)
-        .not('correct_option', 'is', null)
-        .limit(60)
-
-      if (dbPyq && dbPyq.length > 0) {
-        const formatted = dbPyq.map(q => ({
-          id: q.id,
-          question_text: q.question_text,
-          option_a: q.option_a,
-          option_b: q.option_b,
-          option_c: q.option_c,
-          option_d: q.option_d,
-          correct_option: q.correct_option,
-          explanation: q.explanation || 'Official Previous Year Question.',
-          question_type: 'PYQ',
-          is_pyq: true,
-          exam_source: q.papers?.title || 'PYQ Archive',
-        }))
-        pyqCandidates = formatted
-      }
-    } catch (e) {
-      console.warn('DB PYQ query fallback:', e)
-    }
-
-    // 2. Fetch Synthetic/Model question candidates from recall_questions
-    let synCandidates = []
-    try {
-      const { data: dbSyn } = await supabase
+    // 1. Ids of every active question (ids only, so a 3,000+ pool stays light)
+    const poolIds = []
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const { data, error } = await supabase
         .from('recall_questions')
-        .select('id, question_text, question_ta, option_a, option_b, option_c, option_d, correct_option, explanation, subject')
+        .select('id')
         .eq('is_active', true)
-        .limit(60)
+        .order('id', { ascending: true })
+        .range(page * PAGE, page * PAGE + PAGE - 1)
+      if (error) throw new Error(`Could not load the Quick Recall question pool: ${error.message}`)
+      poolIds.push(...(data || []).map(row => row.id))
+      if (!data || data.length < PAGE) break
+    }
 
-      if (dbSyn && dbSyn.length > 0) {
-        const formatted = dbSyn.map(q => ({
-          id: q.id,
-          question_text: q.question_text,
-          question_text_tamil: q.question_ta,
-          option_a: q.option_a,
-          option_b: q.option_b,
-          option_c: q.option_c,
-          option_d: q.option_d,
-          correct_option: q.correct_option,
-          explanation: q.explanation || 'Synthetic / Model Revision Question.',
-          question_type: 'SYNTHETIC',
-          is_pyq: false,
-          subject: q.subject || 'General Knowledge',
-        }))
-        synCandidates = formatted
+    // 2. What this user has already been served, across all groups
+    const seen = new Map()
+    if (userId) {
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const { data, error } = await supabase
+          .from('user_quick_recall_history')
+          .select('question_id, times_seen, last_seen_at')
+          .eq('user_id', userId)
+          .order('question_id', { ascending: true })
+          .range(page * PAGE, page * PAGE + PAGE - 1)
+        if (error) {
+          console.warn('Quick recall history fetch fallback:', error.message)
+          break
+        }
+        ;(data || []).forEach(row => seen.set(String(row.question_id), row))
+        if (!data || data.length < PAGE) break
       }
-    } catch (e) {
-      console.warn('DB Synthetic query fallback:', e)
     }
 
-    // Per-user deterministic hash for randomization (User 1 and User 2 receive different sets)
-    const userRandomScore = (q) => {
-      const seedStr = (userId || 'guest') + '_' + (q.id || q.question_text)
-      let hash = 0
-      for (let i = 0; i < seedStr.length; i++) {
-        hash = (hash * 31 + seedStr.charCodeAt(i)) >>> 0
-      }
-      return (hash % 1000) / 100
+    // 3. Random unseen questions; recycle the oldest-seen only if the pool is used up
+    const unseen = poolIds.filter(id => !seen.has(String(id)))
+    let chosen = pickRandom(unseen, 5)
+    if (chosen.length < 5) {
+      const recycled = poolIds
+        .filter(id => seen.has(String(id)) && !chosen.includes(id))
+        .sort((a, b) => {
+          const sa = seen.get(String(a))
+          const sb = seen.get(String(b))
+          return (sa.times_seen - sb.times_seen) || (new Date(sa.last_seen_at) - new Date(sb.last_seen_at))
+        })
+      chosen = [...chosen, ...recycled.slice(0, 5 - chosen.length)]
+    }
+    if (chosen.length < 5) {
+      throw new Error(`Quick Recall needs 5 approved questions; only ${poolIds.length} are available.`)
     }
 
-    // 3. Score candidates with non-repetition & personalization
-    const scoreCandidate = (q) => {
-      let score = userRandomScore(q)
-      const qId = String(q.id || '')
-      const txt = (q.question_text || '').trim().toLowerCase()
-
-      const seenHist = recallHistoryMap.get(qId) || (txt ? recallHistoryMap.get(txt) : null)
-      if (seenHist) {
-        // Seen in quick recall before: heavily penalize so unseen questions are chosen first
-        score -= (seenHist.times_seen || 1) * 200
-      } else {
-        score += 150 // Strong bonus for completely unseen questions (Zero Repetition)
-      }
-
-      // High priority for previous mistakes (Spaced repetition)
-      if (wrongTexts.has(txt)) {
-        score += 80
-        q.is_previous_wrong = true
-      }
-      // Avoid recently answered in past 30
-      if (recentTexts.has(txt)) {
-        score -= 40
-      }
-      // Weak topic match bonus
-      if (q.subject && weakTopics.has(q.subject.toLowerCase())) {
-        score += 30
-      }
-      return score
+    // 4. Load just the chosen rows (Tamil options exist once migration 00018 has run)
+    const baseColumns = 'id, question_text, question_ta, option_a, option_b, option_c, option_d, correct_option, explanation, subject'
+    const tamilColumns = 'option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil'
+    let { data: rows, error: rowsError } = await supabase
+      .from('recall_questions')
+      .select(`${baseColumns}, ${tamilColumns}`)
+      .in('id', chosen)
+    if (rowsError && rowsError.code === '42703') {
+      ;({ data: rows, error: rowsError } = await supabase
+        .from('recall_questions')
+        .select(baseColumns)
+        .in('id', chosen))
     }
+    if (rowsError) throw new Error(`Could not load Quick Recall questions: ${rowsError.message}`)
 
-    pyqCandidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
-    synCandidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
+    const byId = new Map((rows || []).map(row => [row.id, row]))
+    const questions = chosen
+      .map(id => byId.get(id))
+      .filter(Boolean)
+      .map(q => ({
+        id: q.id,
+        question_text: q.question_text,
+        question_text_tamil: q.question_ta,
+        option_a: q.option_a,
+        option_b: q.option_b,
+        option_c: q.option_c,
+        option_d: q.option_d,
+        option_a_tamil: q.option_a_tamil,
+        option_b_tamil: q.option_b_tamil,
+        option_c_tamil: q.option_c_tamil,
+        option_d_tamil: q.option_d_tamil,
+        correct_option: q.correct_option,
+        explanation: q.explanation || 'Quick Recall revision question.',
+        explanation_tamil: q.explanation_tamil,
+        question_type: 'RECALL',
+        is_pyq: false,
+        subject: q.subject || 'General Knowledge',
+      }))
 
-    const dedup = (list) => {
-      const seen = new Set()
-      return list.filter(item => {
-        const key = item.question_text?.trim().toLowerCase()
-        if (!key || seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+    if (questions.length < 5) {
+      throw new Error(`Quick Recall needs 5 approved questions; only ${questions.length} could be loaded.`)
     }
-
-    const uniquePyqs = dedup(pyqCandidates)
-    const uniqueSyns = dedup(synCandidates)
-
-    // Mix approximately 50% PYQ + 50% Synthetic (3 PYQ + 2 Synthetic OR 2 PYQ + 3 Synthetic)
-    const pyqTargetCount = Math.random() > 0.5 ? 3 : 2
-    const synTargetCount = 5 - pyqTargetCount
-
-    let selectedPyqs = uniquePyqs.slice(0, pyqTargetCount)
-    let selectedSyns = uniqueSyns.slice(0, synTargetCount)
-
-    // Backfill if one pool doesn't have enough
-    if (selectedPyqs.length < pyqTargetCount) {
-      const deficit = pyqTargetCount - selectedPyqs.length
-      selectedSyns = uniqueSyns.slice(0, synTargetCount + deficit)
-    } else if (selectedSyns.length < synTargetCount) {
-      const deficit = synTargetCount - selectedSyns.length
-      selectedPyqs = uniquePyqs.slice(0, pyqTargetCount + deficit)
-    }
-
-    // Interleave to balance order
-    const finalSet = []
-    let pIdx = 0, sIdx = 0
-    while (finalSet.length < 5 && (pIdx < selectedPyqs.length || sIdx < selectedSyns.length)) {
-      if (pIdx < selectedPyqs.length) finalSet.push(selectedPyqs[pIdx++])
-      if (finalSet.length < 5 && sIdx < selectedSyns.length) finalSet.push(selectedSyns[sIdx++])
-    }
-
-    if (finalSet.length < 5) {
-      throw new Error(`Quick Recall needs 5 approved database questions; only ${finalSet.length} are available.`)
-    }
-    return finalSet.slice(0, 5)
+    return questions
   },
 
   /** Backwards compatibility helper */

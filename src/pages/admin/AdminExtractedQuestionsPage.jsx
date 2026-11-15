@@ -7,7 +7,9 @@ import {
   Loader2, X, Check, BookMarked, Upload, Database, Tag, ShieldCheck,
   Table, AlertTriangle, ArrowRight, Save
 } from 'lucide-react'
+import Papa from 'papaparse'
 import { questionService } from '../../services/questionService'
+import { recallGridService } from '../../services/recallGridService'
 import { paperService } from '../../services/paperService'
 import { supabase } from '../../lib/supabase'
 import { useApp } from '../../contexts/AppContext'
@@ -79,8 +81,80 @@ const RESET_FIELDS_BY_COLUMN = {
 
 const rowKeyOf = (q) => q.id || q.question_id
 
-export function AdminExtractedQuestionsPage() {
+// The grid opens on the newest rows; a search or filter queries the whole database.
+const DEFAULT_ROW_LIMIT = 400
+const SEARCH_RESULT_LIMIT = 5000
+
+// The canonical 29 columns, in order. filterKey links a column to its sort and
+// filter menu. readOnly columns cannot be edited inline (the id and hash are
+// generated, and option E is the fixed "Answer not known" choice).
+const GRID_COLUMNS = [
+  { key: 'question_id', label: '1. question_id', width: 'min-w-[130px]', readOnly: true, mono: true, sticky: true },
+  { key: 'content_hash', label: '2. content_hash', width: 'min-w-[110px]', readOnly: true },
+  { key: 'exam_tag', label: '3. exam_tag', width: 'min-w-[130px]', readOnly: true },
+  { key: 'source_type', label: '4. source_type', width: 'min-w-[100px]', type: 'select', options: ['VINA', 'PYQ'], filterKey: 'source' },
+  { key: 'year', label: '5. year', width: 'min-w-[70px]', type: 'number', filterKey: 'year' },
+  { key: 'subject_name', label: '6. subject_name', width: 'min-w-[140px]' },
+  { key: 'unit_code', label: '7. unit_code', width: 'min-w-[110px]', type: 'select', filterKey: 'unit' },
+  { key: 'macro_topic', label: '8. macro_topic', width: 'min-w-[160px]', filterKey: 'macro' },
+  { key: 'micro_topic', label: '9. micro_topic', width: 'min-w-[180px]', filterKey: 'micro' },
+  { key: 'sub_topic', label: '10. sub_topic', width: 'min-w-[160px]' },
+  { key: 'difficulty_level', label: '11. difficulty_level', width: 'min-w-[120px]', type: 'select', options: ['EASY', 'MEDIUM', 'HARD'], filterKey: 'difficulty' },
+  { key: 'question_type', label: '12. question_type', width: 'min-w-[140px]' },
+  { key: 'cognitive_skill', label: '13. cognitive_skill', width: 'min-w-[140px]' },
+  { key: 'ideal_time_seconds', label: '14. ideal_time_seconds', width: 'min-w-[130px]', type: 'number', filterKey: 'ideal' },
+  { key: 'en_question_text', label: '15. en_question_text', lang: 'en', width: 'min-w-[280px]', long: true, maxWidth: 'max-w-xs', filterKey: 'text' },
+  { key: 'en_option_a', label: '16. en_option_a', lang: 'en', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'en_option_b', label: '17. en_option_b', lang: 'en', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'en_option_c', label: '18. en_option_c', lang: 'en', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'en_option_d', label: '19. en_option_d', lang: 'en', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'en_option_e', label: '20. en_option_e', lang: 'en', width: 'min-w-[120px]', readOnly: true },
+  { key: 'ta_question_text', label: '21. ta_question_text', lang: 'ta', width: 'min-w-[280px]', long: true, maxWidth: 'max-w-xs' },
+  { key: 'ta_option_a', label: '22. ta_option_a', lang: 'ta', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'ta_option_b', label: '23. ta_option_b', lang: 'ta', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'ta_option_c', label: '24. ta_option_c', lang: 'ta', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'ta_option_d', label: '25. ta_option_d', lang: 'ta', width: 'min-w-[140px]', maxWidth: 'max-w-[140px]' },
+  { key: 'ta_option_e', label: '26. ta_option_e', lang: 'ta', width: 'min-w-[120px]', readOnly: true },
+  { key: 'answer_key', label: '27. answer_key', width: 'min-w-[100px]', type: 'select', options: ['A', 'B', 'C', 'D'], filterKey: 'key' },
+  { key: 'en_explanation', label: '28. en_explanation', lang: 'en', width: 'min-w-[220px]', long: true, maxWidth: 'max-w-[220px]' },
+  { key: 'ta_explanation', label: '29. ta_explanation', lang: 'ta', width: 'min-w-[220px]', long: true, maxWidth: 'max-w-[220px]' },
+]
+
+// Maps one edited grid cell to the database columns to save (db) and to the
+// values to show straight away (local).
+function buildCellUpdates(field, value) {
+  const db = {}
+  const local = { [field]: value }
+  switch (field) {
+    case 'en_question_text': db.question_text = value; break
+    case 'ta_question_text': db.question_text_tamil = value; break
+    case 'en_option_a': db.option_a = value; break
+    case 'en_option_b': db.option_b = value; break
+    case 'en_option_c': db.option_c = value; break
+    case 'en_option_d': db.option_d = value; break
+    case 'ta_option_a': db.option_a_tamil = value; break
+    case 'ta_option_b': db.option_b_tamil = value; break
+    case 'ta_option_c': db.option_c_tamil = value; break
+    case 'ta_option_d': db.option_d_tamil = value; break
+    case 'answer_key': db.correct_option = value; break
+    case 'en_explanation': db.explanation = value; break
+    case 'ta_explanation': db.explanation_tamil = value; break
+    case 'unit_code': db.unit_code = value; db.unit_tag = value; break
+    case 'macro_topic': db.macro_topic = value; db.macro_topic_name = value; break
+    case 'micro_topic': db.micro_topic = value; db.micro_topic_name = value; break
+    case 'difficulty_level': db.difficulty_level = value; break
+    case 'source_type': db.source_type = value; db.is_pyq = value === 'PYQ'; break
+    case 'year': db.exam_year = String(value); db.year = value; break
+    default: db[field] = value // subject_name, sub_topic, question_type, cognitive_skill, ideal_time_seconds
+  }
+  return { db, local }
+}
+
+// mode "bank": the exam question bank, split by exam group (Group 1 / 2 / 4).
+// mode "recall": the Quick Recall pool, one common pool for every group.
+export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   const { toast } = useApp()
+  const isRecall = mode === 'recall'
 
   const [loading, setLoading] = useState(true)
   const [questions, setQuestions] = useState([])
@@ -88,9 +162,6 @@ export function AdminExtractedQuestionsPage() {
 
   // Top Three-Way Group Switcher: 'TNPSC_GROUP_1' | 'TNPSC_GROUP_2' | 'TNPSC_GROUP_4'
   const [selectedGroupTag, setSelectedGroupTag] = useState('TNPSC_GROUP_1')
-
-  // Sub-filter pills: 'all' | 'vina' | 'pyq'
-  const [sourceFilter, setSourceFilter] = useState('all')
 
   // Language columns view filter: 'all' | 'en' | 'ta'
   const [languageColumnView, setLanguageColumnView] = useState('all')
@@ -128,10 +199,18 @@ export function AdminExtractedQuestionsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
-  // Load questions and papers
-  useEffect(() => {
-    loadData()
-  }, [])
+  // Database-side inventory for the selected group, and filter-menu options
+  const [groupInventory, setGroupInventory] = useState({ total: 0, byUnit: {} })
+  const [facets, setFacets] = useState({ unit: [], macro: [], micro: [], years: [] })
+
+  // Papers panel (publish/unpublish lives inside this tab)
+  const [showPapersPanel, setShowPapersPanel] = useState(false)
+  const [togglingPaperId, setTogglingPaperId] = useState(null)
+
+  // Guards against an older, slower request overwriting a newer one
+  const loadRequestRef = useRef(0)
+  // 'latest' = newest rows only, 'search' = database-wide query
+  const [loadInfo, setLoadInfo] = useState({ mode: 'latest', capped: false })
 
   // Selection belongs to one group; clear it when the group tab changes
   useEffect(() => {
@@ -141,14 +220,29 @@ export function AdminExtractedQuestionsPage() {
   // Return to the first page whenever the visible rows change
   useEffect(() => {
     setCurrentPage(1)
-  }, [columnFilters, sortState, searchQuery, selectedGroupTag, sourceFilter])
+  }, [columnFilters, sortState, searchQuery, selectedGroupTag])
 
+  // By default the grid shows only the newest rows, so a fresh upload can be
+  // checked without lag. A search or any column filter asks the database for
+  // every matching row instead.
   async function loadData() {
+    const requestId = ++loadRequestRef.current
     setLoading(true)
     try {
-      const res = await questionService.getAllExtractedQuestionsForAdmin({ limit: 4000 })
+      const queryActive = hasActiveColumnFilters || Boolean(searchQuery.trim())
+      const limit = queryActive ? SEARCH_RESULT_LIMIT : DEFAULT_ROW_LIMIT
+      const res = isRecall
+        ? await recallGridService.fetchGrid({ search: searchQuery, filters: columnFilters, limit })
+        : await questionService.getAllExtractedQuestionsForAdmin({
+          examTag: selectedGroupTag,
+          search: searchQuery,
+          filters: columnFilters,
+          limit,
+        })
+      if (requestId !== loadRequestRef.current) return
+
       const rawList = res.questions || []
-      // Keep the database id so inline edits can be saved with updateQuestion
+      // Keep the database id so inline edits and deletes can target the row
       const normalizedList = rawList.map((q, idx) => ({
         ...normalizeTo29Columns(q, idx + 1),
         id: q.id,
@@ -156,40 +250,67 @@ export function AdminExtractedQuestionsPage() {
       }))
       setQuestions(normalizedList)
       setPapers(res.papers || [])
+      setLoadInfo({
+        mode: queryActive ? 'search' : 'latest',
+        capped: queryActive && normalizedList.length >= SEARCH_RESULT_LIMIT,
+      })
     } catch (err) {
       console.error('[AdminExtractedQuestionsPage] Load error:', err)
       toast.error('Failed to load questions: ' + err.message)
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestRef.current) setLoading(false)
     }
   }
 
+  // Group totals and filter-menu options come from the whole database
+  async function refreshGroupMeta() {
+    const unitCodes = Array.from(new Set(activeMasterTaxonomy.map(m => m.unit_code)))
+    try {
+      const [inventory, facetData] = await Promise.all(isRecall
+        ? [recallGridService.getInventory(), recallGridService.getFacets()]
+        : [
+          questionService.getGroupInventory(selectedGroupTag, unitCodes),
+          questionService.getGridFacets(selectedGroupTag),
+        ])
+      setGroupInventory(inventory)
+      setFacets(facetData)
+    } catch (err) {
+      console.warn('[AdminExtractedQuestionsPage] Could not load group totals:', err)
+    }
+  }
+
+  // Reload whenever the group, search text or a column filter changes.
+  // Typing is debounced so each keystroke does not hit the database.
+  useEffect(() => {
+    const typing = Boolean(searchQuery.trim() || columnFilters.text.trim())
+    const timer = setTimeout(() => { loadData() }, typing ? 350 : 0)
+    return () => clearTimeout(timer)
+  }, [selectedGroupTag, searchQuery, columnFilters])
+
+  useEffect(() => {
+    refreshGroupMeta()
+  }, [selectedGroupTag])
+
   // Active Master Taxonomy for the currently selected group
   const activeMasterTaxonomy = useMemo(() => {
+    // The Quick Recall pool is shared, so every group's units are valid there
+    if (isRecall) return [...GROUP1_MASTER_TAXONOMY, ...GROUP2_MASTER_TAXONOMY, ...GROUP4_MASTER_TAXONOMY]
     if (selectedGroupTag === 'TNPSC_GROUP_1') return GROUP1_MASTER_TAXONOMY
     if (selectedGroupTag === 'TNPSC_GROUP_2') return GROUP2_MASTER_TAXONOMY
     return GROUP4_MASTER_TAXONOMY
   }, [selectedGroupTag])
 
-  // Active Blueprint for the health monitor
-  const activeBlueprint = useMemo(() => {
-    return OFFICIAL_200Q_BLUEPRINTS[selectedGroupTag] || OFFICIAL_200Q_BLUEPRINTS.TNPSC_GROUP_1
-  }, [selectedGroupTag])
+  // Unit boxes for the selected group, taken from that group's taxonomy
+  const unitCodesForGroup = useMemo(
+    () => Array.from(new Set(activeMasterTaxonomy.map(m => m.unit_code))),
+    [activeMasterTaxonomy]
+  )
 
-  // Filter questions belonging to selected exam group and source type
+  // Questions belonging to the selected exam group (Quick Recall has no groups)
   const groupFilteredQuestions = useMemo(() => {
-    return questions.filter(q => {
-      const qTag = normalizeExamTag(q.exam_tag || q.group_tag)
-      if (qTag !== selectedGroupTag) return false
-
-      if (sourceFilter === 'vina') {
-        if (q.source_type !== 'VINA') return false
-      } else if (sourceFilter === 'pyq') {
-        if (q.source_type !== 'PYQ') return false
-      }
-      return true
-    })
-  }, [questions, selectedGroupTag, sourceFilter])
+    if (isRecall) return questions
+    return questions.filter(q => normalizeExamTag(q.exam_tag || q.group_tag) === selectedGroupTag)
+  }, [questions, selectedGroupTag, isRecall])
 
   // Filter by search query
   const searchFilteredQuestions = useMemo(() => {
@@ -216,18 +337,22 @@ export function AdminExtractedQuestionsPage() {
   }, [groupFilteredQuestions, searchQuery])
 
   // Distinct values offered by the column filter menus (current group only)
+  // Menu options come from the whole group in the database, plus anything
+  // already on screen (so a just-edited value is offered straight away).
   const facetOptions = useMemo(() => {
-    const distinct = (getter) => Array.from(new Set(groupFilteredQuestions.map(getter).filter(Boolean))).sort()
+    const merged = (fromDatabase, getter) => Array.from(new Set([
+      ...fromDatabase,
+      ...groupFilteredQuestions.map(getter).filter(Boolean),
+    ])).sort()
     return {
-      years: Array.from(new Set(groupFilteredQuestions.map(q => String(q.year)).filter(Boolean)))
-        .sort((a, b) => Number(a) - Number(b)),
-      unit: distinct(q => q.unit_code),
-      macro: distinct(q => q.macro_topic),
-      micro: distinct(q => q.micro_topic),
+      years: merged(facets.years, q => String(q.year)).sort((a, b) => Number(a) - Number(b)),
+      unit: merged(facets.unit, q => q.unit_code),
+      macro: merged(facets.macro, q => q.macro_topic),
+      micro: merged(facets.micro, q => q.micro_topic),
       key: ['A', 'B', 'C', 'D', 'E'],
       difficulty: ['EASY', 'MEDIUM', 'HARD'],
     }
-  }, [groupFilteredQuestions])
+  }, [groupFilteredQuestions, facets])
 
   // Column filters (AND across columns) followed by the active column sort
   const tableQuestions = useMemo(() => {
@@ -346,7 +471,7 @@ export function AdminExtractedQuestionsPage() {
     const sortOptions = SORT_OPTIONS[config.type]
 
     return (
-      <th className={`py-2.5 px-3 border-r ${className}`}>
+      <th key={colKey} className={`py-2.5 px-3 border-r ${className}`}>
         <div className="relative flex items-center gap-1 whitespace-nowrap">
           <span>{label}</span>
           <button
@@ -504,11 +629,14 @@ export function AdminExtractedQuestionsPage() {
 
     setBulkDeleting(true)
     try {
-      const removed = await questionService.deleteQuestionsBulk(items)
+      const removed = isRecall
+        ? await recallGridService.deleteBulk(items)
+        : await questionService.deleteQuestionsBulk(items)
       toast.success(`Deleted ${removed} question(s)${skipped ? `; ${skipped} skipped` : ''}.`)
       setSelectedKeys(new Set())
       setShowDeleteConfirm(false)
       await loadData()
+      refreshGroupMeta()
     } catch (err) {
       console.error('Bulk delete error:', err)
       toast.error('Failed to delete questions: ' + err.message)
@@ -518,111 +646,123 @@ export function AdminExtractedQuestionsPage() {
   }
 
   // ── Inventory & Blueprint Health Monitor Calculations ───────────────────────
+  // Counts come from the database (not from the rows loaded in the grid), so
+  // they stay correct while the grid shows only the newest 400 questions.
   const healthMonitor = useMemo(() => {
-    const pool = groupFilteredQuestions
-    const unitCounts = {}
-    activeBlueprint.forEach(b => {
-      unitCounts[b.unit_code] = 0
-    })
+    const blueprintKey = GROUP_CONFIGS.find(g => g.id === selectedGroupTag)?.blueprintKey
+    const blueprint = OFFICIAL_200Q_BLUEPRINTS[blueprintKey] || []
 
-    pool.forEach(q => {
-      const uc = (q.unit_code || '').toUpperCase()
-      if (unitCounts[uc] !== undefined) {
-        unitCounts[uc]++
-      }
+    let minFullMocksPossible = blueprint.length ? 9999 : 0
+    blueprint.forEach(b => {
+      const mocksPossible = Math.floor((groupInventory.byUnit[b.unit_code] || 0) / (b.quota || 1))
+      if (mocksPossible < minFullMocksPossible) minFullMocksPossible = mocksPossible
     })
-
-    let minFullMocksPossible = 9999
-    const unitBreakdown = activeBlueprint.map(b => {
-      const available = unitCounts[b.unit_code] || 0
-      const quota = b.quota || 1
-      const mocksPossible = Math.floor(available / quota)
-      if (mocksPossible < minFullMocksPossible) {
-        minFullMocksPossible = mocksPossible
-      }
-      return {
-        unit_code: b.unit_code,
-        title: b.title,
-        quota,
-        available,
-        mocksPossible,
-        isDeficit: available < quota,
-      }
-    })
-
-    if (minFullMocksPossible === 9999) minFullMocksPossible = 0
 
     return {
-      totalQuestions: pool.length,
-      vinaCount: pool.filter(q => q.source_type === 'VINA').length,
-      pyqCount: pool.filter(q => q.source_type === 'PYQ').length,
+      totalQuestions: groupInventory.total,
       minFullMocksPossible,
-      unitBreakdown,
+      unitBreakdown: unitCodesForGroup.map(code => ({
+        unit_code: code,
+        available: groupInventory.byUnit[code] || 0,
+      })),
     }
-  }, [groupFilteredQuestions, activeBlueprint])
+  }, [groupInventory, unitCodesForGroup, selectedGroupTag])
 
-  // ── Inline Cell Editing Handler ─────────────────────────────────────────────
-  async function handleCellSave(q, field, newValue) {
-    if (q[field] === newValue) {
+  // ── Inline Cell Editing ─────────────────────────────────────────────────────
+  // Columns shown for the current language view
+  const visibleColumns = GRID_COLUMNS.filter(
+    col => !col.lang || languageColumnView === 'all' || col.lang === languageColumnView
+  )
+
+  function headerClassFor(col) {
+    const tone = col.lang === 'en'
+      ? 'border-blue-200 bg-blue-50/80 text-blue-950 font-bold'
+      : col.lang === 'ta'
+        ? 'border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold font-tamil'
+        : 'border-slate-200'
+    return `${tone} ${col.width || ''}`
+  }
+
+  // SHA-256 duplicate check against official PYQ questions in the right table
+  function hasPyqDuplicate(hash, excludeId) {
+    return isRecall
+      ? recallGridService.hasPyqDuplicate(hash, excludeId)
+      : questionService.hasPyqDuplicate(hash, excludeId)
+  }
+
+  // Double-click a cell to edit it. Read-only columns (the id, the hash and the
+  // fixed "Answer not known" option) never enter edit mode.
+  function startCellEdit(q, col) {
+    if (col.readOnly) return
+    setEditingCell({ rowKey: rowKeyOf(q), field: col.key, value: String(q[col.key] ?? '') })
+  }
+
+  async function handleCellSave(q, field, rawValue) {
+    const col = GRID_COLUMNS.find(c => c.key === field)
+    let value = typeof rawValue === 'string' ? rawValue.trim() : rawValue
+
+    // Validate before touching the database
+    if (col?.type === 'number') {
+      const parsed = Number.parseInt(value, 10)
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        toast.error(`${col.label} must be a positive whole number.`)
+        return
+      }
+      value = parsed
+    }
+    if (col?.options && !col.options.includes(value)) {
+      toast.error(`${col.label} must be one of: ${col.options.join(', ')}.`)
+      return
+    }
+    if (field === 'unit_code' && !unitCodesForGroup.includes(value)) {
+      toast.error(`unit_code must be one of: ${unitCodesForGroup.join(', ')}.`)
+      return
+    }
+    if (field === 'question_type' || field === 'cognitive_skill') value = String(value).toUpperCase()
+
+    if (String(q[field] ?? '') === String(value)) {
+      setEditingCell(null)
+      return
+    }
+    if (!q.id) {
+      toast.error('This row has no database id, so it cannot be edited.')
       setEditingCell(null)
       return
     }
 
     setCellSaving(true)
     try {
-      const updates = { [field]: newValue }
+      const { db, local } = buildCellUpdates(field, value)
 
-      // Also compute content_hash if question text changed
+      // Editing the question text re-computes the SHA-256 hash, and a VINA
+      // question may not duplicate an official PYQ question.
       if (field === 'en_question_text' || field === 'ta_question_text') {
-        const en = field === 'en_question_text' ? newValue : q.en_question_text
-        const ta = field === 'ta_question_text' ? newValue : q.ta_question_text
-        updates.content_hash = await computeQuestionContentHash(en, ta)
-      }
-
-      // Map to DB column names
-      const dbUpdates = {}
-      if (field === 'en_question_text') dbUpdates.question_text = newValue
-      else if (field === 'ta_question_text') dbUpdates.question_text_tamil = newValue
-      else if (field === 'en_option_a') dbUpdates.option_a = newValue
-      else if (field === 'en_option_b') dbUpdates.option_b = newValue
-      else if (field === 'en_option_c') dbUpdates.option_c = newValue
-      else if (field === 'en_option_d') dbUpdates.option_d = newValue
-      else if (field === 'ta_option_a') dbUpdates.option_a_tamil = newValue
-      else if (field === 'ta_option_b') dbUpdates.option_b_tamil = newValue
-      else if (field === 'ta_option_c') dbUpdates.option_c_tamil = newValue
-      else if (field === 'ta_option_d') dbUpdates.option_d_tamil = newValue
-      else if (field === 'answer_key') dbUpdates.correct_option = newValue
-      else if (field === 'en_explanation') dbUpdates.explanation = newValue
-      else if (field === 'ta_explanation') dbUpdates.explanation_tamil = newValue
-      else if (field === 'unit_code') {
-        dbUpdates.unit_code = newValue
-        dbUpdates.unit_tag = newValue
-      } else if (field === 'macro_topic') {
-        dbUpdates.macro_topic = newValue
-        dbUpdates.macro_topic_name = newValue
-      } else if (field === 'micro_topic') {
-        dbUpdates.micro_topic = newValue
-        dbUpdates.micro_topic_name = newValue
-      } else if (field === 'difficulty_level') dbUpdates.difficulty_level = newValue
-      else if (field === 'source_type') {
-        dbUpdates.source_type = newValue
-        dbUpdates.is_pyq = newValue === 'PYQ'
-      }
-
-      // Save to Supabase
-      if (q.id) {
-        await questionService.updateQuestion(q.id, dbUpdates)
-      }
-
-      // Update local state
-      setQuestions(prev => prev.map(item => {
-        if (item.question_id === q.question_id) {
-          return { ...item, ...updates }
+        const en = field === 'en_question_text' ? value : q.en_question_text
+        const ta = field === 'ta_question_text' ? value : q.ta_question_text
+        const hash = await computeQuestionContentHash(en, ta)
+        if (q.source_type === 'VINA' && await hasPyqDuplicate(hash, q.id)) {
+          toast.error('Duplicate blocked: this text matches an official PYQ question.')
+          return
         }
-        return item
-      }))
+        db.content_hash = hash
+        local.content_hash = hash
+      }
+      if (field === 'source_type' && value === 'VINA' && await hasPyqDuplicate(q.content_hash, q.id)) {
+        toast.error('Duplicate blocked: this question matches an official PYQ question.')
+        return
+      }
 
-      toast.success(`Saved ${field} successfully!`)
+      if (isRecall) await recallGridService.updateFields(q.id, db)
+      else await questionService.updateQuestionFields(q.id, db)
+
+      setQuestions(prev => prev.map(item => (
+        rowKeyOf(item) === rowKeyOf(q) ? { ...item, ...local } : item
+      )))
+      toast.success(`Saved ${col?.label || field}`)
+
+      if (['unit_code', 'macro_topic', 'micro_topic', 'year', 'source_type'].includes(field)) {
+        refreshGroupMeta()
+      }
     } catch (err) {
       console.error('Cell save error:', err)
       toast.error('Failed to save update: ' + err.message)
@@ -630,6 +770,113 @@ export function AdminExtractedQuestionsPage() {
       setCellSaving(false)
       setEditingCell(null)
     }
+  }
+
+  // Publish or unpublish a paper without leaving this tab. The paper service
+  // refuses to publish a paper that has no questions or missing answers.
+  async function handleTogglePaperPublish(paper) {
+    const nextStatus = paper.status === 'published' ? 'draft' : 'published'
+    setTogglingPaperId(paper.id)
+    try {
+      await paperService.togglePublishStatus(paper.id, nextStatus)
+      toast.success(nextStatus === 'published' ? 'Paper published.' : 'Paper moved back to draft.')
+      await loadData()
+    } catch (err) {
+      toast.error(err.message || 'Could not change the paper status.')
+    } finally {
+      setTogglingPaperId(null)
+    }
+  }
+
+  function renderCellEditor(q, col) {
+    const cancel = () => setEditingCell(null)
+    const baseClass = 'w-full min-w-[110px] px-1.5 py-1 text-xs bg-white border border-tnpsc-brand rounded outline-none focus:ring-1 focus:ring-tnpsc-brand/40'
+
+    if (col.type === 'select') {
+      const options = col.key === 'unit_code' ? unitCodesForGroup : col.options
+      return (
+        <select
+          autoFocus
+          value={editingCell.value}
+          disabled={cellSaving}
+          onChange={e => handleCellSave(q, col.key, e.target.value)}
+          onBlur={cancel}
+          className={baseClass}
+        >
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      )
+    }
+
+    const shared = {
+      autoFocus: true,
+      value: editingCell.value,
+      disabled: cellSaving,
+      onChange: e => setEditingCell(prev => ({ ...prev, value: e.target.value })),
+      onBlur: cancel,
+      onKeyDown: e => {
+        if (e.key === 'Enter' && !(col.long && e.shiftKey)) {
+          e.preventDefault()
+          handleCellSave(q, col.key, editingCell.value)
+        } else if (e.key === 'Escape') {
+          cancel()
+        }
+      },
+    }
+
+    return col.long
+      ? <textarea rows={3} {...shared} className={`${baseClass} min-w-[240px] ${col.lang === 'ta' ? 'font-tamil' : ''}`} />
+      : <input type={col.type === 'number' ? 'number' : 'text'} {...shared} className={`${baseClass} ${col.lang === 'ta' ? 'font-tamil' : ''}`} />
+  }
+
+  function renderGridCell(q, col) {
+    const rowKey = rowKeyOf(q)
+    const isEditing = editingCell?.rowKey === rowKey && editingCell?.field === col.key
+    const raw = q[col.key]
+    const text = raw === undefined || raw === null ? '' : String(raw)
+    const cellClass = `py-2 px-3 border-r border-slate-200 ${col.lang === 'ta' ? 'font-tamil' : ''} ${col.sticky ? 'sticky left-[40px] z-10 bg-white' : ''}`
+
+    if (isEditing) {
+      return (
+        <td key={col.key} className={`${cellClass} bg-amber-50`}>
+          {renderCellEditor(q, col)}
+        </td>
+      )
+    }
+
+    let content
+    if (col.key === 'source_type') {
+      content = (
+        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+          text === 'PYQ' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
+        }`}>
+          {text}
+        </span>
+      )
+    } else if (col.key === 'answer_key') {
+      content = (
+        <span className="inline-block w-6 text-center rounded font-black text-xs bg-emerald-100 text-emerald-800">{text}</span>
+      )
+    } else if (col.key === 'ideal_time_seconds') {
+      content = <span className="font-bold text-slate-600">{text}s</span>
+    } else if (col.key === 'content_hash') {
+      content = <span className="font-mono text-[10px] text-slate-500">{text ? `${text.slice(0, 10)}…` : '—'}</span>
+    } else if (col.mono) {
+      content = <span className="font-mono font-bold text-[11px] text-slate-800">{text}</span>
+    } else {
+      content = <span className={`block truncate ${col.maxWidth || 'max-w-[180px]'} ${text ? 'text-slate-800' : 'text-slate-400'}`}>{text || '—'}</span>
+    }
+
+    return (
+      <td
+        key={col.key}
+        title={col.readOnly ? text : `${text}\n(double-click to edit)`}
+        onDoubleClick={() => startCellEdit(q, col)}
+        className={`${cellClass} ${col.readOnly ? '' : 'cursor-text hover:bg-amber-50/50'}`}
+      >
+        {content}
+      </td>
+    )
   }
 
   // ── Bulk CSV Upload with Strict Taxonomy Validation & Deduplication ─────────
@@ -642,11 +889,16 @@ export function AdminExtractedQuestionsPage() {
 
     try {
       const text = await file.text()
-      const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0)
-      if (lines.length <= 1) throw new Error('CSV file is empty or missing data rows.')
-
-      // Parse headers
-      const rawHeaders = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase())
+      // PapaParse handles quoted commas, apostrophes, doubled quotes and multi-line cells
+      // Spreadsheet exports often start with a byte-order mark; drop it so the first header matches
+      const cleanText = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text
+      const parsedCsv = Papa.parse(cleanText, {
+        header: true,
+        skipEmptyLines: 'greedy',
+        transformHeader: header => header.trim().toLowerCase(),
+      })
+      const dataRows = parsedCsv.data
+      if (dataRows.length === 0) throw new Error('CSV file is empty or missing data rows.')
 
       // Existing PYQ hashes to enforce Deduplication Gate
       const existingPyqHashes = new Set(
@@ -658,27 +910,10 @@ export function AdminExtractedQuestionsPage() {
       let validCount = 0
       let duplicateCount = 0
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i]
-        // Basic CSV split with quote handling
-        const cells = []
-        let current = ''
-        let inQuotes = false
-        for (let c = 0; c < line.length; c++) {
-          const char = line[c]
-          if (char === '"' || char === "'") inQuotes = !inQuotes
-          else if (char === ',' && !inQuotes) {
-            cells.push(current.trim().replace(/^["']|["']$/g, ''))
-            current = ''
-          } else {
-            current += char
-          }
-        }
-        cells.push(current.trim().replace(/^["']|["']$/g, ''))
-
+      for (let i = 1; i <= dataRows.length; i++) {
         const rowObj = {}
-        rawHeaders.forEach((h, idx) => {
-          rowObj[h] = cells[idx] || ''
+        Object.entries(dataRows[i - 1]).forEach(([header, value]) => {
+          rowObj[header] = typeof value === 'string' ? value.trim() : (value ?? '')
         })
 
         const normalized = normalizeTo29Columns(rowObj, i)
@@ -686,7 +921,8 @@ export function AdminExtractedQuestionsPage() {
         normalized.content_hash = hash
 
         // 1. Strict Foreign-Key & Taxonomy Validation
-        const valRes = validateQuestionAgainstMasterTaxonomy(normalized, selectedGroupTag)
+        // (Quick Recall is one common pool, so each row is checked against its own group.)
+        const valRes = validateQuestionAgainstMasterTaxonomy(normalized, isRecall ? normalized.exam_tag : selectedGroupTag)
 
         // 2. Deduplication Gate: VINA question cannot match PYQ hash
         let isDuplicate = false
@@ -698,15 +934,18 @@ export function AdminExtractedQuestionsPage() {
         }
 
         // 3. Map to the approved question_taxonomy catalog the database enforces
-        const approved = mapToApprovedCatalog(normalized)
-        if (!approved) {
-          valRes.errors.push(`No approved catalog mapping for micro_topic '${normalized.micro_topic}'.`)
-          valRes.isValid = false
-        } else {
-          normalized.unit_name = approved.unit_name
-          normalized.unit_tag = approved.unit_name
-          normalized.macro_topic = approved.macro_topic
-          normalized.micro_topic = approved.micro_topic
+        // (Only the exam question bank is guarded by that database rule.)
+        if (!isRecall) {
+          const approved = mapToApprovedCatalog(normalized)
+          if (!approved) {
+            valRes.errors.push(`No approved catalog mapping for micro_topic '${normalized.micro_topic}'.`)
+            valRes.isValid = false
+          } else {
+            normalized.unit_name = approved.unit_name
+            normalized.unit_tag = approved.unit_name
+            normalized.macro_topic = approved.macro_topic
+            normalized.micro_topic = approved.micro_topic
+          }
         }
 
         if (valRes.isValid) {
@@ -725,7 +964,7 @@ export function AdminExtractedQuestionsPage() {
       }
 
       setCsvValidationResults({
-        totalRows: lines.length - 1,
+        totalRows: dataRows.length,
         validCount,
         errorCount: validationErrors.length,
         duplicateCount,
@@ -752,19 +991,23 @@ export function AdminExtractedQuestionsPage() {
         .filter(r => r.isValid)
         .map(r => r.data)
 
-      // Use target paper or create batch paper
-      const targetPaper = selectedTargetPaperId
-      if (!targetPaper) {
-        throw new Error('Please choose the paper these questions belong to.')
+      if (isRecall) {
+        // The Quick Recall pool is common to every group and needs no paper.
+        const { inserted, skipped } = await recallGridService.importRows(validQuestions)
+        toast.success(`Imported ${inserted} questions${skipped ? `; skipped ${skipped} already in the pool` : ''}.`)
+      } else {
+        const targetPaper = selectedTargetPaperId
+        if (!targetPaper) {
+          throw new Error('Please choose the paper these questions belong to.')
+        }
+        await questionService.saveQuestionsToSupabase(targetPaper, validQuestions, false)
+        toast.success(`Successfully imported ${validQuestions.length} verified questions into the database!`)
       }
-
-      await questionService.saveQuestionsToSupabase(targetPaper, validQuestions, false)
-
-      toast.success(`Successfully imported ${validQuestions.length} verified questions into the database!`)
       setShowBulkCsvModal(false)
       setCsvFile(null)
       setCsvValidationResults(null)
       await loadData()
+      refreshGroupMeta()
     } catch (err) {
       console.error('Import error:', err)
       toast.error('Failed to import questions: ' + err.message)
@@ -847,12 +1090,9 @@ export function AdminExtractedQuestionsPage() {
               <Database className="w-4 h-4" />
             </span>
             <h1 className="text-2xl font-black text-body-text tracking-tight">
-              Admin Question Bank &amp; Taxonomy Control
+              {isRecall ? 'Quick Recall Question Bank' : 'Admin Question Bank & Taxonomy Control'}
             </h1>
           </div>
-          <p className="text-xs text-body-secondary mt-1 max-w-3xl">
-            29-Column interactive spreadsheet with strict master taxonomy validation, SHA-256 deduplication gate, and live 200-question blueprint health monitor.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
@@ -864,6 +1104,7 @@ export function AdminExtractedQuestionsPage() {
             <span>Bulk Upload CSV (Strict Validation)</span>
           </button>
 
+          {!isRecall && (
           <button
             onClick={() => setShowUploadModal(true)}
             className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle transition-all"
@@ -871,6 +1112,7 @@ export function AdminExtractedQuestionsPage() {
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
             <span>AI / PDF Text Ingestion</span>
           </button>
+          )}
 
           <button
             onClick={handleExportQuestionsCsv}
@@ -883,6 +1125,7 @@ export function AdminExtractedQuestionsPage() {
       </div>
 
       {/* ── 2. Top Three-Way Group Switcher Tabs ─────────────────────────────── */}
+      {!isRecall && (
       <div className="bg-white rounded-2xl border border-surface-border p-2 shadow-subtle flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2 p-1 bg-slate-100/80 rounded-xl w-full sm:w-auto">
           {GROUP_CONFIGS.map(grp => {
@@ -905,36 +1148,111 @@ export function AdminExtractedQuestionsPage() {
             )
           })}
         </div>
-
-        {/* Sub-Filter Pills: All | VINA | PYQ */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-body-secondary uppercase tracking-wider mr-1">
-            Source:
-          </span>
-          {[
-            { id: 'all',  label: 'All Questions' },
-            { id: 'vina', label: 'VINA Synthetic Only' },
-            { id: 'pyq',  label: 'Official PYQs Only' },
-          ].map(pill => (
-            <button
-              key={pill.id}
-              onClick={() => {
-                setSourceFilter(pill.id)
-                setCurrentPage(1)
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                sourceFilter === pill.id
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : 'bg-white text-body-secondary border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              {pill.label}
-            </button>
-          ))}
-        </div>
       </div>
+      )}
+
+      {/* ── Papers panel: create, publish and unpublish papers in this tab ──── */}
+      {!isRecall && (
+      <div className="bg-white rounded-2xl border border-surface-border shadow-subtle overflow-hidden">
+        <div className="px-4 py-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setShowPapersPanel(open => !open)}
+            className="flex items-center gap-2 text-xs font-black text-body-text uppercase tracking-wider"
+          >
+            {showPapersPanel ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <FileText className="w-4 h-4 text-tnpsc-brand" />
+            Papers ({papers.length})
+          </button>
+          <Link
+            to="/admin/papers/create"
+            className="px-3 py-1.5 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-lg text-xs font-bold flex items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Create Paper
+          </Link>
+        </div>
+
+        {showPapersPanel && (
+          <div className="border-t border-surface-border overflow-x-auto max-h-72">
+            {papers.length === 0 ? (
+              <p className="p-4 text-xs text-body-secondary">No papers yet. Create one to attach questions to.</p>
+            ) : (
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] uppercase font-bold text-body-secondary">
+                  <tr>
+                    <th className="py-2 px-4">Title</th>
+                    <th className="py-2 px-3">Exam</th>
+                    <th className="py-2 px-3">Year</th>
+                    <th className="py-2 px-3 text-center">Questions</th>
+                    <th className="py-2 px-3">Status</th>
+                    <th className="py-2 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {papers.map(paper => {
+                    const isPublished = paper.status === 'published'
+                    return (
+                      <tr key={paper.id}>
+                        <td className="py-2 px-4 font-semibold text-body-text">{paper.title}</td>
+                        <td className="py-2 px-3 text-body-secondary">{paper.exam_name || '—'}</td>
+                        <td className="py-2 px-3 text-body-secondary">{paper.year || '—'}</td>
+                        <td className="py-2 px-3 text-center font-bold">{paper.total_questions || 0}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                            isPublished ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {paper.status || 'draft'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-4 text-right whitespace-nowrap">
+                          <Link
+                            to={`/admin/papers/${paper.id}/edit`}
+                            className="px-2 py-1 mr-1.5 rounded border border-slate-200 bg-white hover:bg-slate-50 font-bold text-slate-700"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            type="button"
+                            disabled={togglingPaperId === paper.id}
+                            onClick={() => handleTogglePaperPublish(paper)}
+                            className={`px-2 py-1 rounded font-bold disabled:opacity-50 ${
+                              isPublished
+                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-900'
+                                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            }`}
+                          >
+                            {togglingPaperId === paper.id ? '…' : isPublished ? 'Unpublish' : 'Publish'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+      )}
 
       {/* ── 3. Inventory & Blueprint Health Monitor Bar ──────────────────────── */}
+      {isRecall ? (
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-card border border-indigo-950/60 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="p-2 rounded-xl bg-white/10 text-amber-300">
+            <ShieldCheck className="w-5 h-5" />
+          </span>
+          <h3 className="text-sm font-black tracking-wide text-white">
+            Common Quick Recall Pool — shared by every exam group
+          </h3>
+        </div>
+        <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/15 text-center">
+          <span className="text-[10px] uppercase font-bold text-slate-300 block">Total Pool</span>
+          <b className="text-base font-black text-white">{groupInventory.total} Qs</b>
+        </div>
+      </div>
+      ) : (
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-card border border-indigo-950/60 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-3">
@@ -945,9 +1263,6 @@ export function AdminExtractedQuestionsPage() {
               <h3 className="text-sm font-black tracking-wide text-white">
                 {selectedGroupTag.replace(/_/g, ' ')} — 200-Question Mock Test Blueprint Health Monitor
               </h3>
-              <p className="text-[11px] text-slate-300">
-                Verifies exact syllabus unit quotas and shows readiness for generating balanced, zero-repeat full mocks.
-              </p>
             </div>
           </div>
 
@@ -968,28 +1283,17 @@ export function AdminExtractedQuestionsPage() {
           {healthMonitor.unitBreakdown.map(item => (
             <div
               key={item.unit_code}
-              className={`p-2.5 rounded-xl border text-center transition-all ${
-                item.isDeficit
-                  ? 'bg-red-500/10 border-red-500/30 text-red-200'
-                  : 'bg-white/5 border-white/10 text-slate-200'
-              }`}
+              className="p-2.5 rounded-xl border text-center bg-white/5 border-white/10 text-slate-200"
             >
               <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 truncate">
                 {item.unit_code}
               </span>
-              <div className="flex items-baseline justify-center gap-1 mt-1">
-                <b className={`text-sm font-black ${item.isDeficit ? 'text-red-400' : 'text-white'}`}>
-                  {item.available}
-                </b>
-                <span className="text-[10px] text-slate-400">/ {item.quota} req</span>
-              </div>
-              <span className={`block text-[9px] font-semibold mt-0.5 ${item.isDeficit ? 'text-red-300' : 'text-emerald-400'}`}>
-                {item.isDeficit ? `Deficit: -${item.quota - item.available}` : `Ready: ${item.mocksPossible}x`}
-              </span>
+              <b className="block mt-1 text-sm font-black text-white">{item.available}</b>
             </div>
           ))}
         </div>
       </div>
+      )}
 
       {/* ── 4. Search & Controls Bar ────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-surface-border shadow-subtle">
@@ -1008,6 +1312,7 @@ export function AdminExtractedQuestionsPage() {
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
+          {!isRecall && (
           <button
             onClick={() => handleDownloadTaxonomyCsv(selectedGroupTag)}
             className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1 border border-indigo-200 transition-colors"
@@ -1015,6 +1320,7 @@ export function AdminExtractedQuestionsPage() {
             <Download className="w-3.5 h-3.5" />
             <span>Download {selectedGroupTag.replace(/_/g, ' ')} Master Taxonomy CSV</span>
           </button>
+          )}
 
           <button
             onClick={handleDownloadTemplateCsv}
@@ -1092,6 +1398,14 @@ export function AdminExtractedQuestionsPage() {
             <span className={selectedKeys.size > 0 ? 'text-tnpsc-brand font-bold' : ''}>
               {selectedKeys.size} selected
             </span>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-500">
+              {loadInfo.mode === 'latest'
+                ? `Showing the latest ${DEFAULT_ROW_LIMIT}. Search or filter to look through all ${groupInventory.total}.`
+                : loadInfo.capped
+                  ? `Showing the first ${SEARCH_RESULT_LIMIT} matches. Narrow the search to see the rest.`
+                  : 'Showing every match in the database.'}
+            </span>
             {tableQuestions.length > 0 && selectedKeys.size < tableQuestions.length && (
               <button
                 type="button"
@@ -1159,57 +1473,25 @@ export function AdminExtractedQuestionsPage() {
                       className="cursor-pointer"
                     />
                   </th>
-                  <th className="py-2.5 px-3 border-r border-slate-200 sticky left-[40px] z-30 bg-slate-100 min-w-[90px]"># / ID</th>
-                  {renderSortFilterHeader('source', 'Source', 'border-slate-200 min-w-[70px]')}
-                  {renderSortFilterHeader('year', 'Year', 'border-slate-200 min-w-[60px]')}
-                  {renderSortFilterHeader('unit', 'Unit Code', 'border-slate-200 min-w-[90px]')}
-                  {renderSortFilterHeader('macro', 'Macro Topic', 'border-slate-200 min-w-[140px]')}
-                  {renderSortFilterHeader('micro', 'Micro Topic', 'border-slate-200 min-w-[160px]')}
-                  {renderSortFilterHeader('key', 'Key', 'border-slate-200 min-w-[60px]')}
-                  {renderSortFilterHeader('difficulty', 'Diff', 'border-slate-200 min-w-[70px]')}
-                  {renderSortFilterHeader('ideal', 'Ideal Sec', 'border-slate-200 min-w-[70px]')}
-                  {/* English Columns (15-20) */}
-                  {(languageColumnView === 'all' || languageColumnView === 'en') && (
-                    <>
-                      {renderSortFilterHeader('text', '🇬🇧 15. en_question_text', 'border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[280px]')}
-                      <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 16. en_option_a</th>
-                      <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 17. en_option_b</th>
-                      <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 18. en_option_c</th>
-                      <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[140px]">🇬🇧 19. en_option_d</th>
-                      <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[120px]">🇬🇧 20. en_option_e</th>
-                    </>
-                  )}
-
-                  {/* Tamil Columns (21-26) */}
-                  {(languageColumnView === 'all' || languageColumnView === 'ta') && (
-                    <>
-                      <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[280px] font-tamil">🇮🇳 21. ta_question_text</th>
-                      <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[140px] font-tamil">🇮🇳 22. ta_option_a</th>
-                      <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[140px] font-tamil">🇮🇳 23. ta_option_b</th>
-                      <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[140px] font-tamil">🇮🇳 24. ta_option_c</th>
-                      <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[140px] font-tamil">🇮🇳 25. ta_option_d</th>
-                      <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[120px] font-tamil">🇮🇳 26. ta_option_e</th>
-                    </>
-                  )}
-
-                  {(languageColumnView === 'all' || languageColumnView === 'en') && (
-                    <th className="py-2.5 px-3 border-r border-blue-200 bg-blue-50/80 text-blue-950 font-bold min-w-[220px]">🇬🇧 28. en_explanation</th>
-                  )}
-                  {(languageColumnView === 'all' || languageColumnView === 'ta') && (
-                    <th className="py-2.5 px-3 border-r border-emerald-200 bg-emerald-50/80 text-emerald-950 font-bold min-w-[220px] font-tamil">🇮🇳 29. ta_explanation</th>
-                  )}
+                  {visibleColumns.map(col => (
+                    col.filterKey
+                      ? renderSortFilterHeader(col.filterKey, col.label, headerClassFor(col))
+                      : (
+                        <th key={col.key} className={`py-2.5 px-3 border-r ${headerClassFor(col)}`}>
+                          {col.label}
+                        </th>
+                      )
+                  ))}
                   <th className="py-2.5 px-3 text-center min-w-[80px]">Actions</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-200">
                 {paginatedQuestions.map((q, idx) => {
-                  const isPyq = q.source_type === 'PYQ'
                   const key = rowKeyOf(q)
                   const isSelected = selectedKeys.has(key)
                   return (
                     <tr key={key || idx} className={`hover:bg-slate-50/70 transition-colors ${isSelected ? 'bg-indigo-50/60' : ''}`}>
-                      {/* 0. Row selection (Sticky Left) */}
                       <td className="py-2 px-2 border-r border-slate-200 sticky left-0 z-10 bg-white text-center">
                         <input
                           type="checkbox"
@@ -1220,120 +1502,8 @@ export function AdminExtractedQuestionsPage() {
                         />
                       </td>
 
-                      {/* 1. ID (Sticky Left, after the checkbox) */}
-                      <td className="py-2 px-3 border-r border-slate-200 sticky left-[40px] z-10 bg-white font-mono font-bold text-[11px] text-slate-800">
-                        {q.question_id}
-                      </td>
+                      {visibleColumns.map(col => renderGridCell(q, col))}
 
-                      {/* 2. Source Type */}
-                      <td className="py-2 px-3 border-r border-slate-200">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                          isPyq ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
-                        }`}>
-                          {q.source_type}
-                        </span>
-                      </td>
-
-                      {/* 3. Year */}
-                      <td className="py-2 px-3 border-r border-slate-200 font-semibold text-slate-700">
-                        {q.year}
-                      </td>
-
-                      {/* 4. Unit Code (Dropdown Constraint) */}
-                      <td className="py-2 px-3 border-r border-slate-200 font-mono font-bold text-slate-800">
-                        <select
-                          value={q.unit_code}
-                          onChange={e => handleCellSave(q, 'unit_code', e.target.value)}
-                          className="bg-transparent border-0 text-[11px] font-bold text-slate-800 focus:bg-white focus:ring-1 focus:ring-tnpsc-brand rounded"
-                        >
-                          {Array.from(new Set(activeMasterTaxonomy.map(m => m.unit_code))).map(uc => (
-                            <option key={uc} value={uc}>{uc}</option>
-                          ))}
-                        </select>
-                      </td>
-
-                      {/* 5. Macro Topic */}
-                      <td className="py-2 px-3 border-r border-slate-200 font-medium text-slate-800 truncate max-w-[160px]" title={q.macro_topic}>
-                        {q.macro_topic}
-                      </td>
-
-                      {/* 6. Micro Topic */}
-                      <td className="py-2 px-3 border-r border-slate-200 font-medium text-slate-800 truncate max-w-[180px]" title={q.micro_topic}>
-                        {q.micro_topic}
-                      </td>
-
-                      {/* 7. Answer Key (Dropdown A/B/C/D) */}
-                      <td className="py-2 px-3 border-r border-slate-200 text-center">
-                        <select
-                          value={q.answer_key}
-                          onChange={e => handleCellSave(q, 'answer_key', e.target.value)}
-                          className="w-8 h-7 text-center rounded font-black text-xs bg-emerald-100 text-emerald-800 border-0 focus:ring-2 focus:ring-emerald-500"
-                        >
-                          {['A', 'B', 'C', 'D'].map(k => (
-                            <option key={k} value={k}>{k}</option>
-                          ))}
-                        </select>
-                      </td>
-
-                      {/* 8. Difficulty Level */}
-                      <td className="py-2 px-3 border-r border-slate-200">
-                        <select
-                          value={q.difficulty_level}
-                          onChange={e => handleCellSave(q, 'difficulty_level', e.target.value)}
-                          className="bg-transparent border-0 text-[10px] font-bold text-slate-700 focus:bg-white rounded"
-                        >
-                          {['EASY', 'MEDIUM', 'HARD'].map(d => (
-                            <option key={d} value={d}>{d}</option>
-                          ))}
-                        </select>
-                      </td>
-
-                      {/* 9. Ideal Time */}
-                      <td className="py-2 px-3 border-r border-slate-200 text-center font-bold text-slate-600">
-                        {q.ideal_time_seconds}s
-                      </td>
-
-                      {/* English Columns (15-20) */}
-                      {(languageColumnView === 'all' || languageColumnView === 'en') && (
-                        <>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-xs truncate font-medium text-slate-800" title={q.en_question_text}>
-                            {q.en_question_text}
-                          </td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate text-slate-700" title={q.en_option_a}>{q.en_option_a}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate text-slate-700" title={q.en_option_b}>{q.en_option_b}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate text-slate-700" title={q.en_option_c}>{q.en_option_c}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate text-slate-700" title={q.en_option_d}>{q.en_option_d}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 text-slate-400 font-italic text-[10px]">Answer not known</td>
-                        </>
-                      )}
-
-                      {/* Tamil Columns (21-26) */}
-                      {(languageColumnView === 'all' || languageColumnView === 'ta') && (
-                        <>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-xs truncate font-tamil text-slate-800" title={q.ta_question_text}>
-                            {q.ta_question_text || '—'}
-                          </td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil text-slate-700" title={q.ta_option_a}>{q.ta_option_a || '—'}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil text-slate-700" title={q.ta_option_b}>{q.ta_option_b || '—'}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil text-slate-700" title={q.ta_option_c}>{q.ta_option_c || '—'}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 max-w-[140px] truncate font-tamil text-slate-700" title={q.ta_option_d}>{q.ta_option_d || '—'}</td>
-                          <td className="py-2 px-3 border-r border-slate-200 text-slate-400 font-tamil text-[10px]">விடை தெரியவில்லை</td>
-                        </>
-                      )}
-
-                      {/* Explanations (28-29) */}
-                      {(languageColumnView === 'all' || languageColumnView === 'en') && (
-                        <td className="py-2 px-3 border-r border-slate-200 max-w-[220px] truncate text-slate-700" title={q.en_explanation}>
-                          {q.en_explanation || '—'}
-                        </td>
-                      )}
-                      {(languageColumnView === 'all' || languageColumnView === 'ta') && (
-                        <td className="py-2 px-3 border-r border-slate-200 max-w-[220px] truncate font-tamil text-slate-700" title={q.ta_explanation}>
-                          {q.ta_explanation || '—'}
-                        </td>
-                      )}
-
-                      {/* Actions */}
                       <td className="py-2 px-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -1438,7 +1608,9 @@ export function AdminExtractedQuestionsPage() {
                   Bulk Upload CSV — Strict Foreign-Key &amp; Taxonomy Validation
                 </h3>
                 <p className="text-xs text-body-secondary mt-0.5">
-                  Target Exam Group: <b className="text-tnpsc-brand">{selectedGroupTag.replace(/_/g, ' ')}</b>
+                  {isRecall
+                    ? 'Each row is checked against its own exam group'
+                    : <>Target Exam Group: <b className="text-tnpsc-brand">{selectedGroupTag.replace(/_/g, ' ')}</b></>}
                 </p>
               </div>
               <button
@@ -1474,6 +1646,7 @@ export function AdminExtractedQuestionsPage() {
                 </label>
               </div>
 
+              {!isRecall && (
               {/* Target paper: the admin must choose it explicitly */}
               <div className="space-y-2">
                 <label htmlFor="bulk-csv-target-paper" className="block text-xs font-bold text-body-text">
@@ -1502,6 +1675,7 @@ export function AdminExtractedQuestionsPage() {
                   </p>
                 )}
               </div>
+              )}
 
               {csvParsing && (
                 <div className="p-8 text-center">
@@ -1562,7 +1736,7 @@ export function AdminExtractedQuestionsPage() {
 
               <button
                 onClick={handleConfirmImportValidRows}
-                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting || !selectedTargetPaperId}
+                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting || (!isRecall && !selectedTargetPaperId)}
                 className="px-5 py-2.5 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle disabled:opacity-40"
               >
                 {csvImporting ? (
@@ -1684,7 +1858,7 @@ export function AdminExtractedQuestionsPage() {
       )}
 
       {/* ── 8. AI/Text PDF Ingestion Modal ──────────────────────────────────── */}
-      {showUploadModal && (
+      {showUploadModal && !isRecall && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-surface-border space-y-4">
             <div className="flex items-center justify-between border-b border-surface-border pb-3">
@@ -1720,6 +1894,7 @@ export function AdminExtractedQuestionsPage() {
                   toast.success(`Extracted ${qs.length} questions! Refreshing spreadsheet...`)
                   setShowUploadModal(false)
                   await loadData()
+                  refreshGroupMeta()
                 }}
               />
             ) : (
@@ -1728,6 +1903,7 @@ export function AdminExtractedQuestionsPage() {
                   toast.success(`Extracted ${qs.length} questions! Refreshing spreadsheet...`)
                   setShowUploadModal(false)
                   await loadData()
+                  refreshGroupMeta()
                 }}
               />
             )}
