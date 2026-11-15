@@ -1646,8 +1646,8 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                 </label>
               </div>
 
-              {!isRecall && (
               {/* Target paper: the admin must choose it explicitly */}
+              {!isRecall && (
               <div className="space-y-2">
                 <label htmlFor="bulk-csv-target-paper" className="block text-xs font-bold text-body-text">
                   1. Choose the paper these questions belong to
