@@ -233,7 +233,7 @@ function QuestionCard({ question, index, onEdit, onDelete, expanded, onToggle })
 }
 
 // ─── Main Text PDF Tab ─────────────────────────────────────────────────────────
-export function TextPdfTab({ paperId, paperTitle, examTag, onImportSuccess }) {
+export function TextPdfTab({ paperId, paperTitle, examTag, sourceType, examYear, onImportSuccess }) {
   const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const fileRef = useRef(null)
 
@@ -484,6 +484,9 @@ export function TextPdfTab({ paperId, paperTitle, examTag, onImportSuccess }) {
           explanation_tamil: q.explanation_tamil || q.ta_explanation || null,
           // The exam group chosen in the grid decides where these questions are listed
           ...(examTag ? { exam_tag: examTag } : {}),
+          // PYQ or VINA, and the exam year, decide which papers and banks they reach
+          ...(sourceType ? { source_type: sourceType, is_pyq: sourceType === 'PYQ' } : {}),
+          ...(examYear ? { exam_year: String(examYear), year: Number(examYear) } : {}),
           source_pdf: file?.name || paperTitle || null,
           page_number: q.page_number || 1,
         }

@@ -12,7 +12,7 @@ import { TopicSeparationSummary, normalizeUnitName } from './TopicSeparationSumm
 
 const taxonomyId = (item) => [item.unit_name, item.macro_topic_name, item.micro_topic_name].join('\u001f')
 
-export default function AiPdfTab({ paperId, paperTitle, examTag, onImportSuccess }) {
+export default function AiPdfTab({ paperId, paperTitle, examTag, sourceType, examYear, onImportSuccess }) {
   const { toast, hasGeminiApiKey, geminiApiKey } = useApp()
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -180,6 +180,9 @@ export default function AiPdfTab({ paperId, paperTitle, examTag, onImportSuccess
         question_number: idx + 1,
         // The exam group chosen in the grid decides where these questions are listed
         ...(examTag ? { exam_tag: examTag } : {}),
+        // PYQ or VINA, and the exam year, decide which papers and banks they reach
+        ...(sourceType ? { source_type: sourceType, is_pyq: sourceType === 'PYQ' } : {}),
+        ...(examYear ? { exam_year: String(examYear), year: Number(examYear) } : {}),
         source_pdf: file?.name || paperTitle || null,
         page_number: q.page_number || q.source_page || 1,
       }))

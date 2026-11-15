@@ -1,5 +1,12 @@
 import { supabase } from '../lib/supabase'
 
+// Exam group tag used on questions -> the exam name stored on papers
+export const EXAM_NAME_BY_TAG = {
+  TNPSC_GROUP_1: 'TNPSC Group 1',
+  TNPSC_GROUP_2: 'TNPSC Group 2/2A',
+  TNPSC_GROUP_4: 'TNPSC Group 4',
+}
+
 export const paperService = {
   async getPublishedPapers(filters = {}) {
     let query = supabase
@@ -64,6 +71,86 @@ export const paperService = {
 
     if (error) throw error
     return data
+  },
+
+  /**
+   * The one Previous Year paper for an exam group and year. Official questions
+   * (source_type PYQ) are filed here by their group and year, so they show up under
+   * that year on the student's Previous Year Papers page without any manual step.
+   * The title carries the group and year because that page matches papers on them.
+   */
+  async ensurePyqPaper({ examTag, year }) {
+    const examName = EXAM_NAME_BY_TAG[examTag]
+    if (!examName) throw new Error(`Unknown exam group "${examTag}".`)
+    const yearNumber = Number(year)
+    if (!Number.isInteger(yearNumber)) throw new Error(`A year is needed to file a ${examName} Previous Year paper.`)
+
+    const title = `${examName} Previous Year Paper ${yearNumber}`
+
+    // Reuse the paper made earlier for this group and year, however it was created
+    const { data: byType, error: typeError } = await supabase
+      .from('papers')
+      .select('*')
+      .eq('exam_name', examName)
+      .eq('exam_type', 'Previous Year')
+      .eq('year', yearNumber)
+      .order('created_at', { ascending: true })
+      .limit(1)
+    if (typeError) throw typeError
+    if (byType?.[0]) return byType[0]
+
+    const { data: byTitle, error: titleError } = await supabase
+      .from('papers')
+      .select('*')
+      .ilike('title', title)
+      .order('created_at', { ascending: true })
+      .limit(1)
+    if (titleError) throw titleError
+    if (byTitle?.[0]) return byTitle[0]
+
+    // 200 questions in 180 minutes at 1.5 marks each, as set out for all three groups
+    return this.createPaper({
+      title,
+      exam_name: examName,
+      exam_type: 'Previous Year',
+      year: yearNumber,
+      subject: 'General Studies',
+      duration_minutes: 180,
+      maximum_marks: 300,
+      marks_per_question: 1.5,
+      status: 'draft',
+    })
+  },
+
+  /**
+   * Publishes a paper only when it is safe for students: it must have questions and
+   * every question must have a correct answer (otherwise it cannot be scored).
+   * Returns what happened instead of throwing, so an import can report it.
+   */
+  async publishIfReady(paperId) {
+    const { count: total, error: totalError } = await supabase
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('paper_id', paperId)
+    if (totalError) throw totalError
+    if (!total) return { published: false, total: 0, missing: 0 }
+
+    const { count: missing, error: missingError } = await supabase
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('paper_id', paperId)
+      .is('correct_option', null)
+    if (missingError) throw missingError
+    if (missing > 0) {
+      // A paper already live must not keep questions that cannot be scored
+      const { data: current } = await supabase.from('papers').select('status').eq('id', paperId).maybeSingle()
+      const demoted = current?.status === 'published'
+      if (demoted) await this.updatePaper(paperId, { status: 'draft' })
+      return { published: false, total, missing, demoted }
+    }
+
+    await this.updatePaper(paperId, { status: 'published' })
+    return { published: true, total, missing: 0 }
   },
 
   async createPaper(paperData) {

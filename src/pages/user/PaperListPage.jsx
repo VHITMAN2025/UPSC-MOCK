@@ -47,7 +47,7 @@ export function PaperListPage() {
   const getPaperEffectiveYear = (paper) => {
     const titleMatch = paper.title?.match(/\b(20\d{2}|19\d{2})\b/)
     if (titleMatch) return parseInt(titleMatch[1], 10)
-    if (paper.year && paper.year <= 2025) return paper.year
+    if (paper.year && paper.year <= new Date().getFullYear()) return paper.year
     return paper.year || 2024
   }
 
@@ -86,7 +86,7 @@ export function PaperListPage() {
 
     // Combine canonical historical years with any custom uploaded years
     const canonical = CANONICAL_YEARS_BY_GROUP[selectedExam] || CANONICAL_YEARS_BY_GROUP['TNPSC Group 4'] || []
-    const dbYears = Object.keys(map).map(Number).filter(yr => yr <= 2025)
+    const dbYears = Object.keys(map).map(Number).filter(yr => yr <= new Date().getFullYear())
     const allYears = Array.from(new Set([...canonical, ...dbYears])).sort((a, b) => b - a)
 
     const cards = allYears.map(yr => {

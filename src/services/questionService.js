@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import { CANONICAL_SYLLABUS_TAXONOMY, syllabusAnalyticsService } from './syllabusAnalyticsService.js'
+import { deriveUnitCode } from './masterTaxonomyService.js'
 
 const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
   u.macro_topics.flatMap(mt =>
@@ -501,6 +502,8 @@ export const questionService = {
         isPyq ? 'PYQ' : 'Mock',
       ].filter(Boolean)))
 
+      const examTagValue = q.exam_tag || (examGroup === 'Group 1' ? 'TNPSC_GROUP_1' : examGroup === 'Group 2' || examGroup === 'Group 2A' ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4')
+
       // CRITICAL: Sanitize all text fields to remove null bytes before database insert
       /** @type {Record<string, any>} */
       const sanitized = {
@@ -526,7 +529,7 @@ export const questionService = {
         unit_tag: unitTag,
         unit_name: unitName,
         // unit_code is what the mock generator matches on (fetchQuestionBankPool)
-        unit_code: q.unit_code || null,
+        unit_code: q.unit_code || deriveUnitCode(examTagValue, unitName, macroName) || null,
         macro_topic: macroName,
         macro_topic_name: macroName,
         micro_topic: microName,
@@ -535,7 +538,7 @@ export const questionService = {
         exam_year: examYear,
         is_pyq: isPyq,
         difficulty_level: q.difficulty_level || 'Medium',
-        exam_tag: q.exam_tag || (examGroup === 'Group 1' ? 'TNPSC_GROUP_1' : examGroup === 'Group 2' || examGroup === 'Group 2A' ? 'TNPSC_GROUP_2' : 'TNPSC_GROUP_4'),
+        exam_tag: examTagValue,
         exam_group: examGroup,
         unit_number: unitNumber,
         source_type: sourceType,
@@ -725,6 +728,9 @@ export const questionService = {
 
     const applyFilters = (query) => {
       const f = filters || {}
+      // Not bank questions: copies that generated mock tests make of their questions ('Full Mock'),
+      // and papers students upload for themselves ('Custom')
+      query = query.not('papers.exam_type', 'in', '("Full Mock","Custom")')
       if (examTag) query = query.eq('exam_tag', examTag)
       if (paperId && paperId !== 'all') query = query.eq('paper_id', paperId)
       if (f.source && f.source !== 'all') query = query.eq('source_type', f.source)
@@ -776,10 +782,10 @@ export const questionService = {
       return { rows }
     }
 
-    let result = await fetchRows(`${BASE_COLUMNS}, ${EXTRA_COLUMNS}`)
+    let result = await fetchRows(`${BASE_COLUMNS}, ${EXTRA_COLUMNS}, papers!inner(exam_type)`)
     if (result.error && (result.error.code === '42703' || String(result.error.message).toLowerCase().includes('column'))) {
       console.warn('[questionService] Optional columns missing, loading base columns only:', result.error.message)
-      result = await fetchRows(BASE_COLUMNS)
+      result = await fetchRows(`${BASE_COLUMNS}, papers!inner(exam_type)`)
     }
     if (result.error) throw result.error
     const rawQuestions = result.rows
@@ -876,7 +882,8 @@ export const questionService = {
     const countFor = async (narrow) => {
       let query = supabase
         .from('questions')
-        .select('id', { count: 'exact', head: true })
+        .select('id, papers!inner(exam_type)', { count: 'exact', head: true })
+        .not('papers.exam_type', 'in', '("Full Mock","Custom")')
         .eq('exam_tag', examTag)
       if (narrow) query = narrow(query)
       const { count, error } = await query
@@ -901,7 +908,8 @@ export const questionService = {
     for (let from = 0; from < MAX_ROWS; from += CHUNK) {
       const { data, error } = await supabase
         .from('questions')
-        .select('unit_code, macro_topic, micro_topic, exam_year')
+        .select('unit_code, macro_topic, micro_topic, exam_year, papers!inner(exam_type)')
+        .not('papers.exam_type', 'in', '("Full Mock","Custom")')
         .eq('exam_tag', examTag)
         .order('id', { ascending: true })
         .range(from, from + CHUNK - 1)

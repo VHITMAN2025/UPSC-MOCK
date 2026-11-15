@@ -647,7 +647,8 @@ export const testGeneratorService = {
     try {
       let q = supabase
         .from('questions')
-        .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, unit_name, unit_code, macro_topic, micro_topic, difficulty_level, is_pyq')
+        .select('id, question_number, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_text_tamil, option_a_tamil, option_b_tamil, option_c_tamil, option_d_tamil, explanation_tamil, group_tag, group_name, unit_tag, unit_name, unit_code, macro_topic, micro_topic, difficulty_level, is_pyq, papers!inner(exam_type)')
+        .not('papers.exam_type', 'in', '("Full Mock","Custom")')
         .not('correct_option', 'is', null)
 
       // A mock is assembled exclusively from verified repository records.

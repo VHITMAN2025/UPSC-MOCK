@@ -344,6 +344,63 @@ export function validateQuestionAgainstMasterTaxonomy(question, targetExamTag) {
   }
 }
 
+// ─── Unit code from the approved catalog unit ────────────────────────────────
+// Questions extracted from a PDF carry the approved catalog's unit and macro topic
+// ("Unit 5: Indian Polity") but no unit_code, and the mock generator picks questions
+// by unit_code. Group 1 numbers its units differently from Groups 2 and 4, so the
+// mapping depends on the exam group. Returns null when no unit applies, for example
+// Current Events in Group 1, which has no such unit.
+const CATALOG_UNIT_TO_CODE_GROUP1 = {
+  1: 'UNIT_I',     // General Science
+  3: 'UNIT_II',    // Geography of India
+  4: 'UNIT_III',   // History & Culture
+  7: 'UNIT_III',   // National Movement
+  5: 'UNIT_IV',    // Indian Polity
+  6: 'UNIT_V',     // Indian Economy
+  9: 'UNIT_V',     // TN Administration
+  8: 'UNIT_VI',    // TN History & Culture
+}
+const CATALOG_UNIT_TO_CODE_GROUP2_4 = {
+  1: 'UNIT_I',     // General Science
+  2: 'UNIT_II',    // Current Events
+  3: 'UNIT_III',   // Geography of India
+  4: 'UNIT_IV',    // History & Culture
+  5: 'UNIT_V',     // Indian Polity
+  6: 'UNIT_V',     // Indian Economy
+  7: 'UNIT_VI',    // National Movement
+  8: 'UNIT_VI',    // TN History & Culture
+  9: 'UNIT_VI',    // TN Administration
+}
+
+// True for names written the way the approved catalog writes them
+export function isCatalogUnitName(unitName) {
+  return /^\s*(Unit\s*\d+\s*[:\u2014\u2013-]|Part A:)/i.test(String(unitName || ''))
+}
+
+export function deriveUnitCode(examTag, unitName, macroTopic) {
+  const unit = String(unitName || '')
+  const macro = String(macroTopic || '').trim()
+
+  const unitNumber = unit.match(/^\s*Unit\s*(\d+)\s*[:\u2014\u2013-]/i)?.[1]
+  if (unitNumber) {
+    const n = Number(unitNumber)
+    if (n === 10) return macro === 'Logical Reasoning' ? 'APT_UNIT_II' : 'APT_UNIT_I'
+    const table = examTag === 'TNPSC_GROUP_1' ? CATALOG_UNIT_TO_CODE_GROUP1 : CATALOG_UNIT_TO_CODE_GROUP2_4
+    return table[n] || null
+  }
+  if (/^\s*Part A:\s*General Tamil/i.test(unit)) {
+    if (/^Ilakkanam/i.test(macro)) return 'LANG_TA_A'
+    if (/^Ilakkaiyam/i.test(macro)) return 'LANG_TA_B'
+    if (/^Tamil Arignargal/i.test(macro)) return 'LANG_TA_C'
+  }
+  if (/^\s*Part A:\s*General English/i.test(unit)) {
+    if (/^Grammar/i.test(macro)) return 'LANG_EN_A'
+    if (/^Literature/i.test(macro)) return 'LANG_EN_B'
+    if (/^Authors/i.test(macro)) return 'LANG_EN_C'
+  }
+  return null
+}
+
 // ─── 6. 29-Column Schema Normalization ───────────────────────────────────────
 export function normalizeTo29Columns(rawQ, index = 1) {
   const examTag = normalizeExamTag(rawQ.exam_tag || rawQ.group_tag || rawQ.group_name)
@@ -425,8 +482,12 @@ export function normalizeTo29Columns(rawQ, index = 1) {
   let taExpl = rawQ.ta_explanation || rawQ.explanation_tamil || ''
 
   // Infer unit_code if not explicitly set
-  let uCode = rawQ.unit_code || ''
-  if (!uCode) {
+  const catalogUnitName = rawQ.unit_name || rawQ.unit_tag || ''
+  let uCode = rawQ.unit_code
+    || deriveUnitCode(examTag, catalogUnitName, rawQ.macro_topic_name || rawQ.macro_topic)
+    || ''
+  // Catalog-style names are decided above; the loose guesses below are only for other formats
+  if (!uCode && !isCatalogUnitName(catalogUnitName)) {
     const uName = (rawQ.unit_name || rawQ.unit_tag || '').toUpperCase()
     if (uName.includes('SCIENCE') || uName.includes('UNIT 1') || uName === '1') uCode = 'UNIT_I'
     else if (uName.includes('GEOGRAPHY') || uName.includes('UNIT 2') || uName === '2') uCode = 'UNIT_II'
@@ -437,7 +498,7 @@ export function normalizeTo29Columns(rawQ, index = 1) {
     else if (uName.includes('APTITUDE') || uName.includes('UNIT 10') || uName === '10') uCode = 'APT_UNIT_I'
     else if (uName.includes('TAMIL') || uName.includes('UNIT 11') || uName === '11') uCode = 'LANG_TA_A'
     else if (uName.includes('ENGLISH')) uCode = 'LANG_EN_A'
-    else uCode = 'UNIT_I'
+    else uCode = ''
   }
 
   const answerKey = String(rawQ.answer_key || rawQ.correct_option || 'A').toUpperCase().trim()

@@ -10,7 +10,7 @@ import {
 import Papa from 'papaparse'
 import { questionService } from '../../services/questionService'
 import { recallGridService } from '../../services/recallGridService'
-import { paperService } from '../../services/paperService'
+import { paperService, EXAM_NAME_BY_TAG as EXAM_NAME_BY_GROUP } from '../../services/paperService'
 import { supabase } from '../../lib/supabase'
 import { useApp } from '../../contexts/AppContext'
 import {
@@ -81,13 +81,21 @@ const RESET_FIELDS_BY_COLUMN = {
 
 const rowKeyOf = (q) => q.id || q.question_id
 
+// Plain-language result of filing questions into a Previous Year paper
+function describePyqOutcome(title, count, outcome) {
+  const added = `${count} question${count === 1 ? '' : 's'} added to "${title}".`
+  if (outcome.published) return `${added} It is live for students under Previous Year Papers.`
+  if (outcome.demoted) {
+    return `${added} ${outcome.missing} of its ${outcome.total} questions have no answer key, so it was moved back to draft until they are filled in.`
+  }
+  if (outcome.missing > 0) {
+    return `${added} It stays unpublished: ${outcome.missing} of ${outcome.total} questions have no answer key yet.`
+  }
+  return added
+}
+
 // A paper needs only a name. Its exam group comes from the group tab being viewed,
 // and its year from the name (falling back to this year).
-const EXAM_NAME_BY_GROUP = {
-  TNPSC_GROUP_1: 'TNPSC Group 1',
-  TNPSC_GROUP_2: 'TNPSC Group 2/2A',
-  TNPSC_GROUP_4: 'TNPSC Group 4',
-}
 
 function paperPayloadFromName(name, examName) {
   const yearInName = String(name).match(/\b(20\d{2})\b/)
@@ -230,6 +238,9 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   // PDF ingestion: the paper name is asked first, then the paper is created
   const [ingestName, setIngestName] = useState('')
   const [ingestPaper, setIngestPaper] = useState(null)
+  // 'PYQ' (official paper, filed by group and year) or 'VINA' (practice questions)
+  const [ingestSource, setIngestSource] = useState('')
+  const [ingestYear, setIngestYear] = useState('')
   const [creatingIngestPaper, setCreatingIngestPaper] = useState(false)
 
   // The dashboard's "+ Paper" shortcut opens this page with the name dialog ready
@@ -707,6 +718,11 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   // Columns shown for the current language view
   const visibleColumns = GRID_COLUMNS
 
+  // Official (PYQ) rows are filed by group and year automatically; only other rows need a paper
+  const csvPyqCount = (csvValidationResults?.rows || []).filter(r => r.isValid && r.data.source_type === 'PYQ').length
+  const csvNeedsPaper = !csvValidationResults
+    || csvValidationResults.rows.some(r => r.isValid && r.data.source_type !== 'PYQ')
+
   function headerClassFor(col) {
     const tone = col.lang === 'en'
       ? 'border-blue-200 bg-blue-50/80 text-blue-950 font-bold'
@@ -872,34 +888,67 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
     setShowUploadModal(false)
     setIngestPaper(null)
     setIngestName('')
+    setIngestSource('')
+    setIngestYear('')
   }
 
   async function handleStartIngest() {
-    const name = ingestName.trim()
-    if (name.length < 3) {
-      toast.error('Enter a paper name (at least 3 characters).')
+    if (!ingestSource) {
+      toast.error('Choose whether this is an official previous year paper or practice questions.')
       return
     }
     setCreatingIngestPaper(true)
     try {
       const examName = EXAM_NAME_BY_GROUP[selectedGroupTag]
+
+      if (ingestSource === 'PYQ') {
+        // Official questions go to the Previous Year paper for this group and year
+        const year = Number.parseInt(ingestYear, 10)
+        const thisYear = new Date().getFullYear()
+        if (!Number.isInteger(year) || year < 2000 || year > thisYear) {
+          toast.error(`Enter the exam year (2000-${thisYear}).`)
+          return
+        }
+        const paper = await paperService.ensurePyqPaper({ examTag: selectedGroupTag, year })
+        setIngestPaper({ id: paper.id, title: paper.title, sourceType: 'PYQ', year })
+        await loadData()
+        return
+      }
+
+      const name = ingestName.trim()
+      if (name.length < 3) {
+        toast.error('Enter a paper name (at least 3 characters).')
+        return
+      }
       // The same name in the same group adds to that paper instead of making a second one
       const existing = papers.find(p =>
         String(p.title || '').trim().toLowerCase() === name.toLowerCase() && (p.exam_name || '') === examName
       )
       const paper = existing || await paperService.createPaper(paperPayloadFromName(name, examName))
-      setIngestPaper({ id: paper.id, title: paper.title, reused: Boolean(existing) })
+      setIngestPaper({ id: paper.id, title: paper.title, reused: Boolean(existing), sourceType: 'VINA' })
       if (!existing) await loadData()
     } catch (err) {
-      toast.error(err.message || 'Could not create the paper.')
+      toast.error(err.message || 'Could not prepare the paper.')
     } finally {
       setCreatingIngestPaper(false)
     }
   }
 
   async function handleIngestSuccess(count) {
-    toast.success(`${count} questions added. Refreshing the grid...`)
+    const paper = ingestPaper
     closeUploadModal()
+
+    let message = `${count} questions added.`
+    if (paper?.sourceType === 'PYQ') {
+      // Official questions go live under Previous Year Papers once they can be scored
+      try {
+        const outcome = await paperService.publishIfReady(paper.id)
+        message = describePyqOutcome(paper.title, count, outcome)
+      } catch (err) {
+        message += ` The paper could not be published: ${err.message}`
+      }
+    }
+    toast.success(message)
     await loadData()
     refreshGroupMeta()
   }
@@ -1049,6 +1098,17 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
           valRes.isValid = false
         }
 
+        // PYQ rows are filed under Previous Year Papers by year, so the year must be stated
+        // (without this check a missing year would silently become 2024).
+        if (!isRecall && normalized.source_type === 'PYQ') {
+          const statedYear = Number.parseInt(rowObj.year || rowObj.exam_year, 10)
+          const thisYear = new Date().getFullYear()
+          if (!Number.isInteger(statedYear) || statedYear < 2000 || statedYear > thisYear) {
+            valRes.errors.push(`A PYQ question needs the year of its exam (2000-${thisYear}); the year decides which Previous Year paper it joins.`)
+            valRes.isValid = false
+          }
+        }
+
         // 3. Map to the approved question_taxonomy catalog the database enforces
         // (Only the exam question bank is guarded by that database rule.)
         if (!isRecall) {
@@ -1112,12 +1172,35 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
         const { inserted, skipped } = await recallGridService.importRows(validQuestions)
         toast.success(`Imported ${inserted} questions${skipped ? `; skipped ${skipped} already in the pool` : ''}.`)
       } else {
-        const targetPaper = selectedTargetPaperId
-        if (!targetPaper) {
-          throw new Error('Please choose the paper these questions belong to.')
+        const pyqRows = validQuestions.filter(q => q.source_type === 'PYQ')
+        const otherRows = validQuestions.filter(q => q.source_type !== 'PYQ')
+        if (otherRows.length > 0 && !selectedTargetPaperId) {
+          throw new Error('Choose a paper for the VINA questions in this file.')
         }
-        await questionService.saveQuestionsToSupabase(targetPaper, validQuestions, false)
-        toast.success(`Successfully imported ${validQuestions.length} verified questions into the database!`)
+
+        const notes = []
+
+        // Official questions are filed by exam group and year, so each year appears on the
+        // student's Previous Year Papers page without any manual step.
+        const pyqBuckets = new Map()
+        pyqRows.forEach(q => {
+          const key = `${q.exam_tag}|${q.year}`
+          if (!pyqBuckets.has(key)) pyqBuckets.set(key, [])
+          pyqBuckets.get(key).push(q)
+        })
+        for (const [key, rows] of pyqBuckets) {
+          const [examTag, year] = key.split('|')
+          const paper = await paperService.ensurePyqPaper({ examTag, year: Number(year) })
+          await questionService.saveQuestionsToSupabase(paper.id, rows, false)
+          const outcome = await paperService.publishIfReady(paper.id)
+          notes.push(describePyqOutcome(paper.title, rows.length, outcome))
+        }
+
+        if (otherRows.length > 0) {
+          await questionService.saveQuestionsToSupabase(selectedTargetPaperId, otherRows, false)
+          notes.push(`${otherRows.length} VINA question${otherRows.length === 1 ? '' : 's'} added to the chosen paper.`)
+        }
+        toast.success(notes.join(' '))
       }
       setShowBulkCsvModal(false)
       setCsvFile(null)
@@ -1782,11 +1865,17 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                 </label>
               </div>
 
-              {/* Target paper: the admin must choose it explicitly */}
-              {!isRecall && (
+              {/* Official questions are filed automatically; other questions need a chosen paper */}
+              {!isRecall && csvPyqCount > 0 && (
+                <p className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                  {csvPyqCount} official (PYQ) question{csvPyqCount === 1 ? '' : 's'} will be filed automatically under
+                  Previous Year Papers by group and year, and added to the mock test bank.
+                </p>
+              )}
+              {!isRecall && csvNeedsPaper && (
               <div className="space-y-2">
                 <label htmlFor="bulk-csv-target-paper" className="block text-xs font-bold text-body-text">
-                  1. Choose the paper these questions belong to
+                  Choose the paper for the VINA (practice) questions
                 </label>
                 <select
                   id="bulk-csv-target-paper"
@@ -1807,7 +1896,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                   </p>
                 ) : (
                   <p className="text-[11px] text-amber-700 font-semibold">
-                    Choose a paper before importing. Create one in Admin → Papers if it isn't listed.
+                    Choose a paper before importing. Use Create Paper in the Papers panel if it isn't listed.
                   </p>
                 )}
               </div>
@@ -1872,7 +1961,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
 
               <button
                 onClick={handleConfirmImportValidRows}
-                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting || (!isRecall && !selectedTargetPaperId)}
+                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting || (!isRecall && csvNeedsPaper && !selectedTargetPaperId)}
                 className="px-5 py-2.5 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle disabled:opacity-40"
               >
                 {csvImporting ? (
@@ -2025,27 +2114,80 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
             </div>
 
             {!ingestPaper ? (
-              <div className="space-y-3">
-                <label htmlFor="ingest-paper-name" className="block text-xs font-bold text-body-text">
-                  Paper name
-                </label>
-                <input
-                  id="ingest-paper-name"
-                  autoFocus
-                  value={ingestName}
-                  onChange={e => setIngestName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleStartIngest() }}
-                  placeholder="e.g. TNPSC Group 1 Previous Year Paper 2024"
-                  className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
-                />
+              <div className="space-y-4">
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-bold text-body-text mb-1">What is in this PDF?</legend>
+                  <label className="flex items-start gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ingest-source"
+                      checked={ingestSource === 'PYQ'}
+                      onChange={() => setIngestSource('PYQ')}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <b>An official previous year paper (PYQ)</b>. It is filed under Previous Year Papers by group and
+                      year, and added to the mock test bank.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ingest-source"
+                      checked={ingestSource === 'VINA'}
+                      onChange={() => setIngestSource('VINA')}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <b>Practice questions (VINA)</b>. They are saved to a paper you name, and added to the mock test bank.
+                    </span>
+                  </label>
+                </fieldset>
+
+                {ingestSource === 'PYQ' && (
+                  <div className="space-y-1">
+                    <label htmlFor="ingest-year" className="block text-xs font-bold text-body-text">Exam year</label>
+                    <input
+                      id="ingest-year"
+                      type="number"
+                      min="2000"
+                      max={new Date().getFullYear()}
+                      value={ingestYear}
+                      onChange={e => setIngestYear(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleStartIngest() }}
+                      placeholder="e.g. 2024"
+                      className="w-40 px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
+                    />
+                    {ingestYear && (
+                      <p className="text-[11px] text-body-secondary">
+                        Paper: {EXAM_NAME_BY_GROUP[selectedGroupTag]} Previous Year Paper {ingestYear}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {ingestSource === 'VINA' && (
+                  <div className="space-y-1">
+                    <label htmlFor="ingest-paper-name" className="block text-xs font-bold text-body-text">Paper name</label>
+                    <input
+                      id="ingest-paper-name"
+                      value={ingestName}
+                      onChange={e => setIngestName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleStartIngest() }}
+                      placeholder="e.g. Group 1 Practice Set 5"
+                      className="w-full px-3 py-2 border border-surface-border rounded-lg text-sm outline-none focus:ring-2 focus:ring-tnpsc-brand"
+                    />
+                    <p className="text-[11px] text-body-secondary">Using a name that already exists adds to that paper.</p>
+                  </div>
+                )}
+
                 <p className="text-[11px] text-body-secondary">
                   Questions are added to <b>{EXAM_NAME_BY_GROUP[selectedGroupTag]}</b>. Switch the group tab first to use another group.
-                  Using a name that already exists adds to that paper.
                 </p>
                 <button
                   type="button"
                   onClick={handleStartIngest}
-                  disabled={creatingIngestPaper}
+                  disabled={creatingIngestPaper || !ingestSource}
                   className="px-4 py-2 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold disabled:opacity-50"
                 >
                   {creatingIngestPaper ? 'Please wait…' : 'Continue'}
@@ -2067,6 +2209,8 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                     paperId={ingestPaper.id}
                     paperTitle={ingestPaper.title}
                     examTag={selectedGroupTag}
+                    sourceType={ingestPaper.sourceType}
+                    examYear={ingestPaper.year}
                     onImportSuccess={handleIngestSuccess}
                   />
                 ) : (
@@ -2074,6 +2218,8 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
                     paperId={ingestPaper.id}
                     paperTitle={ingestPaper.title}
                     examTag={selectedGroupTag}
+                    sourceType={ingestPaper.sourceType}
+                    examYear={ingestPaper.year}
                     onImportSuccess={handleIngestSuccess}
                   />
                 )}
