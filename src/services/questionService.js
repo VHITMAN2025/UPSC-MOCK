@@ -381,7 +381,9 @@ export const questionService = {
 
     // 2. Map frontend fields to actual Supabase database schema with automatic 3-level taxonomy classification
     const formattedList = questionsList.map((q, idx) => {
-      const opt = q.correct_option || q.marked_answer ? String(q.correct_option || q.marked_answer).toUpperCase().trim() : null
+      // Bulk CSV rows carry the answer as answer_key; other sources use correct_option / marked_answer.
+      const rawAnswer = q.correct_option || q.marked_answer || q.answer_key
+      const opt = rawAnswer ? String(rawAnswer).toUpperCase().trim() : null
       const validOpt = ['A', 'B', 'C', 'D'].includes(opt) ? opt : null
 
       // Options mapping (support both option_a / options array)
@@ -508,6 +510,8 @@ export const questionService = {
         group_name: groupName,
         unit_tag: unitTag,
         unit_name: unitName,
+        // unit_code is what the mock generator matches on (fetchQuestionBankPool)
+        unit_code: q.unit_code || null,
         macro_topic: macroName,
         macro_topic_name: macroName,
         micro_topic: microName,
@@ -670,7 +674,7 @@ export const questionService = {
     // 1. Fetch papers for title and metadata lookup
     const { data: papersData, error: pErr } = await supabase
       .from('papers')
-      .select('id, title, exam_name, exam_type, year, total_questions, created_at')
+      .select('id, title, exam_name, exam_type, year, status, total_questions, created_at')
       .order('created_at', { ascending: false })
 
     if (pErr) console.warn('[questionService] Error fetching papers list:', pErr)

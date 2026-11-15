@@ -156,9 +156,6 @@ export function AdminExtractedQuestionsPage() {
       }))
       setQuestions(normalizedList)
       setPapers(res.papers || [])
-      if (res.papers?.length > 0 && !selectedTargetPaperId) {
-        setSelectedTargetPaperId(res.papers[0].id)
-      }
     } catch (err) {
       console.error('[AdminExtractedQuestionsPage] Load error:', err)
       toast.error('Failed to load questions: ' + err.message)
@@ -756,9 +753,9 @@ export function AdminExtractedQuestionsPage() {
         .map(r => r.data)
 
       // Use target paper or create batch paper
-      const targetPaper = selectedTargetPaperId || papers[0]?.id
+      const targetPaper = selectedTargetPaperId
       if (!targetPaper) {
-        throw new Error('Please select or create a question paper to link these questions.')
+        throw new Error('Please choose the paper these questions belong to.')
       }
 
       await questionService.saveQuestionsToSupabase(targetPaper, validQuestions, false)
@@ -1477,6 +1474,35 @@ export function AdminExtractedQuestionsPage() {
                 </label>
               </div>
 
+              {/* Target paper: the admin must choose it explicitly */}
+              <div className="space-y-2">
+                <label htmlFor="bulk-csv-target-paper" className="block text-xs font-bold text-body-text">
+                  1. Choose the paper these questions belong to
+                </label>
+                <select
+                  id="bulk-csv-target-paper"
+                  value={selectedTargetPaperId}
+                  onChange={e => setSelectedTargetPaperId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-surface-border rounded-lg text-xs"
+                >
+                  <option value="">Select a paper…</option>
+                  {papers.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.title} · {p.exam_name || 'No exam'} · {p.status || 'draft'} · {p.total_questions || 0} Qs
+                    </option>
+                  ))}
+                </select>
+                {selectedTargetPaperId ? (
+                  <p className="text-[11px] text-emerald-700 font-semibold">
+                    Questions will be added to: {papers.find(p => p.id === selectedTargetPaperId)?.title}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-amber-700 font-semibold">
+                    Choose a paper before importing. Create one in Admin → Papers if it isn't listed.
+                  </p>
+                )}
+              </div>
+
               {csvParsing && (
                 <div className="p-8 text-center">
                   <Loader2 className="w-6 h-6 text-tnpsc-brand animate-spin mx-auto mb-2" />
@@ -1536,7 +1562,7 @@ export function AdminExtractedQuestionsPage() {
 
               <button
                 onClick={handleConfirmImportValidRows}
-                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting}
+                disabled={!csvValidationResults || csvValidationResults.validCount === 0 || csvImporting || !selectedTargetPaperId}
                 className="px-5 py-2.5 bg-tnpsc-brand hover:bg-[#4f46e5] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-subtle disabled:opacity-40"
               >
                 {csvImporting ? (
