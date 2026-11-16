@@ -25,12 +25,12 @@ export function PaperListPage() {
   const [papers, setPapers] = useState([])
   const [startingYear, setStartingYear] = useState(null)
 
-  // Load published papers matching current selected exam group from sidebar
+  // Load only PYQ (Previous Year Question) papers, not Vina mock tests
   useEffect(() => {
     async function loadPapers() {
       setLoading(true)
       try {
-        const data = await paperService.getAllPapersForAdmin()
+        const data = await paperService.getPyqPapersOnly()
         setPapers(data || [])
       } catch (err) {
         console.error('Failed to load question papers:', err)
@@ -61,13 +61,16 @@ export function PaperListPage() {
       keywords = ['group 2', 'group-2', 'grp_2', 'grp_ii', 'group 2/2a', 'group 2a']
     }
 
-    // Match published papers belonging to the selected group (exclude full mock tests)
+    // Match only PYQ papers (exam_type = 'Previous Year') belonging to the selected group
     const matchedPapers = papers.filter(p => {
-      if (p.status !== 'published') return false
       const title = (p.title || '').toLowerCase()
-      const examType = (p.exam_type || '').toLowerCase()
-      if (examType.includes('mock') || title.includes('mock test')) return false
       const examName = (p.exam_name || '').toLowerCase()
+      const examType = (p.exam_type || '').toLowerCase()
+      
+      // Must be a Previous Year paper (not mock test or Vina paper)
+      if (examType !== 'previous year') return false
+      
+      // Must match the selected exam group
       return keywords.some(k => title.includes(k) || examName.includes(k))
     })
 

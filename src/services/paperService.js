@@ -62,6 +62,22 @@ export const paperService = {
     return data || []
   },
 
+  /**
+   * Get only Previous Year Question (PYQ) papers for the student-facing PYQ page.
+   * Filters papers by exam_type = 'Previous Year' to exclude Vina mock tests.
+   */
+  async getPyqPapersOnly() {
+    const { data, error } = await supabase
+      .from('papers')
+      .select('*')
+      .eq('exam_type', 'Previous Year')
+      .order('year', { ascending: false })
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  },
+
   async getPaperById(paperId) {
     const { data, error } = await supabase
       .from('papers')
