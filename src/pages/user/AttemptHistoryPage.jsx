@@ -38,9 +38,14 @@ export function AttemptHistoryPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-body-text">My Exam Attempt History</h1>
-        <p className="text-xs text-body-secondary mt-1">Review all your previous exam practice attempts and compare progress over time</p>
+      <div className="flex items-center gap-3 border-b border-surface-border pb-5">
+        <div className="w-10 h-10 rounded-xl bg-tnpsc-brand-light text-tnpsc-brand flex items-center justify-center shrink-0">
+          <History className="w-5 h-5" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold text-body-text">Exam History & Review Archive</h1>
+          <p className="text-xs text-body-secondary mt-0.5">Review all your previous exam attempts and track progress over time</p>
+        </div>
       </div>
 
       {attempts.length === 0 ? (
@@ -55,91 +60,110 @@ export function AttemptHistoryPage() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
-          {attempts.map((att) => {
-            const isCompleted = att.status === 'completed'
-            const isInProgress = att.status === 'in_progress'
+        /* Table View - Clean 6-Column Layout as per handoff spec */
+        <div className="bg-white rounded-2xl border border-surface-border shadow-card overflow-hidden">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-5 py-3.5 bg-slate-50 border-b border-surface-border text-xs font-bold text-body-secondary uppercase">
+            <div className="col-span-4">Session</div>
+            <div className="col-span-2">Mode</div>
+            <div className="col-span-2">Date</div>
+            <div className="col-span-1">Score</div>
+            <div className="col-span-1">Accuracy</div>
+            <div className="col-span-2">Action</div>
+          </div>
 
-            return (
-              <div
-                key={att.id}
-                className="bg-white rounded-xl border border-surface-border p-5 shadow-card hover:shadow-md transition-shadow flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-              >
-                {/* Info Column */}
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-primary border border-blue-100">
-                      Attempt #{att.attempt_number}
+          {/* Table Rows */}
+          <div className="divide-y divide-surface-border">
+            {attempts.map((att) => {
+              const isCompleted = att.status === 'completed'
+              const isInProgress = att.status === 'in_progress'
+
+              // Determine mode pill styling
+              let modePill = { label: 'Full Mock', color: 'bg-purple-100 text-purple-800 border-purple-200' }
+              if (att.papers?.exam_type === 'PYQ') {
+                modePill = { label: 'PYQ Paper', color: 'bg-green-100 text-green-800 border-green-200' }
+              } else if (att.papers?.exam_type === 'Custom') {
+                modePill = { label: 'Custom 50Q', color: 'bg-orange-100 text-orange-800 border-orange-200' }
+              }
+
+              return (
+                <div key={att.id} className="grid grid-cols-12 gap-4 px-5 py-4 hover:bg-slate-50 transition-colors text-sm items-center">
+                  {/* SESSION */}
+                  <div className="col-span-4">
+                    <div className="flex items-center gap-2.5">
+                      {att.papers?.exam_type === 'PYQ' ? (
+                        <span className="text-lg">📜</span>
+                      ) : att.papers?.exam_type === 'Custom' ? (
+                        <span className="text-lg">📚</span>
+                      ) : (
+                        <span className="text-lg">⏱</span>
+                      )}
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-body-text leading-tight truncate" title={att.papers?.title}>
+                          {att.papers?.title || 'TNPSC Question Paper'}
+                        </h3>
+                        <p className="text-[11px] text-body-secondary truncate">
+                          {att.papers?.subject || 'General Studies'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* MODE */}
+                  <div className="col-span-2">
+                    <span className={`inline-block text-[10px] font-bold px-2.5 py-1 rounded-full border ${modePill.color}`}>
+                      {modePill.label}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      isCompleted ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'
-                    }`}>
-                      {att.status.replace('_', ' ')}
-                    </span>
                   </div>
 
-                  <h3 className="font-bold text-base text-body-text">
-                    {att.papers?.title || 'UPSC Question Paper'}
-                  </h3>
-
-                  <p className="text-xs text-body-secondary">
-                    {isCompleted ? `Submitted on ${formatDate(att.submitted_at)}` : `Started on ${formatDate(att.started_at)}`}
-                  </p>
-                </div>
-
-                {/* Score & Metrics Pill */}
-                {isCompleted ? (
-                  <div className="flex items-center space-x-6 text-center bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <div>
-                      <span className="text-[10px] text-body-secondary uppercase font-bold block">Score</span>
-                      <span className="text-lg font-extrabold text-primary">{formatScore(att.score)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-body-secondary uppercase font-bold block">Correct</span>
-                      <span className="text-sm font-bold text-emerald-700">{att.correct_count}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-body-secondary uppercase font-bold block">Accuracy</span>
-                      <span className="text-sm font-bold text-indigo-700">{att.accuracy}%</span>
-                    </div>
+                  {/* DATE */}
+                  <div className="col-span-2 text-xs text-body-secondary">
+                    {formatDate(isCompleted ? att.submitted_at : att.started_at)}
                   </div>
-                ) : (
-                  <div className="text-xs font-semibold text-amber-700 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
-                    Exam currently in progress
-                  </div>
-                )}
 
-                {/* Action Buttons */}
-                <div className="flex items-center space-x-2 w-full md:w-auto">
-                  {isCompleted ? (
-                    <>
+                  {/* SCORE */}
+                  <div className="col-span-1">
+                    {isCompleted ? (
+                      <span className="text-sm font-bold text-body-text">
+                        {formatScore(att.score)} <span className="text-body-secondary font-normal">/ 200</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-amber-700">—</span>
+                    )}
+                  </div>
+
+                  {/* ACCURACY */}
+                  <div className="col-span-1">
+                    {isCompleted ? (
+                      <span className="text-sm font-bold text-body-text">{att.accuracy}%</span>
+                    ) : (
+                      <span className="text-xs text-amber-700">—</span>
+                    )}
+                  </div>
+
+                  {/* ACTION */}
+                  <div className="col-span-2">
+                    {isCompleted ? (
                       <Link
                         to={`/attempt/${att.id}/result`}
-                        className="flex-1 md:flex-none px-4 py-2 bg-white border border-surface-border text-body-text hover:bg-slate-50 font-semibold text-xs rounded-lg transition-colors text-center"
+                        className="inline-flex items-center justify-center px-4 py-2 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white rounded-lg text-xs font-bold transition-colors shadow-subtle"
                       >
-                        View Result
+                        Review
                       </Link>
+                    ) : (
                       <Link
-                        to={`/compare/${att.paper_id}`}
-                        className="flex-1 md:flex-none px-4 py-2 bg-primary hover:bg-primary-hover text-white font-semibold text-xs rounded-lg transition-colors text-center flex items-center justify-center space-x-1 shadow-subtle"
+                        to={`/exam/${att.paper_id}`}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg text-xs font-bold transition-colors shadow-subtle"
                       >
-                        <GitCompare className="w-3.5 h-3.5" />
-                        <span>Compare</span>
+                        <Play className="w-3.5 h-3.5 fill-slate-950" />
+                        Resume
                       </Link>
-                    </>
-                  ) : (
-                    <Link
-                      to={`/exam/${att.paper_id}`}
-                      className="w-full md:w-auto px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg transition-colors text-center flex items-center justify-center space-x-1 shadow-subtle"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-slate-950" />
-                      <span>Resume Exam</span>
-                    </Link>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

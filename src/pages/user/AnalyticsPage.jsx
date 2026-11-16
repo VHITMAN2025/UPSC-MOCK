@@ -18,10 +18,11 @@ import { analyticsService } from '../../services/tnpscService'
 import { syllabusAnalyticsService } from '../../services/syllabusAnalyticsService'
 import { formatDate } from '../../lib/utils'
 
+// TNPSC Official Benchmark: 180 mins for 200 questions = 54 seconds per question
 const TNPSC_BENCHMARK_SEC = 54
-const BEHIND_PACE_THRESHOLD_SEC = 70
-const WATCH_PACE_THRESHOLD_SEC = 55
+const SLOW_RESPONSE_THRESHOLD_SEC = 70
 
+// Pacing category filters
 const PACING_CATEGORIES = [
   'All Categories',
   'Aptitude & Mental Ability',
@@ -32,14 +33,12 @@ const PACING_CATEGORIES = [
   'Language (Tamil / English)',
 ]
 
+// As per handoff spec: Only 4 essential tabs
 const DIAGNOSTIC_TABS = [
-  { id: 'ma-view-overview',   label: 'Overview' },
-  { id: 'ma-view-syllabus',   label: 'Syllabus Mastery' },
-  { id: 'ma-view-errors',     label: 'Error Intelligence' },
-  { id: 'ma-view-pacing',     label: 'Time & Pacing' },
-  { id: 'ma-view-questions',  label: 'Question Intelligence' },
-  { id: 'ma-view-history',    label: 'Test History' },
-  { id: 'ma-view-recall',     label: 'Quick Recall' },
+  { id: 'ma-view-overview',    label: 'Overview & Mock Trend' },
+  { id: 'ma-view-unit-topic',  label: 'Unit & Topic Accuracy' },
+  { id: 'ma-view-pacing',      label: 'Pacing & Time (54s/Q)' },
+  { id: 'ma-view-mistakes',    label: 'Mistake Log & Test History' },
 ]
 
 function formatDeltaSeconds(deltaSec) {
@@ -132,12 +131,12 @@ export function AnalyticsPage() {
     const totalTargetSec = count * TNPSC_BENCHMARK_SEC
     const netDeltaSec = totalActualSec - totalTargetSec
     const avgTimeSec = Math.round(totalActualSec / count)
-    const behindPaceCount = filteredQuestionTimings.filter(q => q.timeSpentSec >= BEHIND_PACE_THRESHOLD_SEC).length
-    const watchPaceCount  = filteredQuestionTimings.filter(q => q.timeSpentSec > TNPSC_BENCHMARK_SEC && q.timeSpentSec < BEHIND_PACE_THRESHOLD_SEC).length
+    const behindPaceCount = filteredQuestionTimings.filter(q => q.timeSpentSec >= SLOW_RESPONSE_THRESHOLD_SEC).length
+    const watchPaceCount  = filteredQuestionTimings.filter(q => q.timeSpentSec > TNPSC_BENCHMARK_SEC && q.timeSpentSec < SLOW_RESPONSE_THRESHOLD_SEC).length
     const onPaceCount     = filteredQuestionTimings.filter(q => q.timeSpentSec <= TNPSC_BENCHMARK_SEC).length
 
     const overallStatus =
-      avgTimeSec >= BEHIND_PACE_THRESHOLD_SEC ? 'behind' : avgTimeSec > TNPSC_BENCHMARK_SEC ? 'watch' : 'on_pace'
+      avgTimeSec >= SLOW_RESPONSE_THRESHOLD_SEC ? 'behind' : avgTimeSec > TNPSC_BENCHMARK_SEC ? 'watch' : 'on_pace'
 
     return {
       count,
@@ -163,7 +162,7 @@ export function AnalyticsPage() {
       return {
         ...c,
         avgSec,
-        status: avgSec >= BEHIND_PACE_THRESHOLD_SEC ? 'behind' : avgSec > TNPSC_BENCHMARK_SEC ? 'watch' : 'on_pace',
+        status: avgSec >= SLOW_RESPONSE_THRESHOLD_SEC ? 'behind' : avgSec > TNPSC_BENCHMARK_SEC ? 'watch' : 'on_pace',
       }
     }).sort((a, b) => b.avgSec - a.avgSec)
   }, [allQuestionTimings])
@@ -542,98 +541,91 @@ export function AnalyticsPage() {
             </div>
           </div>
 
-          {/* 6 Top Global KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mt-5">
-            {/* KPI 1: Readiness Index (0-100) + Delta */}
-            <div className="bg-gradient-to-br from-[#25205a] to-[#191d38] border border-[#5147a7] rounded-xl p-3">
+          {/* Top 4 KPI Cards (as per handoff spec) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+            {/* KPI 1: Avg Mock Score + Score Delta */}
+            <div className="bg-gradient-to-br from-[#25205a] to-[#191d38] border border-[#5147a7] rounded-xl p-4">
               <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Readiness Index
+                Avg Mock Score
               </small>
-              <b className="block text-xl font-black text-[#a9a4ff] mt-1">
-                {readinessIndex} / 100
-                {trendSummary.hasMultipleTests && trendSummary.latestDeltaScore !== 0 && (
-                  <span className={`text-xs font-bold ml-1.5 ${trendSummary.latestDeltaScore > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {trendSummary.latestDeltaScore > 0 ? `↑ ${trendSummary.latestDeltaScore}` : `↓ ${Math.abs(trendSummary.latestDeltaScore)}`}
-                  </span>
-                )}
+              <b className="block text-2xl font-black text-white mt-1">
+                {hasAttempts ? `${Math.round((avgScoreLast5 / 100) * 200)}` : '—'}
+                <span className="text-sm text-slate-400 font-normal"> / 200</span>
               </b>
-              <span className="block text-[10px] text-slate-400 mt-0.5">
-                50% Mock · 30% Syl · 20% Cons
+              {trendSummary.hasMultipleTests && trendSummary.latestDeltaScore !== 0 && (
+                <div className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${
+                  trendSummary.latestDeltaScore > 0 
+                    ? 'bg-emerald-500/20 text-emerald-400' 
+                    : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {trendSummary.latestDeltaScore > 0 ? '↑' : '↓'} {Math.abs(trendSummary.latestDeltaScore)} Marks
+                </div>
+              )}
+              <span className="block text-[10px] text-slate-400 mt-2">
+                Safe Cut-off Target: 160+
               </span>
             </div>
 
-            {/* KPI 2: Average Score (out of 200) */}
-            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
+            {/* KPI 2: Overall Accuracy */}
+            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-4">
               <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Average Score
+                Overall Accuracy
               </small>
-              <b className="block text-xl font-black text-white mt-1">
-                {hasAttempts ? `${Math.round((avgScoreLast5 / 100) * 200)} / 200` : '—'}
-              </b>
-              <span className="block text-[10px] text-slate-400 mt-0.5">
-                {hasAttempts ? `${avgScoreLast5}% (N=${Math.min(5, last5Tests.length || 1)})` : 'No mock scores'}
-              </span>
-            </div>
-
-            {/* KPI 3: Attempted Accuracy */}
-            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
-              <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Attempted Accuracy
-              </small>
-              <b className="block text-xl font-black text-emerald-400 mt-1">
+              <b className="block text-2xl font-black text-emerald-400 mt-1">
                 {hasAttempts ? `${data.avgAccuracy}%` : '—'}
               </b>
-              <span className="block text-[10px] text-slate-400 mt-0.5">
-                {hasAttempts
-                  ? (data.totalAnswered === 1
-                      ? 'Based on 1 answered Q'
-                      : `Based on ${data.totalAnswered || 0} answered Qs`)
-                  : 'No attempts recorded'}
-              </span>
+              {hasAttempts && last5Tests[last5Tests.length - 1] && (
+                <span className="block text-[10px] text-slate-400 mt-2">
+                  Latest: {last5Tests[last5Tests.length - 1].correct_count || 0} Correct · {last5Tests[last5Tests.length - 1].wrong_count || 0} Wrong · {last5Tests[last5Tests.length - 1].unattempted_count || 0} Left
+                </span>
+              )}
+              {!hasAttempts && (
+                <span className="block text-[10px] text-slate-400 mt-2">
+                  No attempts recorded
+                </span>
+              )}
             </div>
 
-            {/* KPI 4: Avg Time / Q */}
-            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
+            {/* KPI 3: Pacing & Speed */}
+            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-4">
               <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Avg Time / Q
+                Pacing & Speed
               </small>
-              <b className="block text-xl font-black text-white mt-1">
-                {pacingSummary.count > 0 ? `${pacingSummary.avgTimeSec} sec` : '—'}
+              <b className="block text-2xl font-black text-white mt-1">
+                {pacingSummary.count > 0 ? `${pacingSummary.avgTimeSec}s` : '—'}
+                <span className="text-sm text-slate-400 font-normal"> / Q</span>
               </b>
-              <span className="block text-[10px] text-slate-400 mt-0.5">
-                Target: 54s / Q
+              <span className="block text-[10px] text-slate-400 mt-2">
+                Benchmark: 54s / Question
               </span>
             </div>
 
-            {/* KPI 5: Consistency (Mocks >= baseline / 5) */}
-            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
-              <small className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Consistency
-              </small>
-              <b className="block text-xl font-black text-white mt-1">
-                {hasAttempts ? `${consistentMocksCount} / ${Math.min(5, Math.max(1, last5Tests.length))}` : '—'}
-              </b>
-              <span className="block text-[10px] text-slate-400 mt-0.5">
-                Mocks ≥ 60% baseline
-              </span>
-            </div>
-
-            {/* KPI 6: Weak Units */}
-            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-3">
+            {/* KPI 4: Weak Units (<50%) */}
+            <div className="bg-[#181e32] border border-slate-800 rounded-xl p-4">
               <small className="block text-[10px] font-bold text-red-400 uppercase tracking-wider">
-                Weak Units
+                Weak Units (&lt;50%)
               </small>
-              <b className="block text-xl font-black text-red-400 mt-1">
-                {weakUnitsCount}
+              <b className="block text-2xl font-black text-red-400 mt-1">
+                {weakUnitsCount} <span className="text-sm text-slate-400 font-normal">of 10</span>
               </b>
-              <span className="block text-[10px] text-slate-400 mt-0.5">
-                Unit Score &lt; 50%
-              </span>
+              {weakUnitsCount > 0 && units.length > 0 && (
+                <span className="block text-[10px] text-slate-400 mt-2 truncate">
+                  {units.filter(u => Number(u.accuracy_percentage || 0) < 50 || Number(u.total_attempts || 0) === 0)
+                    .slice(0, 2)
+                    .map(u => u.unit_name?.split(':')[0] || 'Unit')
+                    .join(', ')}
+                </span>
+              )}
+              {weakUnitsCount === 0 && (
+                <span className="block text-[10px] text-emerald-400 mt-2">
+                  All units above 50%!
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ── 7 Top Navigation Tabs with Exact IDs ──────────────────────── */}
+        {/* ── 4 Top Navigation Tabs (Overview, Unit/Topic, Pacing, Mistakes) ────── */}
         <div className="flex items-center gap-6 px-6 bg-[#111426] border-b border-slate-800/80 overflow-x-auto">
           {DIAGNOSTIC_TABS.map(tab => (
             <button
@@ -648,11 +640,6 @@ export function AnalyticsPage() {
               }`}
             >
               {tab.label}
-              {tab.id === 'ma-view-errors' && uniqueMistakeIds.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-500/20 text-red-400 border border-red-500/30">
-                  {uniqueMistakeIds.length}
-                </span>
-              )}
             </button>
           ))}
         </div>

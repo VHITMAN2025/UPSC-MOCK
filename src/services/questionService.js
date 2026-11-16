@@ -882,8 +882,7 @@ export const questionService = {
     const countFor = async (narrow) => {
       let query = supabase
         .from('questions')
-        .select('id, papers!inner(exam_type)', { count: 'exact', head: true })
-        .not('papers.exam_type', 'in', '("Full Mock","Custom")')
+        .select('id', { count: 'exact', head: true })
         .eq('exam_tag', examTag)
       if (narrow) query = narrow(query)
       const { count, error } = await query
@@ -908,8 +907,7 @@ export const questionService = {
     for (let from = 0; from < MAX_ROWS; from += CHUNK) {
       const { data, error } = await supabase
         .from('questions')
-        .select('unit_code, macro_topic, micro_topic, exam_year, papers!inner(exam_type)')
-        .not('papers.exam_type', 'in', '("Full Mock","Custom")')
+        .select('unit_code, macro_topic, micro_topic, exam_year')
         .eq('exam_tag', examTag)
         .order('id', { ascending: true })
         .range(from, from + CHUNK - 1)

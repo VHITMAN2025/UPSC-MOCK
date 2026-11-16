@@ -218,9 +218,6 @@ export function MockTestsPage() {
             <h1 className="text-2xl font-black tracking-tight text-body-text">
               Official 200-Question Full Mock Tests
             </h1>
-            <p className="text-xs text-body-secondary mt-0.5">
-              Exact TNPSC Syllabus Quotas · 300 Marks · 180 Minutes · Mandatory Option E · Zero Repetition
-            </p>
           </div>
         </div>
 
@@ -255,9 +252,11 @@ export function MockTestsPage() {
               <h2 className="text-xl md:text-2xl font-black tracking-tight">
                 {selectedExam} Examination Simulation
               </h2>
-              <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                {syllabusBlueprint.standard}. Dynamically assembled from verified database questions matching official syllabus unit weightages.
-              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 font-bold tracking-wide border border-indigo-400/30">
+                  {syllabusBlueprint.standard}
+                </span>
+              </div>
             </div>
 
             {/* Metrics Chips */}
@@ -284,31 +283,22 @@ export function MockTestsPage() {
             <div className="bg-slate-50 border border-surface-border rounded-2xl p-4 space-y-1.5">
               <span className="text-xs font-bold text-body-text flex items-center gap-2">
                 <Award className="w-4 h-4 text-emerald-600" />
-                1.5 Marks per Correct Question
+                1.5 Marks per Correct
               </span>
-              <p className="text-[11px] text-body-secondary leading-relaxed">
-                Every correctly answered question is awarded 1.5 marks. Total maximum attainable score is 300 marks.
-              </p>
             </div>
 
             <div className="bg-slate-50 border border-surface-border rounded-2xl p-4 space-y-1.5">
               <span className="text-xs font-bold text-body-text flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-indigo-600" />
-                Mandatory Option E (No Penalty)
+                Mandatory Option E
               </span>
-              <p className="text-[11px] text-body-secondary leading-relaxed">
-                Option E ("Answer not known" / "விடை தெரியவில்லை") is provided for every question. Selecting Option E scores 0 marks without any penalty.
-              </p>
             </div>
 
             <div className="bg-slate-50 border border-surface-border rounded-2xl p-4 space-y-1.5">
               <span className="text-xs font-bold text-body-text flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-600" />
-                180 Minutes (3.0 Hours)
+                180 Minutes (3 Hours)
               </span>
-              <p className="text-[11px] text-body-secondary leading-relaxed">
-                54 seconds ideal pacing per question. Real-time timer auto-submits on completion. Answers autosave continuously.
-              </p>
             </div>
           </div>
 
@@ -318,7 +308,6 @@ export function MockTestsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-indigo-950">Select Language Preference for Part A (Questions 1–100)</h3>
-                  <p className="text-xs text-indigo-700">Choose between General Tamil or General English for your 100 language questions.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -397,12 +386,7 @@ export function MockTestsPage() {
           </div>
 
           {/* Launch Action */}
-          <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-surface-border">
-            <div className="flex items-center gap-2 text-xs text-body-secondary">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Zero-repetition active: guarantees never-seen questions for this attempt.</span>
-            </div>
-
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-end gap-4 border-t border-surface-border">
             <button
               onClick={handleLaunchOfficialMock}
               disabled={generating}
@@ -424,85 +408,6 @@ export function MockTestsPage() {
         </div>
       </div>
 
-      {/* ── Published Question Papers ────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-body-text">
-              Published Practice Papers ({selectedExam})
-            </h2>
-            <p className="text-xs text-body-secondary">
-              Pre-published official exam papers available for direct reattempt
-            </p>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="py-12 text-center">
-            <Loader2 className="w-6 h-6 animate-spin text-tnpsc-brand mx-auto mb-2" />
-            <p className="text-xs text-body-secondary">Loading published papers…</p>
-          </div>
-        ) : papers.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-surface-border p-8 text-center space-y-2">
-            <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-            <p className="text-xs font-bold text-body-text">No pre-published papers for {selectedExam}</p>
-            <p className="text-[11px] text-body-secondary">
-              Launch the 200-question full mock test above anytime to generate a complete exam paper.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {papers.map(paper => (
-              <div
-                key={paper.id}
-                className="bg-white rounded-2xl border border-surface-border p-5 flex flex-col justify-between hover:shadow-card transition-all"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                      {paper.exam_type || 'Full Mock'}
-                    </span>
-                    <span className="text-xs text-body-secondary font-mono">{paper.year || 2024}</span>
-                  </div>
-                  <h3 className="text-sm font-bold text-body-text leading-snug line-clamp-2" title={paper.title}>
-                    {paper.title}
-                  </h3>
-                  <p className="text-xs text-body-secondary">{paper.subject || 'General Studies'}</p>
-                </div>
-
-                <div className="pt-4 border-t border-surface-border mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3 text-xs text-body-secondary">
-                    <span>{paper.total_questions || 200} Qs</span>
-                    <span>·</span>
-                    <span>{paper.duration_minutes || 180} mins</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/papers/${paper.id}`}
-                      className="px-3 py-1.5 rounded-lg border border-surface-border text-xs font-bold hover:bg-slate-50 transition-colors"
-                    >
-                      Details
-                    </Link>
-                    <button
-                      onClick={() => startExistingMock(paper)}
-                      disabled={starting === paper.id}
-                      className="px-3 py-1.5 bg-tnpsc-brand hover:bg-tnpsc-brand-hover text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-subtle disabled:opacity-60"
-                    >
-                      {starting === paper.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                      )}
-                      <span>Start</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   )
 }

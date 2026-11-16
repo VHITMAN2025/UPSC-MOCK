@@ -685,7 +685,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
       setSelectedKeys(new Set())
       setShowDeleteConfirm(false)
       await loadData()
-      refreshGroupMeta()
+      await refreshGroupMeta()
     } catch (err) {
       console.error('Bulk delete error:', err)
       toast.error('Failed to delete questions: ' + err.message)
@@ -695,27 +695,33 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
   }
 
   // ── Inventory & Blueprint Health Monitor Calculations ───────────────────────
-  // Counts come from the database (not from the rows loaded in the grid), so
-  // they stay correct while the grid shows only the newest 400 questions.
+  // Counts are calculated from the questions currently loaded in the grid
   const healthMonitor = useMemo(() => {
     const blueprintKey = GROUP_CONFIGS.find(g => g.id === selectedGroupTag)?.blueprintKey
     const blueprint = OFFICIAL_200Q_BLUEPRINTS[blueprintKey] || []
 
+    // Count questions by unit_code from the loaded grid questions
+    const unitCounts = {}
+    groupFilteredQuestions.forEach(q => {
+      const unitCode = q.unit_code || 'Unknown'
+      unitCounts[unitCode] = (unitCounts[unitCode] || 0) + 1
+    })
+
     let minFullMocksPossible = blueprint.length ? 9999 : 0
     blueprint.forEach(b => {
-      const mocksPossible = Math.floor((groupInventory.byUnit[b.unit_code] || 0) / (b.quota || 1))
+      const mocksPossible = Math.floor((unitCounts[b.unit_code] || 0) / (b.quota || 1))
       if (mocksPossible < minFullMocksPossible) minFullMocksPossible = mocksPossible
     })
 
     return {
-      totalQuestions: groupInventory.total,
+      totalQuestions: groupFilteredQuestions.length,
       minFullMocksPossible,
       unitBreakdown: unitCodesForGroup.map(code => ({
         unit_code: code,
-        available: groupInventory.byUnit[code] || 0,
+        available: unitCounts[code] || 0,
       })),
     }
-  }, [groupInventory, unitCodesForGroup, selectedGroupTag])
+  }, [groupFilteredQuestions, unitCodesForGroup, selectedGroupTag])
 
   // ── Inline Cell Editing ─────────────────────────────────────────────────────
   // Columns shown for the current language view
@@ -813,7 +819,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
       toast.success(`Saved ${col?.label || field}`)
 
       if (['unit_code', 'macro_topic', 'micro_topic', 'year', 'source_type'].includes(field)) {
-        refreshGroupMeta()
+        await refreshGroupMeta()
       }
     } catch (err) {
       console.error('Cell save error:', err)
@@ -878,7 +884,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
       setSelectedKeys(new Set())
       toast.success('Paper deleted.')
       await loadData()
-      refreshGroupMeta()
+      await refreshGroupMeta()
     } catch (err) {
       toast.error(err.message || 'Could not delete the paper.')
     } finally {
@@ -988,7 +994,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
       setSelectedGroupTag(target.examTag)
     } else {
       await loadData()
-      refreshGroupMeta()
+      await refreshGroupMeta()
     }
   }
 
@@ -1245,7 +1251,7 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
       setCsvFile(null)
       setCsvValidationResults(null)
       await loadData()
-      refreshGroupMeta()
+      await refreshGroupMeta()
     } catch (err) {
       console.error('Import error:', err)
       toast.error('Failed to import questions: ' + err.message)

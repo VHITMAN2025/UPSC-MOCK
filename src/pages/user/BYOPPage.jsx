@@ -1520,9 +1520,6 @@ export function BYOPPage() {
           <Upload className="w-6 h-6 text-tnpsc-brand" />
           <div>
             <h1 className="text-xl font-bold text-body-text">Bring Your Own Paper</h1>
-            <p className="text-xs text-body-secondary">
-              Upload selectable-text PDF — local parser extracts questions automatically
-            </p>
           </div>
         </div>
         <button
@@ -1543,9 +1540,6 @@ export function BYOPPage() {
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
             <div>
               <p className="text-xs font-bold text-amber-900">Personal Google Gemini API Key Required for AI Vision</p>
-              <p className="text-[11px] text-amber-700 mt-0.5">
-                To extract questions from Tamil, handwritten, or scanned PDFs using Gemini AI, please configure your free Gemini API key in Settings.
-              </p>
             </div>
           </div>
           <button
