@@ -4,6 +4,11 @@
 -- the new catalog is used for import. Safe to run more than once.
 -- Remapping existing questions from the old unit codes is a separate step (not in this file).
 
+-- The original table only allowed ALL_GROUPS and GROUP_2_AND_4, so widen the check first.
+ALTER TABLE public.question_taxonomy DROP CONSTRAINT IF EXISTS question_taxonomy_exam_group_check;
+ALTER TABLE public.question_taxonomy ADD CONSTRAINT question_taxonomy_exam_group_check
+  CHECK (exam_group IN ('ALL_GROUPS', 'GROUP_2_AND_4', 'TNPSC_GROUP_1', 'TNPSC_GROUP_2', 'TNPSC_GROUP_4'));
+
 INSERT INTO public.question_taxonomy (exam_group, unit_name, macro_topic_name, micro_topic_name)
 VALUES
   ('TNPSC_GROUP_4', 'Unit I: General Science', 'Physics', 'Mechanics, Force, Pressure & Energy'),
