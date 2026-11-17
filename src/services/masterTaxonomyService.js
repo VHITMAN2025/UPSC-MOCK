@@ -1,4 +1,5 @@
 import questionTranslations from '../data/question_translations.js'
+import { TAXONOMY_V2, BLUEPRINTS_V2 } from '../data/taxonomyV2.js'
 
 /**
  * Master Taxonomy Service & 29-Column Schema Specification
@@ -13,173 +14,12 @@ import questionTranslations from '../data/question_translations.js'
  * 4. 29-Column Schema Normalization & Serialization
  */
 
-// ─── 1. Group 1 Locked Master Taxonomy ──────────────────────────────────────
-export const GROUP1_MASTER_TAXONOMY = [
-  // ── UNIT_I: General Science (Quota: 10) ────────────────────────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Physics', micro_topic: 'Mechanics, Force, Motion & Properties of Matter', sub_topic: 'Laws of Motion & Gravitation' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Physics', micro_topic: 'Light, Sound, Heat, Electricity & Magnetism', sub_topic: 'Ohm Law, Resistance & Optics' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Chemistry', micro_topic: 'Elements, Compounds, Acids, Bases & Salts', sub_topic: 'pH Scale & Litmus Reactions' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Chemistry', micro_topic: 'Fertilizers, Pesticides & Carbon Compounds', sub_topic: 'Urea, Nitrogenous Fertilizers & Polymers' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Biology', micro_topic: 'Blood, Circulation & Human Organ Systems', sub_topic: 'Circulatory, Renal & Endocrine Systems' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Biology', micro_topic: 'Nutrition, Vitamins & Human Diseases', sub_topic: 'Vitamin Deficiency & Viral Pathogens' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'Environment & Ecology', micro_topic: 'Ecosystems, Food Chain & Biodiversity Conservation', sub_topic: 'Trophic Levels & Endangered Species' },
-
-  // ── UNIT_II: Geography of India (Quota: 10) ────────────────────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Location & Physical Features', micro_topic: 'Himalayan Mountains, Peninsular Plateau & Coastal Plains', sub_topic: 'Passes, Plateaus & Escarpments' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Monsoon & Climate', micro_topic: 'Monsoon Mechanism, Rainfall Patterns & Weather Phenomena', sub_topic: 'South-West & North-East Monsoon Mechanisms' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Water Resources & Rivers', micro_topic: 'Himalayan & Peninsular Rivers of India', sub_topic: 'Ganga, Indus, Brahmaputra & Godavari Basins' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Water Resources & Rivers', micro_topic: 'Rivers of Tamil Nadu (Cauvery, Vaigai, Thamirabarani)', sub_topic: 'Cauvery River Basin & TN Irrigation Dams' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Social & Economic Geography', micro_topic: 'Soil Types, Natural Vegetation & Wild Life Sanctuaries', sub_topic: 'Black Soils, Alluvial Belts & Biosphere Reserves' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Social & Economic Geography', micro_topic: 'Population Distribution, Urbanization & Migration', sub_topic: 'Census Demographics & Urban Slums' },
-
-  // ── UNIT_III: History, Culture of India & INM (Quota: 25) ───────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Ancient India', micro_topic: 'Indus Valley Civilization & Vedic Period', sub_topic: 'Harappan Town Planning & Rigvedic Society' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Medieval India', micro_topic: 'Guptas, Delhi Sultanate, Mughals & Marathas', sub_topic: 'Gupta Administration & Delhi Sultanate Dynasties' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'South Indian Dynasties', micro_topic: 'Vijayanagara & Bahmani Empires', sub_topic: 'Krishnadevaraya Rule & Nayankara System' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'South Indian Dynasties', micro_topic: 'Cholas, Pandyas, Pallavas & South Indian Heritage', sub_topic: 'Chola Local Self-Government (Uttiramerur)' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Early Resistance to British Rule', micro_topic: 'Early Uprisings against British Rule & 1857 Revolt', sub_topic: 'Palayakkarar Rebellion & Vellore Mutiny 1806' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'National Renaissance & Movement', micro_topic: 'Indian National Congress, Moderates, Extremists & Revolutionary Agitations', sub_topic: 'INC Sessions, Surat Split & Swadeshi Movement' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Gandhian Era', micro_topic: 'Gandhian Era, Mass Movements & Leaders', sub_topic: 'Non-Cooperation, Civil Disobedience & Quit India' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Partition & Independence', micro_topic: 'Communalism, Partition, Independence & Integration of States', sub_topic: 'Cabinet Mission, Mountbatten Plan & Sardar Patel Integration' },
-
-  // ── UNIT_IV: Indian Polity (Quota: 40) ──────────────────────────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Constitutional Framework', micro_topic: 'Preamble, Salient Features, Union, States & Citizenship', sub_topic: 'Article 1-11, Basic Structure Doctrine' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Fundamental Rights & Duties', micro_topic: 'Fundamental Rights, Directive Principles of State Policy & Fundamental Duties', sub_topic: 'Article 14-32, Article 32 Writs, 42nd Amendment' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Union Government', micro_topic: 'Union Executive: President, Vice-President, Prime Minister & Council of Ministers', sub_topic: 'Presidential Powers & Cabinet Discretion' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Union Parliament', micro_topic: 'Union Parliament: Lok Sabha, Rajya Sabha & Legislative Procedure', sub_topic: 'Money Bills, Speaker Powers & Committees' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'State Government', micro_topic: 'State Executive: Governor, Chief Minister & Council of Ministers', sub_topic: 'Governor Discretionary Powers' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'State Legislature & Judiciary', micro_topic: 'State Legislature & State Judiciary (High Courts & Subordinate Courts)', sub_topic: 'High Court Writs (Article 226)' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Union Judiciary', micro_topic: 'Supreme Court of India & Judicial Review', sub_topic: 'Appellate Jurisdiction & Collegium System' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Local Self Government', micro_topic: 'Panchayati Raj, 73rd & 74th Constitutional Amendment Acts', sub_topic: 'Three-Tier Gram Panchayat & Nagar Palika' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Constitutional & Statutory Bodies', micro_topic: 'Constitutional & Statutory Bodies: Election Commission, CAG, UPSC, TNPSC, NITI Aayog', sub_topic: 'Article 324, Article 148 CAG Auditing' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'Anti-Corruption & Transparency', micro_topic: 'Anti-Corruption Measures: Lokpal, Lokayukta, Central Vigilance Commission, RTI', sub_topic: 'RTI Act 2005 & Ombudsman Mechanism' },
-
-  // ── UNIT_V: Indian Economy & Dev Admin in TN (Quota: 50) ───────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Indian Economy & Planning', micro_topic: 'Nature of Indian Economy, Five-Year Plans & Planning Commission to NITI Aayog', sub_topic: 'Five Year Plan Models & NITI Aayog Strategic Goals' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Banking & Monetary Policy', micro_topic: 'Reserve Bank of India, Monetary Policy, Commercial Banking & Financial Inclusion', sub_topic: 'Repo Rate, Reverse Repo & CRR Regulations' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Fiscal Policy & Public Finance', micro_topic: 'Sources of Revenue, Fiscal Policy, GST & Finance Commission', sub_topic: 'GST Slabs & 15th/16th Finance Commission Devolution' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Agriculture & Rural Economy', micro_topic: 'Agriculture, Land Reforms, Green Revolution & Rural Development', sub_topic: 'MSP, PM-KISAN & Tenancy Reforms' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Industry & External Sector', micro_topic: 'Industrial Growth, Foreign Trade & Balance of Payments', sub_topic: 'MSME Policies, FDI & Current Account Deficit' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Tamil Nadu Socio-Economic Profile', micro_topic: 'Human Development Indicators (HDI) & Socio-Economic Progress in Tamil Nadu', sub_topic: 'TN Infant Mortality, Literacy & Gender Parity' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Social Justice in TN', micro_topic: 'Social Justice, Reservations & Inclusive Growth in Tamil Nadu', sub_topic: '69% Reservation Policy & Caste Survey Precedents' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Education & Health in TN', micro_topic: 'Education & Public Health Delivery Systems in Tamil Nadu', sub_topic: 'Mid-Day Meal / Breakfast Scheme & PHC Infrastructure' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'E-Governance in TN', micro_topic: 'E-Governance Initiatives, Digital Tamil Nadu & Administrative Reforms', sub_topic: 'TNeGA, E-Sevai Centers & Smart City Models' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'State Welfare Schemes', micro_topic: 'State Welfare Schemes for Women, Children, Farmers & Marginalized Groups', sub_topic: 'Kalaignar Magalir Urimai Thittam & Moovalur Ramamirtham Ammaiyar Scheme' },
-
-  // ── UNIT_VI: History, Culture, Heritage & Movements in TN (Quota: 40) ──────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Tamil Society & Heritage', micro_topic: 'History of Tamil Society, Archaeological Discoveries & Keezhadi Excavations', sub_topic: 'Keezhadi, Adichanallur & Kodumanal Excavations' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Tamil Literature', micro_topic: 'Sangam Literature, Post-Sangam Literature & Epics (Silappathikaram, Manimekalai)', sub_topic: 'Akananuru, Purananuru & Silappathikaram Narrative' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Thirukkural', micro_topic: 'Thirukkural: Secular Nature, Compassion, Good Governance & Universal Values', sub_topic: 'Thirukkural Couplets on Politics (Porutpaal) & Ethics (Arathupaal)' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Freedom Struggle in TN', micro_topic: 'Role of Tamil Nadu in Freedom Struggle: Early Agitations (Pulithevan, Kattabomman, Maruthu Brothers)', sub_topic: 'Dindigul League & Panchalankurichi Battles' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Freedom Struggle in TN', micro_topic: 'Freedom Fighters of TN: V.O. Chidambaranar, Subramania Bharati, Subramania Siva, Rajaji, Kamarajar', sub_topic: 'Swadeshi Steam Navigation & Vedaranyam Salt Satyagraha' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Dravidian & Reform Movements', micro_topic: 'Self-Respect Movement, Justice Party, Periyar E.V.R. & Anna', sub_topic: 'Non-Brahmin Manifesto 1916 & Vaikom Satyagraha' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Social Reform Movements', micro_topic: 'Women Empowerment & Social Reform Movements in Tamil Nadu', sub_topic: 'Dr. Muthulakshmi Reddy & Devadasi Abolition' },
-
-  // ── APT_UNIT_I: Aptitude & Arithmetic (Quota: 15) ──────────────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Arithmetic Operations', micro_topic: 'Simplification & Percentage', sub_topic: 'BODMAS & Percentage Conversions' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Arithmetic Operations', micro_topic: 'Highest Common Factor (HCF) & Lowest Common Multiple (LCM)', sub_topic: 'Co-primes & LCM-HCF Relation' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Commercial Math', micro_topic: 'Ratio, Proportion & Variations', sub_topic: 'Direct & Inverse Variations' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Commercial Math', micro_topic: 'Simple Interest & Compound Interest', sub_topic: 'Annual vs Semi-annual Compounding' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Mensuration', micro_topic: 'Area, Volume & Mensuration', sub_topic: '2D/3D Cylinders, Spheres & Cones' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Commercial Math', micro_topic: 'Time and Work, Pipes & Cisterns', sub_topic: 'Efficiency & Alternate Days Working' },
-
-  // ── APT_UNIT_II: Mental Ability & Reasoning (Quota: 10) ────────────────────
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_II', macro_topic: 'Logical Reasoning', micro_topic: 'Logical Reasoning & Syllogism', sub_topic: 'Venn Diagrams & Statement Deductions' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_II', macro_topic: 'Analytical Reasoning', micro_topic: 'Number Series, Alphanumeric Series & Coding-Decoding', sub_topic: 'Difference Series & Letter Shifts' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_II', macro_topic: 'Visual Reasoning', micro_topic: 'Puzzles, Dice & Visual Reasoning', sub_topic: 'Opposite Faces of Dice & Seating Arrangements' },
-  { exam_tag: 'TNPSC_GROUP_1', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_II', macro_topic: 'Data Interpretation', micro_topic: 'Data Interpretation: Tables, Bar Graphs, Pie Charts & Histograms', sub_topic: 'Percentage Growth from Pie Charts' },
-]
-
-// ─── 2. Group 2 & 2A Locked Master Taxonomy ──────────────────────────────────
-export const GROUP2_MASTER_TAXONOMY = [
-  // ── Language Part A: General Tamil (Quota: 100) ───────────────────────────
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'பொருத்துதல் & பொருத்தமான பொருளைத் தெரிவு செய்தல்', sub_topic: 'சொல்-பொருள் பொருத்துதல்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'பிரித்தெழுதுக & சேர்த்தெழுதுக', sub_topic: 'உயிர்வரிசை & மெய்வரிசை புணர்ச்சி' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'சந்திப்பிழை நீக்குதல், ஒருமை பன்மை பிழை நீக்குதல்', sub_topic: 'வல்லினம் மிகும் மிகா இடங்கள்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'வேர்ச்சொல்லைத் தேர்வு செய்தல் & வினைமுற்று, வினையெச்சம் அமைத்தல்', sub_topic: 'பெயரெச்சம், வினையெச்சம் & தொழிற் பெயர்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'அகரவரிசைப்படி சொற்களைச் சீர் செய்தல்', sub_topic: 'உயிர், மெய், உயிர்மெய் அகரவரிசை' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'பெயர்ச்சொல்லின் வகை அறிதல் & இலக்கணக் குறிப்பு', sub_topic: 'பொருட்பெயர், இடப்பெயர், பண்புப்பெயர்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'தன்வினை, பிறவினை, செய்வினை, செயப்பாட்டு வினை வாக்கியங்களைக் கண்டறிதல்', sub_topic: 'வினை அமைப்புகள் & நேரடி கூற்று' },
-
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'திருக்குறள் தொடர்பான செய்திகள், மேற்கோள்கள்', sub_topic: 'அறத்துப்பால் & பொருட்பால் அதிகாரங்கள்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'எட்டுத்தொகை & பத்துப்பாட்டு நூல்கள்', sub_topic: 'நற்றிணை, குறுந்தொகை, முல்லைப்பாட்டு' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'பதினெண்கீழ்க்கணக்கு நூல்கள் (நாலடியார், நான்மணிக்கடிகை, இன்னா நாற்பது)', sub_topic: 'நீதி நூல்கள் & மூதுரை' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'சிலப்பதிகாரம், மணிமேகலை & ஐம்பெருங்காப்பியங்கள்', sub_topic: 'கண்ணகி வழக்குரை & மணிமேகலை பாத்திரம்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'பெரியபுராணம், கம்பராமாயணம் & சிற்றிலக்கியங்கள்', sub_topic: 'கலிங்கத்துப்பரணி & முக்கூடற்பள்ளு' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'நாட்டுப்புறப் பாட்டுகள், சித்தர் பாடல்கள்', sub_topic: 'தாலாட்டுப் பாடல், சித்தர் தத்துவங்கள்' },
-
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'பாரதியார், பாரதிதாசன், நாமக்கல் கவிஞர், கவிமணி தேசிக விநாயகம் பிள்ளை', sub_topic: 'பாரதி பாடல்கள் & புதுக்கவிதை இயக்கம்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'உ.வே. சாமிநாதையர், தெ.பொ. மீனாட்சிசுந்தரனார், சி. இலக்குவனார்', sub_topic: 'சுவடி பதிப்புப் பணிகள் & உ.வே.சா' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'தேவநேயப் பாவாணர், ஜி.யு. போப், வீரமாமுனிவர் தமிழ்த் தொண்டு', sub_topic: 'செந்தமிழ்ச் சொற்பிறப்பியல் & மொழிபெயர்ப்புகள்' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'பெரியார், அண்ணா, முத்துராமலிங்கத் தேவர், காமராசர் சமுதாயத் தொண்டு', sub_topic: 'எழுத்துச் சீர்திருத்தம் & கல்விப் புரட்சி' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'தமிழ் உரைநடை வளர்ச்சி, இதழியல் & கலைகள் (நாடகம், திரைப்படம்)', sub_topic: 'நாடகத் தந்தை பம்மல் சம்பந்தனார்' },
-
-  // ── Language Part A: General English (Quota: 100) ─────────────────────────
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_A', macro_topic: 'Grammar', micro_topic: 'Match Phrases and Synonyms/Antonyms', sub_topic: 'Vocabulary & Contextual Meanings' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_A', macro_topic: 'Grammar', micro_topic: 'Prepositions, Question Tags & Articles', sub_topic: 'Tag Inversion & Definite Articles' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_A', macro_topic: 'Grammar', micro_topic: 'Active Voice and Passive Voice', sub_topic: 'Past/Present Participle Passive Conversions' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_A', macro_topic: 'Grammar', micro_topic: 'Tenses, Direct & Indirect Speech', sub_topic: 'Reported Speech with Modal Auxiliaries' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_A', macro_topic: 'Grammar', micro_topic: 'Degrees of Comparison & Sentence Correction', sub_topic: 'Superlative to Comparative Transformations' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_A', macro_topic: 'Grammar', micro_topic: 'Compound Words & Blended Words', sub_topic: 'Portmanteau Words & Hyphenated Compounds' },
-
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_B', macro_topic: 'Literature / Prescribed Poems', micro_topic: 'Figures of Speech (Alliteration, Metaphor, Personification)', sub_topic: 'Metaphor, Simile & Hyperbole Recognition' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_B', macro_topic: 'Literature / Prescribed Poems', micro_topic: 'Prescribed Poem Appreciation (Sea Fever, The Comet, Courage)', sub_topic: 'John Masefield & Norman Littleford Lines' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_B', macro_topic: 'Literature / Prescribed Poems', micro_topic: 'Poetic Lines and Author Identification', sub_topic: 'Rhyme Scheme & Stanza Analysis' },
-
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_C', macro_topic: 'Authors and Literary Works', micro_topic: 'Biographies of Eminent Personalities (Mahatma Gandhi, Helen Keller, Dr. Salim Ali)', sub_topic: 'The Story of My Experiments with Truth' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_C', macro_topic: 'Authors and Literary Works', micro_topic: "Shakespeare's Works, Plays and Famous Quotes", sub_topic: 'Merchant of Venice & Julius Caesar Quotes' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General English', unit_code: 'LANG_EN_C', macro_topic: 'Authors and Literary Works', micro_topic: 'Oscar Wilde, Rabindranath Tagore, R.K. Narayan Short Stories', sub_topic: 'Malgudi Days & The Model Millionaire' },
-
-  // ── General Studies Part B (Quota: 75) ────────────────────────────────────
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'General Science', micro_topic: 'Mechanics, Force, Motion & Everyday Science', sub_topic: 'Newtonian Physics & Pressure' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'General Science', micro_topic: 'Human Physiology, Nutrients & Common Diseases', sub_topic: 'Deficiencies & Body Systems' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Current Events', micro_topic: 'National & Regional Events, Welfare Schemes & Sports', sub_topic: 'State Flagship Schemes & National Awards' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Geography of India', micro_topic: 'Monsoon, Rainfall & Rivers of India and Tamil Nadu', sub_topic: 'Cauvery & Vaigai Rivers, Monsoon Winds' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'History and Culture of India', micro_topic: 'Indus Valley, Guptas, Delhi Sultans, Mughals & South Indian History', sub_topic: 'South Indian Temples & Gupta Age' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Indian Polity & Economy', micro_topic: 'Constitution, Fundamental Rights, Parliament & Indian Banking / GST', sub_topic: 'Fundamental Rights, RBI & GST Council' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'INM & Tamil Nadu Heritage / Dev Admin', micro_topic: 'Indian National Movement, Thirukkural & Social Justice in TN', sub_topic: 'V.O.C., Periyar, Dravidian Movement & Thirukkural Ethics' },
-
-  // ── Aptitude Part C (Quota: 25) ───────────────────────────────────────────
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Arithmetic Operations', micro_topic: 'Simplification, Percentage, Ratio, HCF & LCM, Simple/Compound Interest', sub_topic: 'Percentage & Interest Calculations' },
-  { exam_tag: 'TNPSC_GROUP_2', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_II', macro_topic: 'Logical Reasoning', micro_topic: 'Number Series, Puzzles, Visual Reasoning & Data Interpretation', sub_topic: 'Series Completion & Visual Puzzles' },
-]
-
-// ─── 3. Group 4 Locked Master Taxonomy ──────────────────────────────────────
-export const GROUP4_MASTER_TAXONOMY = [
-  // ── Language Part A: General Tamil (SSLC Standard) (Quota: 100) ───────────
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'பொருத்துதல் & பொருத்தமான பொருளைத் தெரிவு செய்தல்', sub_topic: 'சொல்-பொருள் பொருத்துதல்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'பிரித்தெழுதுக & சேர்த்தெழுதுக', sub_topic: 'புணர்ச்சி விதிகள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'சந்திப்பிழை நீக்குதல், ஒருமை பன்மை பிழை நீக்குதல்', sub_topic: 'வல்லினம் மிகும் மிகா இடங்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'வேர்ச்சொல்லைத் தேர்வு செய்தல் & வினைமுற்று, வினையெச்சம் அமைத்தல்', sub_topic: 'வேர்ச்சொல் வினையெச்சம்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'அகரவரிசைப்படி சொற்களைச் சீர் செய்தல்', sub_topic: 'அகரவரிசை' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'பெயர்ச்சொல்லின் வகை அறிதல் & இலக்கணக் குறிப்பு', sub_topic: 'பெயர்ச்சொற்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_A', macro_topic: 'பொதுத்தமிழ் இலக்கணம்', micro_topic: 'தன்வினை, பிறவினை, செய்வினை, செயப்பாட்டு வினை வாக்கியங்களைக் கண்டறிதல்', sub_topic: 'வினை வகை' },
-
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'திருக்குறள் தொடர்பான செய்திகள், மேற்கோள்கள்', sub_topic: 'திருக்குறள் அறநெறி' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'எட்டுத்தொகை & பத்துப்பாட்டு நூல்கள்', sub_topic: 'சங்க இலக்கிய நூல்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'பதினெண்கீழ்க்கணக்கு நூல்கள் (நாலடியார், நான்மணிக்கடிகை, இன்னா நாற்பது)', sub_topic: 'நீதி நூல்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'சிலப்பதிகாரம், மணிமேகலை & ஐம்பெருங்காப்பியங்கள்', sub_topic: 'இரட்டைக் காப்பியங்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'பெரியபுராணம், கம்பராமாயணம் & சிற்றிலக்கியங்கள்', sub_topic: 'பக்தி இலக்கியம் & கம்பன்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_B', macro_topic: 'பொதுத்தமிழ் இலக்கியம்', micro_topic: 'நாட்டுப்புறப் பாட்டுகள், சித்தர் பாடல்கள்', sub_topic: 'நாட்டுப்புறப் பாடல்கள்' },
-
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'பாரதியார், பாரதிதாசன், நாமக்கல் கவிஞர், கவிமணி தேசிக விநாயகம் பிள்ளை', sub_topic: 'விடுதலைக் கவிஞர்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'உ.வே. சாமிநாதையர், தெ.பொ. மீனாட்சிசுந்தரனார், சி. இலக்குவனார்', sub_topic: 'தமிழ்த் தொண்டர்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'தேவநேயப் பாவாணர், ஜி.யு. போப், வீரமாமுனிவர் தமிழ்த் தொண்டு', sub_topic: 'அயல்நாட்டு தமிழறிஞர்கள்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'பெரியார், அண்ணா, முத்துராமலிங்கத் தேவர், காமராசர் சமுதாயத் தொண்டு', sub_topic: 'சமூகச் சீர்திருத்தம்' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Tamil', unit_code: 'LANG_TA_C', macro_topic: 'தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்', micro_topic: 'தமிழ் உரைநடை வளர்ச்சி, இதழியல் & கலைகள் (நாடகம், திரைப்படம்)', sub_topic: 'உரைநடை & இதழியல்' },
-
-  // ── General Studies Part B (SSLC Standard) (Quota: 75) ────────────────────
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Studies', unit_code: 'UNIT_I', macro_topic: 'General Science', micro_topic: 'Nature of Universe, Force, Motion, Matter, Acid-Base & Living World', sub_topic: 'Basic Science & Everyday Life' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Studies', unit_code: 'UNIT_II', macro_topic: 'Current Events', micro_topic: 'Current Affairs, Awards, Sports, National Symbols & State Welfare', sub_topic: 'Recent Milestones & Welfare Schemes' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Studies', unit_code: 'UNIT_III', macro_topic: 'Geography of India', micro_topic: 'Location, Physical Features, Monsoon, Water Resources & TN Rivers', sub_topic: 'Cauvery River & Monsoon Climate' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Studies', unit_code: 'UNIT_IV', macro_topic: 'History and Culture of India', micro_topic: 'Indus Valley, Guptas, Sultanate, Mughals, Marathas & South Indian History', sub_topic: 'South Indian Kings & Architecture' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Studies', unit_code: 'UNIT_V', macro_topic: 'Indian Polity & Economy', micro_topic: 'Constitution, Fundamental Rights, Parliament, Panchayat Raj & Planning Commission/RBI', sub_topic: '73rd Amendment, Fundamental Rights & Banking' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'General Studies', unit_code: 'UNIT_VI', macro_topic: 'Indian National Movement & TN Heritage', micro_topic: '1857 Revolt, INC, Freedom Fighters of TN, Thirukkural & Dravidian Movement', sub_topic: 'Kattabomman, Bharati, Periyar & Thirukkural' },
-
-  // ── Aptitude Part C (SSLC Standard) (Quota: 25) ───────────────────────────
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_I', macro_topic: 'Arithmetic Operations', micro_topic: 'Simplification, Percentage, HCF & LCM, Ratio, Simple & Compound Interest, Time & Work', sub_topic: 'Arithmetic & Simple Interest' },
-  { exam_tag: 'TNPSC_GROUP_4', subject_name: 'Aptitude & Mental Ability', unit_code: 'APT_UNIT_II', macro_topic: 'Logical Reasoning', micro_topic: 'Logical Reasoning, Number Series, Puzzles & Visual Reasoning', sub_topic: 'Number Sequences & Reasoning Puzzles' },
-]
+// ─── Catalog: generated from supabase/data/taxonomy_v2.csv ─────────────────
+// Source of truth for units, macro topics, micro topics and quotas. Do not edit by hand;
+// change the CSV and regenerate src/data/taxonomyV2.js.
+export const GROUP1_MASTER_TAXONOMY = TAXONOMY_V2.filter(e => e.exam_tag === 'TNPSC_GROUP_1')
+export const GROUP2_MASTER_TAXONOMY = TAXONOMY_V2.filter(e => e.exam_tag === 'TNPSC_GROUP_2')
+export const GROUP4_MASTER_TAXONOMY = TAXONOMY_V2.filter(e => e.exam_tag === 'TNPSC_GROUP_4')
 
 // ─── Map by Exam Tag ────────────────────────────────────────────────────────
 export const MASTER_TAXONOMIES = {
@@ -191,58 +31,9 @@ export const MASTER_TAXONOMIES = {
   'TNPSC Group 4': GROUP4_MASTER_TAXONOMY,
 }
 
-// ─── 200-Question Official Blueprints ───────────────────────────────────────
-export const OFFICIAL_200Q_BLUEPRINTS = {
-  TNPSC_GROUP_1: [
-    { unit_code: 'UNIT_I',     subject_name: 'General Studies', quota: 10, title: 'Unit I: General Science' },
-    { unit_code: 'UNIT_II',    subject_name: 'General Studies', quota: 10, title: 'Unit II: Geography of India' },
-    { unit_code: 'UNIT_III',   subject_name: 'General Studies', quota: 25, title: 'Unit III: History, Culture of India & INM' },
-    { unit_code: 'UNIT_IV',    subject_name: 'General Studies', quota: 40, title: 'Unit IV: Indian Polity' },
-    { unit_code: 'UNIT_V',     subject_name: 'General Studies', quota: 50, title: 'Unit V: Indian Economy & Dev Admin in TN' },
-    { unit_code: 'UNIT_VI',    subject_name: 'General Studies', quota: 40, title: 'Unit VI: History, Culture & Movements in TN' },
-    { unit_code: 'APT_UNIT_I', subject_name: 'Aptitude & Mental Ability', quota: 15, title: 'Part B: Aptitude & Arithmetic' },
-    { unit_code: 'APT_UNIT_II',subject_name: 'Aptitude & Mental Ability', quota: 10, title: 'Part B: Mental Ability & Reasoning' },
-  ],
-  TNPSC_GROUP_2_TAMIL: [
-    { unit_code: 'LANG_TA_A',  subject_name: 'General Tamil', quota: 35, title: 'Language Part A: பொதுத்தமிழ் இலக்கணம்' },
-    { unit_code: 'LANG_TA_B',  subject_name: 'General Tamil', quota: 35, title: 'Language Part A: பொதுத்தமிழ் இலக்கியம்' },
-    { unit_code: 'LANG_TA_C',  subject_name: 'General Tamil', quota: 30, title: 'Language Part A: தமிழ் அறிஞர்களும் தொண்டும்' },
-    { unit_code: 'UNIT_I',     subject_name: 'General Studies', quota: 5,  title: 'Part B: General Science' },
-    { unit_code: 'UNIT_II',    subject_name: 'General Studies', quota: 5,  title: 'Part B: Current Events' },
-    { unit_code: 'UNIT_III',   subject_name: 'General Studies', quota: 10, title: 'Part B: Geography of India' },
-    { unit_code: 'UNIT_IV',    subject_name: 'General Studies', quota: 15, title: 'Part B: History and Culture of India' },
-    { unit_code: 'UNIT_V',     subject_name: 'General Studies', quota: 20, title: 'Part B: Indian Polity & Economy' },
-    { unit_code: 'UNIT_VI',    subject_name: 'General Studies', quota: 20, title: 'Part B: INM & TN Heritage / Dev Admin' },
-    { unit_code: 'APT_UNIT_I', subject_name: 'Aptitude & Mental Ability', quota: 15, title: 'Part C: Aptitude & Arithmetic' },
-    { unit_code: 'APT_UNIT_II',subject_name: 'Aptitude & Mental Ability', quota: 10, title: 'Part C: Mental Ability & Reasoning' },
-  ],
-  TNPSC_GROUP_2_ENGLISH: [
-    { unit_code: 'LANG_EN_A',  subject_name: 'General English', quota: 35, title: 'Language Part A: Grammar' },
-    { unit_code: 'LANG_EN_B',  subject_name: 'General English', quota: 35, title: 'Language Part A: Prescribed Poems' },
-    { unit_code: 'LANG_EN_C',  subject_name: 'General English', quota: 30, title: 'Language Part A: Authors & Works' },
-    { unit_code: 'UNIT_I',     subject_name: 'General Studies', quota: 5,  title: 'Part B: General Science' },
-    { unit_code: 'UNIT_II',    subject_name: 'General Studies', quota: 5,  title: 'Part B: Current Events' },
-    { unit_code: 'UNIT_III',   subject_name: 'General Studies', quota: 10, title: 'Part B: Geography of India' },
-    { unit_code: 'UNIT_IV',    subject_name: 'General Studies', quota: 15, title: 'Part B: History and Culture of India' },
-    { unit_code: 'UNIT_V',     subject_name: 'General Studies', quota: 20, title: 'Part B: Indian Polity & Economy' },
-    { unit_code: 'UNIT_VI',    subject_name: 'General Studies', quota: 20, title: 'Part B: INM & TN Heritage / Dev Admin' },
-    { unit_code: 'APT_UNIT_I', subject_name: 'Aptitude & Mental Ability', quota: 15, title: 'Part C: Aptitude & Arithmetic' },
-    { unit_code: 'APT_UNIT_II',subject_name: 'Aptitude & Mental Ability', quota: 10, title: 'Part C: Mental Ability & Reasoning' },
-  ],
-  TNPSC_GROUP_4: [
-    { unit_code: 'LANG_TA_A',  subject_name: 'General Tamil', quota: 35, title: 'Language Part A: பகுதி-அ இலக்கணம்' },
-    { unit_code: 'LANG_TA_B',  subject_name: 'General Tamil', quota: 35, title: 'Language Part A: பகுதி-ஆ இலக்கியம்' },
-    { unit_code: 'LANG_TA_C',  subject_name: 'General Tamil', quota: 30, title: 'Language Part A: பகுதி-இ தமிழ் அறிஞர்கள்' },
-    { unit_code: 'UNIT_I',     subject_name: 'General Studies', quota: 8,  title: 'Part B: General Science (SSLC)' },
-    { unit_code: 'UNIT_II',    subject_name: 'General Studies', quota: 7,  title: 'Part B: Current Events' },
-    { unit_code: 'UNIT_III',   subject_name: 'General Studies', quota: 12, title: 'Part B: Geography of India' },
-    { unit_code: 'UNIT_IV',    subject_name: 'General Studies', quota: 15, title: 'Part B: History and Culture of India' },
-    { unit_code: 'UNIT_V',     subject_name: 'General Studies', quota: 18, title: 'Part B: Indian Polity & Economy' },
-    { unit_code: 'UNIT_VI',    subject_name: 'General Studies', quota: 15, title: 'Part B: INM & Tamil Nadu Culture' },
-    { unit_code: 'APT_UNIT_I', subject_name: 'Aptitude & Mental Ability', quota: 15, title: 'Part C: Aptitude & Arithmetic' },
-    { unit_code: 'APT_UNIT_II',subject_name: 'Aptitude & Mental Ability', quota: 10, title: 'Part C: Mental Ability & Reasoning' },
-  ],
-}
+// ─── 200-Question Official Blueprints (from taxonomy_v2.csv) ─────────────────
+export const OFFICIAL_200Q_BLUEPRINTS = BLUEPRINTS_V2
+
 
 // ─── 4. SHA-256 Deduplication Hash ───────────────────────────────────────────
 export async function computeQuestionContentHash(enText = '', taText = '') {
@@ -345,60 +136,19 @@ export function validateQuestionAgainstMasterTaxonomy(question, targetExamTag) {
 }
 
 // ─── Unit code from the approved catalog unit ────────────────────────────────
-// Questions extracted from a PDF carry the approved catalog's unit and macro topic
-// ("Unit 5: Indian Polity") but no unit_code, and the mock generator picks questions
-// by unit_code. Group 1 numbers its units differently from Groups 2 and 4, so the
-// mapping depends on the exam group. Returns null when no unit applies, for example
-// Current Events in Group 1, which has no such unit.
-const CATALOG_UNIT_TO_CODE_GROUP1 = {
-  1: 'UNIT_I',     // General Science
-  3: 'UNIT_II',    // Geography of India
-  4: 'UNIT_III',   // History & Culture
-  7: 'UNIT_III',   // National Movement
-  5: 'UNIT_IV',    // Indian Polity
-  6: 'UNIT_V',     // Indian Economy
-  9: 'UNIT_V',     // TN Administration
-  8: 'UNIT_VI',    // TN History & Culture
-}
-const CATALOG_UNIT_TO_CODE_GROUP2_4 = {
-  1: 'UNIT_I',     // General Science
-  2: 'UNIT_II',    // Current Events
-  3: 'UNIT_III',   // Geography of India
-  4: 'UNIT_IV',    // History & Culture
-  5: 'UNIT_V',     // Indian Polity
-  6: 'UNIT_V',     // Indian Economy
-  7: 'UNIT_VI',    // National Movement
-  8: 'UNIT_VI',    // TN History & Culture
-  9: 'UNIT_VI',    // TN Administration
-}
-
-// True for names written the way the approved catalog writes them
+// The unit code comes from the v2 catalog for the exam group. A unit name that is not in
+// the v2 catalog (for example a legacy "Unit 5: Indian Polity" name) returns null, so the
+// question is not filed under a code the mock generator no longer uses.
 export function isCatalogUnitName(unitName) {
-  return /^\s*(Unit\s*\d+\s*[:\u2014\u2013-]|Part A:)/i.test(String(unitName || ''))
+  const name = String(unitName || '').trim()
+  return TAXONOMY_V2.some(e => e.unit_name === name) || /^\s*(Unit\s*\d+\s*[:\u2014\u2013-]|Part A:)/i.test(name)
 }
 
 export function deriveUnitCode(examTag, unitName, macroTopic) {
-  const unit = String(unitName || '')
-  const macro = String(macroTopic || '').trim()
-
-  const unitNumber = unit.match(/^\s*Unit\s*(\d+)\s*[:\u2014\u2013-]/i)?.[1]
-  if (unitNumber) {
-    const n = Number(unitNumber)
-    if (n === 10) return macro === 'Logical Reasoning' ? 'APT_UNIT_II' : 'APT_UNIT_I'
-    const table = examTag === 'TNPSC_GROUP_1' ? CATALOG_UNIT_TO_CODE_GROUP1 : CATALOG_UNIT_TO_CODE_GROUP2_4
-    return table[n] || null
-  }
-  if (/^\s*Part A:\s*General Tamil/i.test(unit)) {
-    if (/^Ilakkanam/i.test(macro)) return 'LANG_TA_A'
-    if (/^Ilakkaiyam/i.test(macro)) return 'LANG_TA_B'
-    if (/^Tamil Arignargal/i.test(macro)) return 'LANG_TA_C'
-  }
-  if (/^\s*Part A:\s*General English/i.test(unit)) {
-    if (/^Grammar/i.test(macro)) return 'LANG_EN_A'
-    if (/^Literature/i.test(macro)) return 'LANG_EN_B'
-    if (/^Authors/i.test(macro)) return 'LANG_EN_C'
-  }
-  return null
+  const tag = normalizeExamTag(examTag)
+  const unit = String(unitName || '').trim()
+  const hit = TAXONOMY_V2.find(e => e.exam_tag === tag && e.unit_name === unit)
+  return hit ? hit.unit_code : null
 }
 
 // ─── 6. 29-Column Schema Normalization ───────────────────────────────────────
@@ -559,55 +309,23 @@ export function generateMasterTaxonomyCsv(taxonomyList) {
   return [headers.join(','), ...rows].join('\n')
 }
 
-// ─── 8. Approved Catalog Mapping (question_taxonomy, migration 00013) ────────
-// The database trigger only accepts Unit > Macro > Micro names exactly as they
-// appear in the approved question_taxonomy catalog (English names for Group 2 &
-// Group 4 Tamil). Validated Tamil rows are mapped to those names before import.
-// Keys are the Tamil micro_topic strings from GROUP2_MASTER_TAXONOMY.
-// Topics not listed here have no approved catalog row and are rejected.
-const APPROVED_TAMIL_UNIT = 'Part A: General Tamil'
-
-const TAMIL_MICRO_TO_APPROVED_CATALOG = {
-  // LANG_TA_A (Grammar)
-  'பொருத்துதல் & பொருத்தமான பொருளைத் தெரிவு செய்தல்': { macro_topic: 'Ilakkanam (Grammar)', micro_topic: 'Pizhai Thiruththam & Sol Porul' },
-  'பிரித்தெழுதுக & சேர்த்தெழுதுக': { macro_topic: 'Ilakkanam (Grammar)', micro_topic: 'Poruthuthal & Pirithu Ezhudhuthal' },
-  'சந்திப்பிழை நீக்குதல், ஒருமை பன்மை பிழை நீக்குதல்': { macro_topic: 'Ilakkanam (Grammar)', micro_topic: 'Pizhai Thiruththam & Sol Porul' },
-  // LANG_TA_B (Literature)
-  'திருக்குறள் தொடர்பான செய்திகள், மேற்கோள்கள்': { macro_topic: 'Ilakkaiyam (Literature)', micro_topic: 'Thirukkural & Ettuthogai' },
-  'எட்டுத்தொகை & பத்துப்பாட்டு நூல்கள்': { macro_topic: 'Ilakkaiyam (Literature)', micro_topic: 'Thirukkural & Ettuthogai' },
-  'சிலப்பதிகாரம், மணிமேகலை & ஐம்பெருங்காப்பியங்கள்': { macro_topic: 'Ilakkaiyam (Literature)', micro_topic: 'Paththuppaattu & Iymperum Kaapiyangal' },
-  // LANG_TA_C (Scholars)
-  'பாரதியார், பாரதிதாசன், நாமக்கல் கவிஞர், கவிமணி தேசிக விநாயகம் பிள்ளை': { macro_topic: 'Tamil Arignargal (Scholars)', micro_topic: 'Tamil Thondu & Bharathiyar/Bharathidasan' },
-  'தேவநேயப் பாவாணர், ஜி.யு. போப், வீரமாமுனிவர் தமிழ்த் தொண்டு': { macro_topic: 'Tamil Arignargal (Scholars)', micro_topic: 'Tamil Thondu & Bharathiyar/Bharathidasan' },
-  'பெரியார், அண்ணா, முத்துராமலிங்கத் தேவர், காமராசர் சமுதாயத் தொண்டு': { macro_topic: 'Tamil Arignargal (Scholars)', micro_topic: 'Urainadai & Samudhaya Thondu' },
-}
-
-/**
- * Returns the approved catalog { unit_name, macro_topic, micro_topic } for a
- * validated Tamil row, or null when the topic has no approved catalog row.
- */
-// Group 1 micro_topic strings from GROUP1_MASTER_TAXONOMY, mapped to the
-// approved catalog rows (ALL_GROUPS). Each entry carries its own unit_name.
-const GROUP1_MICRO_TO_APPROVED_CATALOG = {
-  'Mechanics, Force, Motion & Properties of Matter': { unit_name: 'Unit 1: General Science', macro_topic: 'Physics', micro_topic: 'Mechanics & Properties of Matter' },
-  'Light, Sound, Heat, Electricity & Magnetism': { unit_name: 'Unit 1: General Science', macro_topic: 'Physics', micro_topic: 'Light, Sound, Heat & Magnetism' },
-  'Monsoon Mechanism, Rainfall Patterns & Weather Phenomena': { unit_name: 'Unit 3: Geography of India', macro_topic: 'Climate & Weather', micro_topic: 'Monsoon, Rainfall & Weather Patterns' },
-  'Indus Valley Civilization & Vedic Period': { unit_name: 'Unit 4: History & Culture', macro_topic: 'Ancient India', micro_topic: 'Indus Valley Civilization' },
-  'Preamble, Salient Features, Union, States & Citizenship': { unit_name: 'Unit 5: Indian Polity', macro_topic: 'Constitution Basics', micro_topic: 'Preamble, Citizenship, Union & Territories' },
-  'Fundamental Rights, Directive Principles of State Policy & Fundamental Duties': { unit_name: 'Unit 5: Indian Polity', macro_topic: 'Rights & Duties', micro_topic: 'Fundamental Duties & Directive Principles (DPSP)' },
-  'Reserve Bank of India, Monetary Policy, Commercial Banking & Financial Inclusion': { unit_name: 'Unit 6: Indian Economy', macro_topic: 'Finance & Banking', micro_topic: 'Reserve Bank of India (RBI) & Monetary Policy' },
-  'Thirukkural: Secular Nature, Compassion, Good Governance & Universal Values': { unit_name: 'Unit 8: TN History & Culture', macro_topic: 'Thirukkural', micro_topic: 'Significance as Secular Literature & Everyday Relevance' },
-  'Simplification & Percentage': { unit_name: 'Unit 10: Aptitude', macro_topic: 'Quantitative Aptitude', micro_topic: 'Percentage, Simple & Compound Interest' },
-  'Logical Reasoning & Syllogism': { unit_name: 'Unit 10: Aptitude', macro_topic: 'Logical Reasoning', micro_topic: 'Logical Reasoning & Puzzles' },
-}
-
-export function mapToApprovedCatalog(row) {
-  const key = String(row.micro_topic || '').trim()
-  const tamil = TAMIL_MICRO_TO_APPROVED_CATALOG[key]
-  if (tamil) return { unit_name: APPROVED_TAMIL_UNIT, ...tamil }
-  const group1 = GROUP1_MICRO_TO_APPROVED_CATALOG[key]
-  if (group1) return { ...group1 }
-  return null
+// ─── 8. Approved Catalog Mapping (question_taxonomy) ────────────────────────
+// Looks up the micro topic in the v2 catalog for the exam group. The approved unit,
+// macro and micro names come from that entry, so the database trigger (migration 00013,
+// extended by 00020) accepts them. Returns null when the micro topic is not in the catalog.
+export function mapToApprovedCatalog(row, examTag) {
+  const tag = normalizeExamTag(examTag || row.exam_tag)
+  const micro = String(row.micro_topic || '').trim()
+  const macro = String(row.macro_topic || '').trim()
+  const candidates = TAXONOMY_V2.filter(e => e.exam_tag === tag && e.micro_topic === micro)
+  if (candidates.length === 0) return null
+  const hit = candidates.find(e => e.macro_topic === macro) || candidates[0]
+  return {
+    unit_code: hit.unit_code,
+    unit_name: hit.unit_name,
+    macro_topic: hit.macro_topic,
+    micro_topic: hit.micro_topic,
+  }
 }
 
 export function generate29ColumnTemplateCsv() {

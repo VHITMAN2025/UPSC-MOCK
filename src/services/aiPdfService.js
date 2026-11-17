@@ -5,6 +5,7 @@ import { normalizeUnitName } from '../components/admin/TopicSeparationSummary.js
 import { supabase } from '../lib/supabase.js'
 import * as pdfjsLib from 'pdfjs-dist'
 import questionTranslations from '../data/question_translations.js'
+import { TAXONOMY_V2 } from '../data/taxonomyV2.js'
 
 const CANONICAL_MICROS = CANONICAL_SYLLABUS_TAXONOMY.flatMap(u =>
   u.macro_topics.flatMap(mt =>
@@ -86,87 +87,14 @@ async function extractLongPdfInBatches(base64Data, preferredModel, onStatusUpdat
   return allQuestions.sort((a, b) => Number(a.question_number) - Number(b.question_number))
 }
 
-export const FALLBACK_APPROVED_TAXONOMY = [
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Physics', micro_topic_name: 'Mechanics & Properties of Matter' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Physics', micro_topic_name: 'Light, Sound, Heat & Magnetism' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Physics', micro_topic_name: 'Universe & Solar System' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Chemistry', micro_topic_name: 'Elements, Compounds, Acids, Bases & Salts' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Chemistry', micro_topic_name: 'Petroleum Products, Fertilizers & Pesticides' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Biology', micro_topic_name: 'Main Concepts of Life Science & Classification' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Biology', micro_topic_name: 'Blood, Circulation & Human Body Systems' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Biology', micro_topic_name: 'Human Diseases (Causes & Cures)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 1: General Science', macro_topic_name: 'Environment', micro_topic_name: 'Environment, Ecology & Diet' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 2: Current Events', macro_topic_name: 'History & Politics', micro_topic_name: 'Latest Diary of Events & National Symbols' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 2: Current Events', macro_topic_name: 'History & Politics', micro_topic_name: 'Prominent Personalities & Places in News' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 2: Current Events', macro_topic_name: 'History & Politics', micro_topic_name: 'Public Awareness & General Administration' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 2: Current Events', macro_topic_name: 'Geography & Science', micro_topic_name: 'Geographical Landmarks' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 2: Current Events', macro_topic_name: 'Geography & Science', micro_topic_name: 'Latest Inventions in Science & Technology' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Physical Geography', micro_topic_name: 'Location & Physical Features of India' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Climate & Weather', micro_topic_name: 'Monsoon, Rainfall & Weather Patterns' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Water & Soil', micro_topic_name: 'Water Resources & Rivers in India' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Water & Soil', micro_topic_name: 'Soil, Minerals & Natural Resources' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Economic & Human', micro_topic_name: 'Agriculture Patterns' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Economic & Human', micro_topic_name: 'Transport, Communication & Population Density' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 3: Geography of India', macro_topic_name: 'Economic & Human', micro_topic_name: 'Disaster Management & Environmental Impact' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'Ancient India', micro_topic_name: 'Indus Valley Civilization' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'Ancient India', micro_topic_name: 'Guptas' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'Medieval India', micro_topic_name: 'Delhi Sultanate' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'Medieval India', micro_topic_name: 'Mughals & Marathas' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'South Indian History', micro_topic_name: 'Cholas, Pandyas, Pallavas' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'Culture & Heritage', micro_topic_name: 'Characteristics of Indian Culture (Unity in Diversity)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 4: History & Culture', macro_topic_name: 'Culture & Heritage', micro_topic_name: 'India as a Secular State' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Constitution Basics', micro_topic_name: 'Making of the Constitution & Salient Features' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Constitution Basics', micro_topic_name: 'Preamble, Citizenship, Union & Territories' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Rights & Duties', micro_topic_name: 'Fundamental Rights' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Rights & Duties', micro_topic_name: 'Fundamental Duties & Directive Principles (DPSP)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Executive & Legislature', micro_topic_name: 'Union Executive (President, PM, Cabinet)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Executive & Legislature', micro_topic_name: 'State Executive (Governor, CM, Council)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Executive & Legislature', micro_topic_name: 'Parliament & State Legislature' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Judiciary & Local Govt', micro_topic_name: 'Supreme Court & High Courts' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Judiciary & Local Govt', micro_topic_name: 'Local Government (Panchayati Raj)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 5: Indian Polity', macro_topic_name: 'Judiciary & Local Govt', micro_topic_name: 'Constitutional & Non-Constitutional Bodies (EC, CAG, UPSC)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 6: Indian Economy', macro_topic_name: 'Nature of Economy', micro_topic_name: 'Nature of Indian Economy & Five Year Plans' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 6: Indian Economy', macro_topic_name: 'Nature of Economy', micro_topic_name: 'Planning Commission & NITI Aayog' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 6: Indian Economy', macro_topic_name: 'Finance & Banking', micro_topic_name: 'Reserve Bank of India (RBI) & Monetary Policy' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 6: Indian Economy', macro_topic_name: 'Finance & Banking', micro_topic_name: 'Finance Commission & Fiscal Policy' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 6: Indian Economy', macro_topic_name: 'Sectors of Economy', micro_topic_name: 'Agriculture, Industry & Rural Development' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 6: Indian Economy', macro_topic_name: 'Sectors of Economy', micro_topic_name: 'GST & Taxation' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 7: National Movement', macro_topic_name: 'Early Uprisings', micro_topic_name: 'Early Uprisings against British Rule (1857 Revolt)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 7: National Movement', macro_topic_name: 'INC & Moderates', micro_topic_name: 'Indian National Congress Formation' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 7: National Movement', macro_topic_name: 'INC & Moderates', micro_topic_name: 'Emergence of Leaders (B.R. Ambedkar, Bhagat Singh, etc.)' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 7: National Movement', macro_topic_name: 'Gandhian Era', micro_topic_name: 'Non-Cooperation, Civil Disobedience, Quit India' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Ancient Tamilakam', micro_topic_name: 'History of Tamil Society & Archaeological Discoveries' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Ancient Tamilakam', micro_topic_name: 'Sangam Literature' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Thirukkural', micro_topic_name: 'Significance as Secular Literature & Everyday Relevance' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Freedom Struggle in TN', micro_topic_name: 'Early Agitations against British Rule' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Freedom Struggle in TN', micro_topic_name: 'Role of Women in Freedom Struggle' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Social Movements', micro_topic_name: '19th & 20th Century Socio-Political Movements' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 8: TN History & Culture', macro_topic_name: 'Social Movements', micro_topic_name: 'Justice Party, Dravidian Movement & Periyar' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 9: TN Administration', macro_topic_name: 'Welfare & Governance', micro_topic_name: 'Social Justice & Social Harmony' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 9: TN Administration', macro_topic_name: 'Welfare & Governance', micro_topic_name: 'Education & Health Systems in Tamil Nadu' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 9: TN Administration', macro_topic_name: 'Welfare & Governance', micro_topic_name: 'E-Governance in Tamil Nadu' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 9: TN Administration', macro_topic_name: 'TN Geography', micro_topic_name: 'Geography of Tamil Nadu & its Economic Impact' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Quantitative Aptitude', micro_topic_name: 'Simplification, LCM & HCF' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Quantitative Aptitude', micro_topic_name: 'Ratio & Proportion' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Quantitative Aptitude', micro_topic_name: 'Percentage, Simple & Compound Interest' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Quantitative Aptitude', micro_topic_name: 'Area & Volume' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Quantitative Aptitude', micro_topic_name: 'Time & Work' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Logical Reasoning', micro_topic_name: 'Logical Reasoning & Puzzles' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Logical Reasoning', micro_topic_name: 'Dice & Visual Reasoning' },
-  { exam_group: 'ALL_GROUPS', unit_name: 'Unit 10: Aptitude', macro_topic_name: 'Logical Reasoning', micro_topic_name: 'Alpha-Numeric & Number Series' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General Tamil', macro_topic_name: 'Ilakkanam (Grammar)', micro_topic_name: 'Poruthuthal & Pirithu Ezhudhuthal' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General Tamil', macro_topic_name: 'Ilakkanam (Grammar)', micro_topic_name: 'Pizhai Thiruththam & Sol Porul' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General Tamil', macro_topic_name: 'Ilakkaiyam (Literature)', micro_topic_name: 'Thirukkural & Ettuthogai' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General Tamil', macro_topic_name: 'Ilakkaiyam (Literature)', micro_topic_name: 'Paththuppaattu & Iymperum Kaapiyangal' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General Tamil', macro_topic_name: 'Tamil Arignargal (Scholars)', micro_topic_name: 'Tamil Thondu & Bharathiyar/Bharathidasan' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General Tamil', macro_topic_name: 'Tamil Arignargal (Scholars)', micro_topic_name: 'Urainadai & Samudhaya Thondu' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General English', macro_topic_name: 'Grammar', micro_topic_name: 'Match the following & Synonyms/Antonyms' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General English', macro_topic_name: 'Grammar', micro_topic_name: 'Prefix/Suffix & Articles/Prepositions' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General English', macro_topic_name: 'Literature', micro_topic_name: 'Figures of Speech & Poetry Comprehension' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General English', macro_topic_name: 'Literature', micro_topic_name: 'Important Lines from Poems' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General English', macro_topic_name: 'Authors & Literary Works', micro_topic_name: 'Match Authors with Stories' },
-  { exam_group: 'GROUP_2_AND_4', unit_name: 'Part A: General English', macro_topic_name: 'Authors & Literary Works', micro_topic_name: 'Biographies & Characters' },
-]
+// Built-in fallback: the v2 catalog (src/data/taxonomyV2.js), used when the database
+// list cannot be loaded. Same shape as the question_taxonomy rows.
+export const FALLBACK_APPROVED_TAXONOMY = TAXONOMY_V2.map(e => ({
+  exam_group: e.exam_tag,
+  unit_name: e.unit_name,
+  macro_topic_name: e.macro_topic,
+  micro_topic_name: e.micro_topic,
+}))
 
 export async function loadApprovedPdfTaxonomy() {
   try {
@@ -174,6 +102,7 @@ export async function loadApprovedPdfTaxonomy() {
       .from('question_taxonomy')
       .select('exam_group, unit_name, macro_topic_name, micro_topic_name')
       .eq('active', true)
+      .in('exam_group', ['TNPSC_GROUP_1', 'TNPSC_GROUP_2', 'TNPSC_GROUP_4'])
       .order('unit_name')
     if (!error && data?.length) return data
   } catch (err) {

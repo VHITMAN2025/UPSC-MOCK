@@ -1157,11 +1157,12 @@ export function AdminExtractedQuestionsPage({ mode = 'bank' } = {}) {
         // 3. Map to the approved question_taxonomy catalog the database enforces
         // (Only the exam question bank is guarded by that database rule.)
         if (!isRecall) {
-          const approved = mapToApprovedCatalog(normalized)
+          const approved = mapToApprovedCatalog(normalized, selectedGroupTag)
           if (!approved) {
             valRes.errors.push(`No approved catalog mapping for micro_topic '${normalized.micro_topic}'.`)
             valRes.isValid = false
           } else {
+            normalized.unit_code = approved.unit_code
             normalized.unit_name = approved.unit_name
             normalized.unit_tag = approved.unit_name
             normalized.macro_topic = approved.macro_topic

@@ -10,93 +10,43 @@ import { paperService } from '../../services/paperService'
 import { attemptService } from '../../services/attemptService'
 import { testGeneratorService } from '../../services/testGeneratorService'
 import { useAuth } from '../../hooks/useAuth'
+import { BLUEPRINTS_V2 } from '../../data/taxonomyV2.js'
+
+// Quota display, built from the v2 blueprints (src/data/taxonomyV2.js) so it always
+// matches what the mock generator uses.
+const DISPLAY_PART_LABEL = {
+  PART_A: 'Part A — General Studies',
+  PART_B: 'Part B — Aptitude & Mental Ability',
+  PART_C: 'Part C — General Tamil',
+}
+
+function displayPartFor(unitCode) {
+  if (unitCode.includes('_GS_')) return 'PART_A'
+  if (unitCode.includes('_APT_')) return 'PART_B'
+  return 'PART_C'
+}
+
+function syllabusDisplay(examTag, standard) {
+  const units = BLUEPRINTS_V2[examTag] || []
+  const parts = ['PART_A', 'PART_B', 'PART_C']
+    .map(part => ({ part, units: units.filter(u => displayPartFor(u.unit_code) === part) }))
+    .filter(p => p.units.length > 0)
+  return {
+    standard,
+    parts: parts.map(({ part, units: partUnits }) => {
+      const total = partUnits.reduce((sum, u) => sum + u.quota, 0)
+      return {
+        name: `${DISPLAY_PART_LABEL[part]} (${total} Questions)`,
+        units: partUnits.map(u => ({ code: u.unit_code, title: u.title, count: u.quota })),
+      }
+    }),
+  }
+}
 
 const SYLLABUS_QUOTAS_DISPLAY = {
-  'TNPSC Group 1': {
-    standard: 'Degree Standard (Part A: 175 GS + Part B: 25 Aptitude)',
-    parts: [
-      {
-        name: 'Part A — General Studies (175 Questions)',
-        units: [
-          { code: 'UNIT_I', title: 'General Science', count: 10 },
-          { code: 'UNIT_II', title: 'Geography of India', count: 10 },
-          { code: 'UNIT_III', title: 'History, Culture of India & INM', count: 25 },
-          { code: 'UNIT_IV', title: 'Indian Polity', count: 40 },
-          { code: 'UNIT_V', title: 'Indian Economy & Dev Admin in TN', count: 50 },
-          { code: 'UNIT_VI', title: 'History, Culture, Heritage & Movements in TN', count: 40 },
-        ]
-      },
-      {
-        name: 'Part B — Aptitude & Mental Ability (25 Questions)',
-        units: [
-          { code: 'APT_UNIT_I', title: 'Aptitude & Arithmetic', count: 15 },
-          { code: 'APT_UNIT_II', title: 'Mental Ability & Logical Reasoning', count: 10 },
-        ]
-      }
-    ]
-  },
-  'TNPSC Group 2/2A': {
-    standard: 'Degree GS + SSLC Standard Language',
-    parts: [
-      {
-        name: 'Part A — Language (100 Questions: User Selected)',
-        units: [
-          { code: 'LANG_A', title: 'Part A (இலக்கணம் / Grammar)', count: 35 },
-          { code: 'LANG_B', title: 'Part B (இலக்கியம் / Prescribed Poems)', count: 35 },
-          { code: 'LANG_C', title: 'Part C (தமிழ் அறிஞர்கள் / Authors & Works)', count: 30 },
-        ]
-      },
-      {
-        name: 'Part B — General Studies (75 Questions)',
-        units: [
-          { code: 'UNIT_I', title: 'General Science', count: 5 },
-          { code: 'UNIT_II', title: 'Current Events', count: 5 },
-          { code: 'UNIT_III', title: 'Geography of India', count: 10 },
-          { code: 'UNIT_IV', title: 'History and Culture of India', count: 15 },
-          { code: 'UNIT_V', title: 'Indian Polity & Economy', count: 20 },
-          { code: 'UNIT_VI', title: 'INM & Tamil Nadu Heritage / Dev Admin', count: 20 },
-        ]
-      },
-      {
-        name: 'Part C — Aptitude & Mental Ability (25 Questions)',
-        units: [
-          { code: 'APT_UNIT_I', title: 'Aptitude & Arithmetic', count: 15 },
-          { code: 'APT_UNIT_II', title: 'Mental Ability & Logical Reasoning', count: 10 },
-        ]
-      }
-    ]
-  },
-  'TNPSC Group 4': {
-    standard: 'SSLC Standard (Part A: 100 General Tamil + Part B: 75 GS + Part C: 25 Aptitude)',
-    parts: [
-      {
-        name: 'Part A — Compulsory General Tamil (100 Questions)',
-        units: [
-          { code: 'LANG_TA_A', title: 'பகுதி-அ (இலக்கணம்)', count: 35 },
-          { code: 'LANG_TA_B', title: 'பகுதி-ஆ (இலக்கியம்)', count: 35 },
-          { code: 'LANG_TA_C', title: 'பகுதி-இ (தமிழ் அறிஞர்களும் தமிழ்த் தொண்டும்)', count: 30 },
-        ]
-      },
-      {
-        name: 'Part B — General Studies (75 Questions)',
-        units: [
-          { code: 'UNIT_I', title: 'General Science (SSLC Standard)', count: 8 },
-          { code: 'UNIT_II', title: 'Current Events', count: 7 },
-          { code: 'UNIT_III', title: 'Geography of India', count: 12 },
-          { code: 'UNIT_IV', title: 'History and Culture of India', count: 15 },
-          { code: 'UNIT_V', title: 'Indian Polity & Economy', count: 18 },
-          { code: 'UNIT_VI', title: 'INM & Tamil Nadu Culture / Heritage', count: 15 },
-        ]
-      },
-      {
-        name: 'Part C — Aptitude & Mental Ability (25 Questions)',
-        units: [
-          { code: 'APT_UNIT_I', title: 'Aptitude & Arithmetic', count: 15 },
-          { code: 'APT_UNIT_II', title: 'Mental Ability & Logical Reasoning', count: 10 },
-        ]
-      }
-    ]
-  }
+  'TNPSC Group 1': syllabusDisplay('TNPSC_GROUP_1', 'Degree Standard (Part A: 175 GS + Part B: 25 Aptitude)'),
+  'TNPSC Group 2/2A': syllabusDisplay('TNPSC_GROUP_2', 'Degree GS + SSLC Standard Language'),
+  'TNPSC Group 4': syllabusDisplay('TNPSC_GROUP_4', 'SSLC Standard (Part A: 100 General Tamil + Part B: 75 GS + Part C: 25 Aptitude)'),
 }
 
 export function MockTestsPage() {

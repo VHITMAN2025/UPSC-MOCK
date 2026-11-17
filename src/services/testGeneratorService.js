@@ -17,6 +17,7 @@ import { questionService } from './questionService.js'
 import { attemptService } from './attemptService.js'
 import { questionHistoryService } from './questionHistoryService.js'
 import { OFFICIAL_200Q_BLUEPRINTS } from './masterTaxonomyService.js'
+import { BLUEPRINTS_V2 } from '../data/taxonomyV2.js'
 
 // ─── Custom Errors ────────────────────────────────────────────────────────────
 
@@ -40,35 +41,34 @@ export const DIFFICULTY_RATIOS = {
   hard: 0.30,   // 30%
 }
 
-// Group 1 Quota Blueprint (175 GS + 25 Aptitude = 200 Questions)
-export const GROUP1_SYLLABUS_QUOTAS = {
-  normalized200: [
-    { partCode: 'PART_A', unitCode: 'UNIT_I',     unitNumber: 1, unitName: 'General Science', quota: 10 },
-    { partCode: 'PART_A', unitCode: 'UNIT_II',    unitNumber: 2, unitName: 'Geography of India', quota: 10 },
-    { partCode: 'PART_A', unitCode: 'UNIT_III',   unitNumber: 3, unitName: 'History, Culture of India & INM', quota: 25 },
-    { partCode: 'PART_A', unitCode: 'UNIT_IV',    unitNumber: 4, unitName: 'Indian Polity', quota: 40 },
-    { partCode: 'PART_A', unitCode: 'UNIT_V',     unitNumber: 5, unitName: 'Indian Economy & Dev Admin in TN', quota: 50 },
-    { partCode: 'PART_A', unitCode: 'UNIT_VI',    unitNumber: 6, unitName: 'History, Culture, Heritage & Movements in TN', quota: 40 },
-    { partCode: 'PART_B', unitCode: 'APT_UNIT_I', unitNumber: 7, unitName: 'Aptitude & Arithmetic', quota: 15 },
-    { partCode: 'PART_B', unitCode: 'APT_UNIT_II',unitNumber: 8, unitName: 'Mental Ability & Reasoning', quota: 10 },
-  ],
+// Quotas come from the v2 taxonomy (src/data/taxonomyV2.js), which mirrors
+// supabase/data/taxonomy_v2.csv. Each group's units sum to 200 questions.
+function partCodeFor(unitCode) {
+  if (unitCode.includes('_GS_')) return 'PART_A'
+  if (unitCode.includes('_APT_')) return 'PART_B'
+  if (unitCode.includes('_TA_') || unitCode.includes('_EN_')) return 'PART_C'
+  return 'PART_A'
 }
 
-// Group 2 Quota Blueprint (100 Language + 75 GS + 25 Aptitude = 200 Questions)
+function blueprintUnits(examTag) {
+  return (BLUEPRINTS_V2[examTag] || []).map((u, i) => ({
+    partCode: partCodeFor(u.unit_code),
+    unitCode: u.unit_code,
+    unitNumber: i + 1,
+    unitName: u.title,
+    quota: u.quota,
+  }))
+}
+
+// Group 1 quota blueprint (175 GS + 25 Aptitude = 200 Questions)
+export const GROUP1_SYLLABUS_QUOTAS = {
+  normalized200: blueprintUnits('TNPSC_GROUP_1'),
+}
+
+// Group 2 quota blueprint (100 Tamil + 75 GS + 25 Aptitude = 200 Questions).
+// The English list is still the legacy one: the English-or-Tamil decision is open.
 export const GROUP2_SYLLABUS_QUOTAS = {
-  tamil200: [
-    { partCode: 'PART_A', unitCode: 'LANG_TA_A',  unitNumber: 1, unitName: 'பகுதி-அ (இலக்கணம்)', quota: 35 },
-    { partCode: 'PART_A', unitCode: 'LANG_TA_B',  unitNumber: 2, unitName: 'பகுதி-ஆ (இலக்கியம்)', quota: 35 },
-    { partCode: 'PART_A', unitCode: 'LANG_TA_C',  unitNumber: 3, unitName: 'பகுதி-இ (தமிழ் அறிஞர்கள்)', quota: 30 },
-    { partCode: 'PART_B', unitCode: 'UNIT_I',     unitNumber: 4, unitName: 'General Science', quota: 5 },
-    { partCode: 'PART_B', unitCode: 'UNIT_II',    unitNumber: 5, unitName: 'Current Events', quota: 5 },
-    { partCode: 'PART_B', unitCode: 'UNIT_III',   unitNumber: 6, unitName: 'Geography of India', quota: 10 },
-    { partCode: 'PART_B', unitCode: 'UNIT_IV',    unitNumber: 7, unitName: 'History and Culture of India', quota: 15 },
-    { partCode: 'PART_B', unitCode: 'UNIT_V',     unitNumber: 8, unitName: 'Indian Polity & Economy', quota: 20 },
-    { partCode: 'PART_B', unitCode: 'UNIT_VI',    unitNumber: 9, unitName: 'INM & Tamil Nadu Heritage', quota: 20 },
-    { partCode: 'PART_C', unitCode: 'APT_UNIT_I', unitNumber: 10, unitName: 'Aptitude & Arithmetic', quota: 15 },
-    { partCode: 'PART_C', unitCode: 'APT_UNIT_II',unitNumber: 11, unitName: 'Mental Ability & Reasoning', quota: 10 },
-  ],
+  tamil200: blueprintUnits('TNPSC_GROUP_2'),
   english200: [
     { partCode: 'PART_A', unitCode: 'LANG_EN_A',  unitNumber: 1, unitName: 'Part-A Grammar', quota: 35 },
     { partCode: 'PART_A', unitCode: 'LANG_EN_B',  unitNumber: 2, unitName: 'Part-B Literature / Prescribed Poems', quota: 35 },
@@ -84,21 +84,9 @@ export const GROUP2_SYLLABUS_QUOTAS = {
   ],
 }
 
-// Group 4 Quota Blueprint (100 Tamil + 75 GS + 25 Aptitude = 200 Questions)
+// Group 4 quota blueprint (100 Tamil + 75 GS + 25 Aptitude = 200 Questions)
 export const GROUP4_SYLLABUS_QUOTAS = {
-  normalized200: [
-    { partCode: 'PART_A', unitCode: 'LANG_TA_A',  unitNumber: 1, unitName: 'பகுதி-அ (இலக்கணம்)', quota: 35 },
-    { partCode: 'PART_A', unitCode: 'LANG_TA_B',  unitNumber: 2, unitName: 'பகுதி-ஆ (இலக்கியம்)', quota: 35 },
-    { partCode: 'PART_A', unitCode: 'LANG_TA_C',  unitNumber: 3, unitName: 'பகுதி-இ (தமிழ் அறிஞர்கள்)', quota: 30 },
-    { partCode: 'PART_B', unitCode: 'UNIT_I',     unitNumber: 4, unitName: 'General Science (SSLC)', quota: 8 },
-    { partCode: 'PART_B', unitCode: 'UNIT_II',    unitNumber: 5, unitName: 'Current Events', quota: 7 },
-    { partCode: 'PART_B', unitCode: 'UNIT_III',   unitNumber: 6, unitName: 'Geography of India', quota: 12 },
-    { partCode: 'PART_B', unitCode: 'UNIT_IV',    unitNumber: 7, unitName: 'History and Culture of India', quota: 15 },
-    { partCode: 'PART_B', unitCode: 'UNIT_V',     unitNumber: 8, unitName: 'Indian Polity & Economy', quota: 18 },
-    { partCode: 'PART_B', unitCode: 'UNIT_VI',    unitNumber: 9, unitName: 'INM & Tamil Nadu Culture', quota: 15 },
-    { partCode: 'PART_C', unitCode: 'APT_UNIT_I', unitNumber: 10, unitName: 'Aptitude & Arithmetic', quota: 15 },
-    { partCode: 'PART_C', unitCode: 'APT_UNIT_II',unitNumber: 11, unitName: 'Mental Ability & Reasoning', quota: 10 },
-  ],
+  normalized200: blueprintUnits('TNPSC_GROUP_4'),
 }
 
 // ─── Mathematical Biproportional / Hamilton Allocator ────────────────────────
