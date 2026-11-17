@@ -580,7 +580,7 @@ function PracticeSession({ session, questions, onComplete }) {
               ? (optEn !== optTa ? optEn : null)
               : (optTa !== optEn ? optTa : null)
 
-            if (!textEn && !textTa) return null
+            if (!optEn && !optTa) return null
             const isSelected = answers[currentQ.id] === opt
             return (
               <button

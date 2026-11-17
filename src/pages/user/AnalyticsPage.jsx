@@ -36,9 +36,9 @@ const PACING_CATEGORIES = [
 // As per handoff spec: Only 4 essential tabs
 const DIAGNOSTIC_TABS = [
   { id: 'ma-view-overview',    label: 'Overview & Mock Trend' },
-  { id: 'ma-view-unit-topic',  label: 'Unit & Topic Accuracy' },
+  { id: 'ma-view-syllabus',    label: 'Unit & Topic Accuracy' },
   { id: 'ma-view-pacing',      label: 'Pacing & Time (54s/Q)' },
-  { id: 'ma-view-mistakes',    label: 'Mistake Log & Test History' },
+  { id: 'ma-view-errors',      label: 'Mistake Log & Test History' },
 ]
 
 function formatDeltaSeconds(deltaSec) {

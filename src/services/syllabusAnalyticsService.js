@@ -1383,9 +1383,15 @@ export const syllabusAnalyticsService = {
       }
     })
 
-    // 3. Process User Test Submissions & Attempt Logs
+    // 3. Process User Test Submissions & Attempt Logs (filtered by exam group)
     const userAttempts = userAttemptsRes.status === 'fulfilled' ? (userAttemptsRes.value.data || []) : []
     userAttempts.forEach(attempt => {
+      // Filter: Only count attempts from papers matching the selected exam group
+      const paperExamName = attempt.papers?.exam_name
+      if (paperExamName && paperExamName !== examName) {
+        return // Skip attempts from different exam groups
+      }
+
       const answers = attempt.attempt_answers || []
       answers.forEach(ans => {
         if (!ans.selected_option) return
@@ -1424,9 +1430,15 @@ export const syllabusAnalyticsService = {
       })
     })
 
-    // 4. Process Quick Recall Answers
+    // 4. Process Quick Recall Answers (filtered by exam context)
     const recallSessions = userRecallSessionsRes.status === 'fulfilled' ? (userRecallSessionsRes.value.data || []) : []
     recallSessions.forEach(session => {
+      // Filter: Only count recall answers matching the selected exam group context
+      const sessionExamContext = session.exam_context
+      if (sessionExamContext && sessionExamContext !== examName) {
+        return // Skip sessions from different exam groups
+      }
+
       const answers = session.quick_recall_answers || []
       answers.forEach(ans => {
         let microId = null
@@ -1449,9 +1461,15 @@ export const syllabusAnalyticsService = {
       })
     })
 
-    // 4b. Process Targeted Practice Sessions (Syncs unit mastery after targeted practice)
+    // 4b. Process Targeted Practice Sessions (Syncs unit mastery after targeted practice, filtered by exam context)
     const userPracticeSessions = userPracticeSessionsRes?.status === 'fulfilled' ? (userPracticeSessionsRes.value.data || []) : []
     userPracticeSessions.forEach(ps => {
+      // Filter: Only count practice sessions matching the selected exam group context
+      const sessionExamContext = ps.exam_context
+      if (sessionExamContext && sessionExamContext !== examName) {
+        return // Skip sessions from different exam groups
+      }
+
       const qs = Array.isArray(ps.questions_json) ? ps.questions_json : []
       const ansMap = ps.answers_json || {}
       const answeredEntries = Object.entries(ansMap)
