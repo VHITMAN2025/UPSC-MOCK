@@ -1,0 +1,90 @@
+topic_id,exam_group,syllabus_part,unit_name,macro_topic_name,micro_topic_name,group_4_weightage,group_2_weightage,group_1_weightage,notes
+TOPIC_001,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Physics,Mechanics & Properties of Matter,2,1,2,Physics - Group 4: 8Q | Group 2: 5Q | Group 1: 10Q
+TOPIC_002,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Physics,Light, Sound, Heat & Magnetism,2,1,2,Physics
+TOPIC_003,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Physics,Universe & Solar System,1,1,2,Physics
+TOPIC_004,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Chemistry,Elements, Compounds, Acids, Bases & Salts,1,1,2,Chemistry
+TOPIC_005,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Chemistry,Petroleum Products, Fertilizers & Pesticides,1,1,1,Chemistry
+TOPIC_006,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Biology,Main Concepts of Life Science & Classification,0,0,1,Biology
+TOPIC_007,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Biology,Blood, Circulation & Human Body Systems,1,0,0,Biology
+TOPIC_008,ALL_GROUPS,Part A: General Studies,Unit 1: General Science,Environment,Environment, Ecology & Diet,0,0,0,Environment
+TOPIC_009,ALL_GROUPS,Part A: General Studies,Unit 2: Current Events,History & Politics,Latest Diary of Events & National Symbols,2,1,2,Current Events - Group 4: 7Q | Group 2: 5Q | Group 1: 10Q
+TOPIC_010,ALL_GROUPS,Part A: General Studies,Unit 2: Current Events,History & Politics,Prominent Personalities & Places in News,2,1,2,Current affairs
+TOPIC_011,ALL_GROUPS,Part A: General Studies,Unit 2: Current Events,History & Politics,Public Awareness & General Administration,2,2,3,Current affairs
+TOPIC_012,ALL_GROUPS,Part A: General Studies,Unit 2: Current Events,Geography & Science,Geographical Landmarks,1,1,2,Current affairs
+TOPIC_013,ALL_GROUPS,Part A: General Studies,Unit 2: Current Events,Geography & Science,Latest Inventions in Science & Technology,0,0,1,Current affairs
+TOPIC_016,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Physical Geography,Location & Physical Features of India,3,2,2,Geography
+TOPIC_017,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Climate & Weather,Monsoon, Rainfall & Weather Patterns,2,2,2,Geography
+TOPIC_018,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Water & Soil,Water Resources & Rivers in India,2,2,2,Geography
+TOPIC_019,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Water & Soil,Soil, Minerals & Natural Resources,2,2,2,Geography
+TOPIC_020,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Economic & Human,Agriculture Patterns,1,1,1,Geography
+TOPIC_021,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Economic & Human,Transport, Communication & Population Density,1,1,1,Geography
+TOPIC_022,ALL_GROUPS,Part A: General Studies,Unit 3: Geography of India,Economic & Human,Disaster Management & Environmental Impact,1,0,0,Geography
+TOPIC_023,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,Ancient India,Indus Valley Civilization,2,2,3,History
+TOPIC_024,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,Ancient India,Guptas,2,2,3,History
+TOPIC_025,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,Medieval India,Delhi Sultanate,2,2,4,History
+TOPIC_026,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,Medieval India,Mughals & Marathas,2,3,4,History
+TOPIC_027,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,South Indian History,Cholas, Pandyas, Pallavas,3,3,5,History
+TOPIC_028,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,Culture & Heritage,Characteristics of Indian Culture (Unity in Diversity),2,2,3,History
+TOPIC_029,ALL_GROUPS,Part A: General Studies,Unit 4: History & Culture,Culture & Heritage,India as a Secular State,2,1,3,History
+TOPIC_030,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Constitution Basics,Making of the Constitution & Salient Features,3,3,6,Polity
+TOPIC_031,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Constitution Basics,Preamble, Citizenship, Union & Territories,3,3,6,Polity
+TOPIC_032,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Rights & Duties,Fundamental Rights,3,4,8,Polity
+TOPIC_033,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Rights & Duties,Fundamental Duties & Directive Principles (DPSP),3,3,6,Polity
+TOPIC_034,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Executive & Legislature,Union Executive (President, PM, Cabinet),2,3,5,Polity
+TOPIC_035,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Executive & Legislature,State Executive (Governor, CM, Council),2,2,4,Polity
+TOPIC_036,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Executive & Legislature,Parliament & State Legislature,2,2,5,Polity
+TOPIC_037,ALL_GROUPS,Part A: General Studies,Unit 10: Aptitude,Quantitative Aptitude,Simplification, LCM & HCF,5,5,5,Aptitude
+TOPIC_038,ALL_GROUPS,Part A: General Studies,Unit 10: Aptitude,Quantitative Aptitude,Ratio & Proportion,4,4,3,Aptitude
+TOPIC_039,ALL_GROUPS,Part A: General Studies,Unit 10: Aptitude,Quantitative Aptitude,Percentage, Simple & Compound Interest,4,4,3,Aptitude
+TOPIC_040,ALL_GROUPS,Part A: General Studies,Unit 10: Aptitude,Quantitative Aptitude,Area & Volume,3,3,2,Aptitude
+TOPIC_041,ALL_GROUPS,Part A: General Studies,Unit 10: Aptitude,Quantitative Aptitude,Time & Work,2,2,2,Aptitude
+TOPIC_042,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Ilakkanam (Grammar),Poruthuthal & Pirithu Ezhudhuthal,12,12,0,Tamil grammar for Group 2/4
+TOPIC_043,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Ilakkanam (Grammar),Pizhai Thiruththam & Sol Porul,11,11,0,Tamil grammar for Group 2/4
+TOPIC_044,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Ilakkanam (Grammar),Tamil Grammar Comprehensive,12,12,0,Tamil grammar for Group 2/4
+TOPIC_045,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Ilakkaiyam (Literature),Thirukkural & Ettuthogai,12,12,0,Tamil literature for Group 2/4
+TOPIC_046,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Ilakkaiyam (Literature),Paththuppaattu & Iymperum Kaapiyangal,11,11,0,Tamil literature for Group 2/4
+TOPIC_047,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Ilakkaiyam (Literature),Classical Tamil Literature,12,12,0,Tamil literature for Group 2/4
+TOPIC_048,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Tamil Arignargal (Scholars),Tamil Thondu & Bharathiyar/Bharathidasan,10,10,0,Tamil scholars for Group 2/4
+TOPIC_049,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Tamil Arignargal (Scholars),Urainadai & Samudhaya Thondu,10,10,0,Tamil scholars for Group 2/4
+TOPIC_050,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Tamil Arignargal (Scholars),Modern Tamil Literature,10,10,0,Tamil scholars for Group 2/4
+TOPIC_051,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Tamil Comprehensive,Tamil History & Culture,0,0,0,Tamil comprehensive for Group 2/4
+TOPIC_052,GROUP_2_AND_4,Part C: General English,Part A: General English,Grammar,Match the following & Synonyms/Antonyms,0,12,0,English grammar for Group 2/4
+TOPIC_053,GROUP_2_AND_4,Part C: General English,Part A: General English,Grammar,Prefix/Suffix & Articles/Prepositions,0,11,0,English grammar for Group 2/4
+TOPIC_054,GROUP_2_AND_4,Part C: General English,Part A: General English,Grammar,English Grammar Comprehensive,0,12,0,English grammar for Group 2/4
+TOPIC_055,GROUP_2_AND_4,Part C: General English,Part A: General English,Literature,Figures of Speech & Poetry Comprehension,0,12,0,English literature for Group 2/4
+TOPIC_056,GROUP_2_AND_4,Part C: General English,Part A: General English,Literature,Important Lines from Poems,0,11,0,English literature for Group 2/4
+TOPIC_057,GROUP_2_AND_4,Part C: General English,Part A: General English,Literature,English Literature Comprehensive,0,12,0,English literature for Group 2/4
+TOPIC_058,GROUP_2_AND_4,Part C: General English,Part A: General English,Authors & Literary Works,Match Authors with Stories,0,10,0,English authors for Group 2/4
+TOPIC_059,GROUP_2_AND_4,Part C: General English,Part A: General English,Authors & Literary Works,Biographies & Characters,0,10,0,English authors for Group 2/4
+TOPIC_060,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Judiciary & Local Govt,Supreme Court & High Courts,0,0,0,Polity - Group 1 specific
+TOPIC_061,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Judiciary & Local Govt,Local Government (Panchayati Raj),0,0,0,Polity - Group 1 specific
+TOPIC_062,ALL_GROUPS,Part A: General Studies,Unit 5: Indian Polity,Judiciary & Local Govt,Constitutional & Non-Constitutional Bodies (EC, CAG, UPSC),0,0,0,Polity - Group 1 specific
+TOPIC_063,ALL_GROUPS,Part A: General Studies,Unit 6: Indian Economy,Nature of Economy,Nature of Indian Economy & Five Year Plans,3,3,8,Economy
+TOPIC_064,ALL_GROUPS,Part A: General Studies,Unit 6: Indian Economy,Nature of Economy,Planning Commission & NITI Aayog,3,3,8,Economy
+TOPIC_065,ALL_GROUPS,Part A: General Studies,Unit 6: Indian Economy,Finance & Banking,Reserve Bank of India (RBI) & Monetary Policy,3,4,10,Economy
+TOPIC_066,ALL_GROUPS,Part A: General Studies,Unit 6: Indian Economy,Finance & Banking,Finance Commission & Fiscal Policy,3,3,8,Economy
+TOPIC_067,ALL_GROUPS,Part A: General Studies,Unit 6: Indian Economy,Sectors of Economy,Agriculture, Industry & Rural Development,3,4,10,Economy
+TOPIC_068,ALL_GROUPS,Part A: General Studies,Unit 6: Indian Economy,Sectors of Economy,GST & Taxation,3,3,6,Economy
+TOPIC_069,ALL_GROUPS,Part A: General Studies,Unit 7: National Movement,Early Uprisings,Early Uprisings against British Rule (1857 Revolt),0,0,0,National movement
+TOPIC_070,ALL_GROUPS,Part A: General Studies,Unit 7: National Movement,INC & Moderates,Indian National Congress Formation,0,0,0,National movement
+TOPIC_071,ALL_GROUPS,Part A: General Studies,Unit 7: National Movement,INC & Moderates,Emergence of Leaders (B.R. Ambedkar, Bhagat Singh, etc.),0,0,0,National movement
+TOPIC_072,ALL_GROUPS,Part A: General Studies,Unit 7: National Movement,Gandhian Era,Non-Cooperation, Civil Disobedience, Quit India,0,0,0,National movement
+TOPIC_073,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Ancient Tamilakam,History of Tamil Society & Archaeological Discoveries,0,0,0,TN History
+TOPIC_074,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Ancient Tamilakam,Sangam Literature,0,0,0,TN History
+TOPIC_075,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Thirukkural,Significance as Secular Literature & Everyday Relevance,0,0,0,TN History
+TOPIC_076,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Freedom Struggle in TN,Early Agitations against British Rule,0,0,0,TN History
+TOPIC_077,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Freedom Struggle in TN,Role of Women in Freedom Struggle,0,0,0,TN History
+TOPIC_078,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Social Movements,19th & 20th Century Socio-Political Movements,0,0,0,TN History
+TOPIC_079,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,Social Movements,Justice Party, Dravidian Movement & Periyar,0,0,0,TN History
+TOPIC_080,ALL_GROUPS,Part A: General Studies,Unit 9: TN Administration,Welfare & Governance,Social Justice & Social Harmony,0,0,0,TN Administration
+TOPIC_081,ALL_GROUPS,Part A: General Studies,Unit 9: TN Administration,Welfare & Governance,Education & Health Systems in Tamil Nadu,0,0,0,TN Administration
+TOPIC_082,ALL_GROUPS,Part B: Aptitude,Unit 10: Aptitude,Logical Reasoning,Logical Reasoning & Puzzles,5,5,5,Reasoning
+TOPIC_083,ALL_GROUPS,Part B: Aptitude,Unit 10: Aptitude,Logical Reasoning,Dice & Visual Reasoning,3,3,3,Reasoning
+TOPIC_084,ALL_GROUPS,Part B: Aptitude,Unit 10: Aptitude,Logical Reasoning,Alpha-Numeric & Number Series,2,2,2,Reasoning
+TOPIC_085,ALL_GROUPS,Part A: General Studies,Unit 9: TN Administration,Welfare & Governance,E-Governance in Tamil Nadu,0,0,0,TN Administration
+TOPIC_086,ALL_GROUPS,Part A: General Studies,Unit 9: TN Administration,TN Geography,Geography of Tamil Nadu & its Economic Impact,0,0,0,TN Geography
+TOPIC_087,ALL_GROUPS,Part A: General Studies,Unit 7: National Movement,National Movement Comprehensive,Freedom Struggle & Leaders,0,0,0,National movement comprehensive
+TOPIC_088,ALL_GROUPS,Part A: General Studies,Unit 8: TN History & Culture,TN Culture Comprehensive,Tamil Nadu Heritage & Culture,0,0,0,TN comprehensive
+TOPIC_089,ALL_GROUPS,Part A: General Studies,Unit 9: TN Administration,TN Administration Comprehensive,Governance & Development in TN,0,0,0,TN administration comprehensive
+TOPIC_090,GROUP_2_AND_4,Part C: General English,Part A: General English,English Comprehensive,General English Complete Topics,0,10,0,English comprehensive for Group 2
+TOPIC_091,GROUP_2_AND_4,Part C: General Tamil,Part A: General Tamil,Tamil Comprehensive,General Tamil Complete Topics,0,0,0,Tamil comprehensive placeholder
