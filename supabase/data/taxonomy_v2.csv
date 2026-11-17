@@ -1,0 +1,92 @@
+topic_id,exam_group,subject_name,unit_code,unit_name,macro_topic,micro_topic,unit_quota
+TOPIC_001,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Physics","Mechanics, Force, Pressure & Energy",5
+TOPIC_002,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Physics","Everyday Principles of Electricity, Magnetism, Light, Sound & Heat",5
+TOPIC_003,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Physics","Nuclear Physics & Latest Inventions in Science",5
+TOPIC_004,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Chemistry","Elements, Compounds, Acids, Bases & Salts",5
+TOPIC_005,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Chemistry","Petroleum Products, Fertilizers, Pesticides & Metallurgy",5
+TOPIC_006,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Chemistry","Food Adulterants & Chemical Applications",5
+TOPIC_007,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Botany & Zoology","Classification of Living Organisms, Evolution & Genetics",5
+TOPIC_008,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Botany & Zoology","Physiology, Nutrition, Health, Hygiene & Human Diseases",5
+TOPIC_009,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Environmental Science","Environmental Science & Ecological Balance",5
+TOPIC_010,TNPSC_GROUP_4,"General Studies","G4_GS_U1","Unit I: General Science","Current Affairs","Current Affairs in Science & Technology",5
+TOPIC_011,TNPSC_GROUP_4,"General Studies","G4_GS_U2","Unit II: Geography of India","Physical Geography","Earth Location, Physical Features, Weather & Climate",5
+TOPIC_012,TNPSC_GROUP_4,"General Studies","G4_GS_U2","Unit II: Geography of India","Physical Geography","Water Resources, Rivers, Soil, Minerals & Natural Resources",5
+TOPIC_013,TNPSC_GROUP_4,"General Studies","G4_GS_U2","Unit II: Geography of India","Economic & Social Geography","Forest, Wildlife, Agriculture Pattern, Transport & Communication",5
+TOPIC_014,TNPSC_GROUP_4,"General Studies","G4_GS_U2","Unit II: Geography of India","Economic & Social Geography","Population Density & Distribution in Tamil Nadu and India",5
+TOPIC_015,TNPSC_GROUP_4,"General Studies","G4_GS_U2","Unit II: Geography of India","Disaster & Environment","Calamities, Disaster Management, Environment & Climate Change",5
+TOPIC_016,TNPSC_GROUP_4,"General Studies","G4_GS_U2","Unit II: Geography of India","Current Affairs","Geographical Landmarks & Current Affairs",5
+TOPIC_017,TNPSC_GROUP_4,"General Studies","G4_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Ancient & Medieval History","Indus Valley Civilization, Guptas, Delhi Sultans, Mughals & Marathas",10
+TOPIC_018,TNPSC_GROUP_4,"General Studies","G4_GS_U3","Unit III: History, Culture of India, and Indian National Movement","South Indian History","South Indian History & Early Uprisings",10
+TOPIC_019,TNPSC_GROUP_4,"General Studies","G4_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Indian National Movement","Indian National Congress & Emergence of National Leaders",10
+TOPIC_020,TNPSC_GROUP_4,"General Studies","G4_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Indian National Movement","Role of Ambedkar, Periyar, Bharathiar, V.O.C., Gandhi & Others in Freedom Struggle",10
+TOPIC_021,TNPSC_GROUP_4,"General Studies","G4_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Indian Culture & Society","Characteristics of Indian Culture, Unity in Diversity & Secularism",10
+TOPIC_022,TNPSC_GROUP_4,"General Studies","G4_GS_U4","Unit IV: Indian Polity","Constitution & Framework","Constitution of India, Preamble, Salient Features, Union, State & Territory",15
+TOPIC_023,TNPSC_GROUP_4,"General Studies","G4_GS_U4","Unit IV: Indian Polity","Rights & Directives","Citizenship, Fundamental Rights, Fundamental Duties & DPSP",15
+TOPIC_024,TNPSC_GROUP_4,"General Studies","G4_GS_U4","Unit IV: Indian Polity","Government Organs","Union & State Executive, Legislature, Judiciary & Rule of Law",15
+TOPIC_025,TNPSC_GROUP_4,"General Studies","G4_GS_U4","Unit IV: Indian Polity","Local Governance & Federalism","Local Governments, Panchayat Raj & Centre-State Relationships",15
+TOPIC_026,TNPSC_GROUP_4,"General Studies","G4_GS_U4","Unit IV: Indian Polity","Admin & Social Justice","Elections, Anti-Corruption Measures, Lokpal, Lokayukta, RTI & Women Empowerment",15
+TOPIC_027,TNPSC_GROUP_4,"General Studies","G4_GS_U4","Unit IV: Indian Polity","Political Systems","Consumer Protection, Human Rights & Political Parties in Tamil Nadu and India",15
+TOPIC_028,TNPSC_GROUP_4,"General Studies","G4_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Indian Economy & Planning","Nature of Indian Economy, Five-Year Plans, Planning Commission & Niti Aayog",20
+TOPIC_029,TNPSC_GROUP_4,"General Studies","G4_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Public Finance & Taxation","Sources of Revenue, RBI, Finance Commission & Goods and Services Tax (GST)",20
+TOPIC_030,TNPSC_GROUP_4,"General Studies","G4_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Agriculture & Industry","Economic Trends, Employment Generation, Land Reforms & Agricultural Technology",20
+TOPIC_031,TNPSC_GROUP_4,"General Studies","G4_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Social Development & Welfare","Rural Welfare Programmes, Poverty, Population, Education & Health Systems in Tamil Nadu",20
+TOPIC_032,TNPSC_GROUP_4,"General Studies","G4_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Tamil Nadu Economy","Geography of Tamil Nadu, Economic Growth Impact & Government Welfare Schemes",20
+TOPIC_033,TNPSC_GROUP_4,"General Studies","G4_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu","Tamil Society & Archaeology","History of Tamil Society, Archaeological Discoveries & Sangam to Contemporary Literature",20
+TOPIC_034,TNPSC_GROUP_4,"General Studies","G4_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu","Thirukkural Studies","Thirukkural: Secular Literature, Universal Values & Philosophical Content",20
+TOPIC_035,TNPSC_GROUP_4,"General Studies","G4_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu","Tamil Nadu Freedom Struggle","Role of Tamil Nadu in Freedom Struggle & Women Freedom Fighters",20
+TOPIC_036,TNPSC_GROUP_4,"General Studies","G4_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu","Social Reform Movements","Social Reformers, Movements & Social Transformation in Tamil Nadu",20
+TOPIC_037,TNPSC_GROUP_4,"Aptitude & Mental Ability","G4_APT_U1","Unit I: Aptitude","Arithmetic","Simplification, Percentage, HCF & LCM",15
+TOPIC_038,TNPSC_GROUP_4,"Aptitude & Mental Ability","G4_APT_U1","Unit I: Aptitude","Arithmetic","Ratio and Proportion, Simple Interest & Compound Interest",15
+TOPIC_039,TNPSC_GROUP_4,"Aptitude & Mental Ability","G4_APT_U1","Unit I: Aptitude","Commercial & Mensuration Math","Area, Volume, Time and Work",15
+TOPIC_040,TNPSC_GROUP_4,"Aptitude & Mental Ability","G4_APT_U2","Unit II: Reasoning","Analytical Reasoning","Logical Reasoning, Puzzles, Dice & Visual Reasoning",10
+TOPIC_041,TNPSC_GROUP_4,"Aptitude & Mental Ability","G4_APT_U2","Unit II: Reasoning","Verbal & Non-Verbal Reasoning","Alpha-Numeric Reasoning & Number Series",10
+TOPIC_042,TNPSC_GROUP_4,"General Tamil","G4_TA_U1","அலகு I: இலக்கணம்","இலக்கணம் - எழுத்து","எழுத்து: பிரித்து எழுதுதல், சேர்த்து எழுதுதல், சந்திப்பிழை & எழுத்து வேறுபாடுகள்",25
+TOPIC_043,TNPSC_GROUP_4,"General Tamil","G4_TA_U1","அலகு I: இலக்கணம்","இலக்கணம் - சொல்","சொல்: வேர்ச்சொல் அறிதல், வினைமுற்று, வினையெச்சம், பெயரெச்சம் & பிழை திருத்தம்",25
+TOPIC_044,TNPSC_GROUP_4,"General Tamil","G4_TA_U2","அலகு II: சொல்லகராதி","சொல்லகராதி - பொருள்","எதிர்ச்சொல், ஓரெழுத்து ஒரு மொழி, பொருள் அறிதல் & அகர வரிசை",15
+TOPIC_045,TNPSC_GROUP_4,"General Tamil","G4_TA_U2","அலகு II: சொல்லகராதி","சொல்லகராதி - பயன்பாடு","மரூஉச் சொற்கள், பேச்சு வழக்கு, பிழை திருத்தம் & பலபொருள் சொற்கள்",15
+TOPIC_046,TNPSC_GROUP_4,"General Tamil","G4_TA_U3","அலகு III: எழுதும் திறன்","எழுதும் திறன் - வாக்கியம்","சொற்றொடர் அமைப்பு, செய்வினை-செயப்பாட்டு வினை & மரபுத் தமிழ்",15
+TOPIC_047,TNPSC_GROUP_4,"General Tamil","G4_TA_U4","அலகு IV: கலைச் சொற்கள்","கலைச் சொற்கள்","பல்துறை சார்ந்த கலைச் சொற்களுக்கு இணையான தமிழ்ச் சொற்கள்",10
+TOPIC_048,TNPSC_GROUP_4,"General Tamil","G4_TA_U5","அலகு V: வாசித்தல் - புரிந்து கொள்ளும் திறன்","வாசித்தல் திறன்","பத்தி வினாக்கள், தலையங்கம், உவமை மற்றும் பழமொழிகள்",15
+TOPIC_049,TNPSC_GROUP_4,"General Tamil","G4_TA_U6","அலகு VI: எளிய மொழி பெயர்ப்பு","மொழிபெயர்ப்பு","ஆங்கிலச் சொற்களுக்கு இணையான தமிழ்ச் சொற்கள் மற்றும் மொழிபெயர்ப்பு",5
+TOPIC_050,TNPSC_GROUP_4,"General Tamil","G4_TA_U7","அலகு VII: இலக்கியம், தமிழ் அறிஞர்களும், தமிழ்த்தொண்டும்","இலக்கியம் - திருக்குறள்","திருக்குறள் 20 அதிகாரங்கள் மற்றும் மேற்கோள்கள்",15
+TOPIC_051,TNPSC_GROUP_4,"General Tamil","G4_TA_U7","அலகு VII: இலக்கியம், தமிழ் அறிஞர்களும், தமிழ்த்தொண்டும்","அறநூல்கள் & தமிழறிஞர்கள்","அறநூல்கள், திராவிட மொழிகள் மற்றும் தமிழறிஞர்களின் தொண்டு",15
+TOPIC_052,TNPSC_GROUP_4,"General English","G4_EN_U1","Unit I: Grammar","Grammar","Parts of Speech, Concord, Tenses, Voice & Sentence Types",25
+TOPIC_053,TNPSC_GROUP_4,"General English","G4_EN_U1","Unit I: Grammar","Grammar","Infinitives, Gerunds, Participles, Question Tags & Punctuation",25
+TOPIC_054,TNPSC_GROUP_4,"General English","G4_EN_U2","Unit II: Vocabulary","Vocabulary","Synonyms, Antonyms, Homonyms, Collocations & Idioms",15
+TOPIC_055,TNPSC_GROUP_4,"General English","G4_EN_U3","Unit III: Writing Skills","Writing Skills","Letter Writing, Jumbled Sentences & Inferences",10
+TOPIC_056,TNPSC_GROUP_4,"General English","G4_EN_U4","Unit IV: Technical Terms","Technical Terms","Administrative & Official Terms",10
+TOPIC_057,TNPSC_GROUP_4,"General English","G4_EN_U5","Unit V: Reading Comprehension","Comprehension","Unseen Passages, Editorials & Fact Ascertainment",20
+TOPIC_058,TNPSC_GROUP_4,"General English","G4_EN_U6","Unit VI: Translation","Translation","Word & Sentence Translation Tasks",5
+TOPIC_059,TNPSC_GROUP_4,"General English","G4_EN_U7","Unit VII: Literary Works","Poetry & Prose Appreciation","Appreciation of Poems, Prose & Authors from School Textbooks",15
+TOPIC_060,TNPSC_GROUP_2,"General Studies","G2_GS_U1","Unit I: General Science","Scientific Temper & Physics","Scientific Knowledge, Temper, Reasoning & Universe Physics",5
+TOPIC_061,TNPSC_GROUP_2,"General Studies","G2_GS_U1","Unit I: General Science","Chemistry & Life Science","Chemistry in Everyday Life, Biology, Evolution & Genetics",5
+TOPIC_062,TNPSC_GROUP_2,"General Studies","G2_GS_U1","Unit I: General Science","Health, Ecology & Technology","Nutrition, Health, Diseases, Environment & Latest Inventions",5
+TOPIC_063,TNPSC_GROUP_2,"General Studies","G2_GS_U2","Unit II: Geography of India","Physical & Economic Geography","Location, Physiography, Climate, Water Resources, Soils & Minerals",5
+TOPIC_064,TNPSC_GROUP_2,"General Studies","G2_GS_U2","Unit II: Geography of India","Social & Disaster Geography","Population Distribution, Tribes, Disaster Management, Pollution & Climate Change",5
+TOPIC_065,TNPSC_GROUP_2,"General Studies","G2_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Ancient & Medieval India","Indus Valley, Dynasties, Vijayanagaram, Bahmani & South Indian History",10
+TOPIC_066,TNPSC_GROUP_2,"General Studies","G2_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Indian National Movement","National Renaissance, Early Uprisings, INC & Freedom Fighters",10
+TOPIC_067,TNPSC_GROUP_2,"General Studies","G2_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Socio-Cultural History","Communalism, Partition, Secularism & Prominent Personalities",10
+TOPIC_068,TNPSC_GROUP_2,"General Studies","G2_GS_U4","Unit IV: Indian Polity","Constitutional Framework","Preamble, Salient Features, Rights, Duties & DPSP",15
+TOPIC_069,TNPSC_GROUP_2,"General Studies","G2_GS_U4","Unit IV: Indian Polity","Government Structure & Judiciary","Union/State Executive & Legislature, Local Bodies, Judiciary & Rule of Law",15
+TOPIC_070,TNPSC_GROUP_2,"General Studies","G2_GS_U4","Unit IV: Indian Polity","Admin, Corruption & Rights","Anti-Corruption, Lokpal, RTI, Human Rights & Political Parties",15
+TOPIC_071,TNPSC_GROUP_2,"General Studies","G2_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Macro Economy & Policy","Economic Structure, Five-Year Plans, RBI Policy, Finance Commission & GST",20
+TOPIC_072,TNPSC_GROUP_2,"General Studies","G2_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Development & Welfare Admin","Employment, Agriculture, Industry, Poverty, HDI & Social Reforms in Tamil Nadu",20
+TOPIC_073,TNPSC_GROUP_2,"General Studies","G2_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Administration & Governance in TN","Reservation Policy, Social Justice, Health/Education Systems, e-Governance & Public Delivery",20
+TOPIC_074,TNPSC_GROUP_2,"General Studies","G2_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu","Tamil Society & Thirukkural","Tamil Society, Archaeology, Literature & Thirukkural Relevance",20
+TOPIC_075,TNPSC_GROUP_2,"General Studies","G2_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu","Tamil Nadu Freedom Struggle","Role of TN in Freedom Struggle & Women Leaders",20
+TOPIC_076,TNPSC_GROUP_2,"General Studies","G2_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu","Socio-Political Movements","Justice Party, Self-Respect Movement, Dravidian Movement, Periyar & Anna",20
+TOPIC_077,TNPSC_GROUP_2,"Aptitude & Mental Ability","G2_APT_U1","Unit I: Aptitude","Arithmetic","Simplification, Percentage, HCF & LCM",15
+TOPIC_078,TNPSC_GROUP_2,"Aptitude & Mental Ability","G2_APT_U1","Unit I: Aptitude","Commercial & Advanced Math","Ratio & Proportion, Simple & Compound Interest, Area, Volume, Time & Work",15
+TOPIC_079,TNPSC_GROUP_2,"Aptitude & Mental Ability","G2_APT_U2","Unit II: Reasoning","Logical & Analytical Reasoning","Logical Reasoning, Puzzles, Dice, Visual & Alpha-Numeric Reasoning, Number Series",10
+TOPIC_080,TNPSC_GROUP_2,"General Tamil","G2_TA_U1","அலகு I முதல் VII: பொதுத் தமிழ்","பொதுத் தமிழ்","இலக்கணம், சொல்லகராதி, எழுதும் திறன், கலைச்சொற்கள், வாசித்தல், மொழிபெயர்ப்பு & இலக்கியம் (SSLC Standard)",100
+TOPIC_081,TNPSC_GROUP_2,"General English","G2_EN_U1","Unit I to VII: General English","General English","Grammar, Vocabulary, Writing Skills, Technical Terms, Comprehension, Translation & Literary Works (SSLC Standard)",100
+TOPIC_082,TNPSC_GROUP_1,"General Studies","G1_GS_U1","Unit I: General Science","Advanced Scientific Temper & Physics","Scientific Temper, Advanced Physics Principles & Modern Technology Applications",10
+TOPIC_083,TNPSC_GROUP_1,"General Studies","G1_GS_U1","Unit I: General Science","Advanced Life Science & Ecology","Advanced Molecular Biology, Genetics, Physiology, Human Diseases & Ecology",10
+TOPIC_084,TNPSC_GROUP_1,"General Studies","G1_GS_U2","Unit II: Geography of India","Comprehensive India & World Geography","Advanced Physical, Economic, Social Geography, Geopolitics & Disaster Management",10
+TOPIC_085,TNPSC_GROUP_1,"General Studies","G1_GS_U3","Unit III: History, Culture of India, and Indian National Movement","Deep Indian History & Culture","Comprehensive Ancient, Medieval, Modern History, Cultural Heritage & Personalities",25
+TOPIC_086,TNPSC_GROUP_1,"General Studies","G1_GS_U3","Unit III: History, Culture of India, and Indian National Movement","National Movement & Current Dynamics","Indian National Movement, Satyagraha, Militant Movements, Books, Authors & Sports",25
+TOPIC_087,TNPSC_GROUP_1,"General Studies","G1_GS_U4","Unit IV: Indian Polity","Advanced Indian Polity & Governance","Comprehensive Constitutional Law, Federalism, Judiciary, Administrative Ethics & Public Administration",40
+TOPIC_088,TNPSC_GROUP_1,"General Studies","G1_GS_U5","Unit V: Indian Economy and Development Administration in Tamil Nadu","Advanced Macroeconomics & TN Development","Comprehensive Economic Planning, Fiscal/Monetary Policy, Welfare Administration, Human Development & Governance in TN",50
+TOPIC_089,TNPSC_GROUP_1,"General Studies","G1_GS_U6","Unit VI: History, Culture, Heritage, and Socio-Political Movements in Tamil Nadu","Advanced Tamil Heritage & Movements","In-depth Tamil Society, Archaeological Heritage, Thirukkural Philosophy, Justice Party & Dravidian Movement Contributions",40
+TOPIC_090,TNPSC_GROUP_1,"Aptitude & Mental Ability","G1_APT_U1","Unit I: Aptitude","Advanced Aptitude","Comprehensive Quantitative Aptitude: Simplification, Percentage, HCF/LCM, Ratio, SI/CI, Area, Volume, Time & Work",15
+TOPIC_091,TNPSC_GROUP_1,"Aptitude & Mental Ability","G1_APT_U2","Unit II: Reasoning","Advanced Reasoning","Logical Reasoning, Analytical Puzzles, Dice, Visual, Alpha-Numeric & Advanced Number Series",10
