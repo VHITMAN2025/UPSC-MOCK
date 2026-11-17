@@ -1,0 +1,33 @@
+-- Remap for Group 4 questions that were missing from the earlier export.
+-- Requires migration 00021. Run once, after 00022.
+
+INSERT INTO public.taxonomy_remap (exam_group, old_unit_name, old_macro_topic, old_micro_topic,
+  new_unit_code, new_unit_name, new_macro_topic, new_micro_topic, confirmed)
+VALUES
+  ('TNPSC_GROUP_4', 'Unit 3: Geography of India', 'Physical Geography', 'Location & Physical Features of India', 'G4_GS_U2', 'Unit II: Geography of India', 'Physical Geography', 'Earth Location, Physical Features, Weather & Climate', true),
+  ('TNPSC_GROUP_4', 'Unit 3: Geography of India', 'Water & Soil', 'Soil, Minerals & Natural Resources', 'G4_GS_U2', 'Unit II: Geography of India', 'Physical Geography', 'Water Resources, Rivers, Soil, Minerals & Natural Resources', true),
+  ('TNPSC_GROUP_4', 'Unit 3: Geography of India', 'Water & Soil', 'Water Resources & Rivers in India', 'G4_GS_U2', 'Unit II: Geography of India', 'Physical Geography', 'Water Resources, Rivers, Soil, Minerals & Natural Resources', true),
+  ('TNPSC_GROUP_4', 'Unit 4: History & Culture', 'Ancient India', 'Indus Valley Civilization', 'G4_GS_U3', 'Unit III: History, Culture of India, and Indian National Movement', 'Ancient & Medieval History', 'Indus Valley Civilization, Guptas, Delhi Sultans, Mughals & Marathas', true),
+  ('TNPSC_GROUP_4', 'Unit 5: Indian Polity', 'Constitution Basics', 'Making of the Constitution & Salient Features', 'G4_GS_U4', 'Unit IV: Indian Polity', 'Constitution & Framework', 'Constitution of India, Preamble, Salient Features, Union, State & Territory', true),
+  ('TNPSC_GROUP_4', 'Unit 5: Indian Polity', 'Constitution Basics', 'Preamble, Citizenship, Union & Territories', 'G4_GS_U4', 'Unit IV: Indian Polity', 'Constitution & Framework', 'Constitution of India, Preamble, Salient Features, Union, State & Territory', true),
+  ('TNPSC_GROUP_4', 'Unit 5: Indian Polity', 'Executive & Legislature', 'State Executive (Governor, CM, Council)', 'G4_GS_U4', 'Unit IV: Indian Polity', 'Government Organs', 'Union & State Executive, Legislature, Judiciary & Rule of Law', true),
+  ('TNPSC_GROUP_4', 'Unit 5: Indian Polity', 'Executive & Legislature', 'Union Executive (President, PM, Cabinet)', 'G4_GS_U4', 'Unit IV: Indian Polity', 'Government Organs', 'Union & State Executive, Legislature, Judiciary & Rule of Law', true),
+  ('TNPSC_GROUP_4', 'Unit 5: Indian Polity', 'Judiciary & Local Govt', 'Constitutional & Non-Constitutional Bodies (EC, CAG, UPSC)', 'G4_GS_U4', 'Unit IV: Indian Polity', 'Admin & Social Justice', 'Elections, Anti-Corruption Measures, Lokpal, Lokayukta, RTI & Women Empowerment', true),
+  ('TNPSC_GROUP_4', 'Unit 5: Indian Polity', 'Rights & Duties', 'Fundamental Duties & Directive Principles (DPSP)', 'G4_GS_U4', 'Unit IV: Indian Polity', 'Rights & Directives', 'Citizenship, Fundamental Rights, Fundamental Duties & DPSP', true),
+  ('TNPSC_GROUP_4', 'Unit 6: Indian Economy', 'Finance & Banking', 'Reserve Bank of India (RBI) & Monetary Policy', 'G4_GS_U5', 'Unit V: Indian Economy and Development Administration in Tamil Nadu', 'Public Finance & Taxation', 'Sources of Revenue, RBI, Finance Commission & Goods and Services Tax (GST)', true),
+  ('TNPSC_GROUP_4', 'Unit 6: Indian Economy', 'Sectors of Economy', 'Agriculture, Industry & Rural Development', 'G4_GS_U5', 'Unit V: Indian Economy and Development Administration in Tamil Nadu', 'Agriculture & Industry', 'Economic Trends, Employment Generation, Land Reforms & Agricultural Technology', true),
+  ('TNPSC_GROUP_4', 'Unit 7: National Movement', 'Gandhian Era', 'Non-Cooperation, Civil Disobedience, Quit India', 'G4_GS_U3', 'Unit III: History, Culture of India, and Indian National Movement', 'Indian National Movement', 'Role of Ambedkar, Periyar, Bharathiar, V.O.C., Gandhi & Others in Freedom Struggle', true),
+  ('TNPSC_GROUP_4', 'Unit 7: National Movement', 'INC & Moderates', 'Emergence of Leaders (B.R. Ambedkar, Bhagat Singh, etc.)', 'G4_GS_U3', 'Unit III: History, Culture of India, and Indian National Movement', 'Indian National Movement', 'Indian National Congress & Emergence of National Leaders', true),
+  ('TNPSC_GROUP_4', 'Unit 8: TN History & Culture', 'Ancient Tamilakam', 'History of Tamil Society & Archaeological Discoveries', 'G4_GS_U6', 'Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu', 'Tamil Society & Archaeology', 'History of Tamil Society, Archaeological Discoveries & Sangam to Contemporary Literature', true),
+  ('TNPSC_GROUP_4', 'Unit 8: TN History & Culture', 'Ancient Tamilakam', 'Sangam Literature', 'G4_GS_U6', 'Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu', 'Tamil Society & Archaeology', 'History of Tamil Society, Archaeological Discoveries & Sangam to Contemporary Literature', true),
+  ('TNPSC_GROUP_4', 'Unit 8: TN History & Culture', 'Freedom Struggle in TN', 'Early Agitations against British Rule', 'G4_GS_U6', 'Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu', 'Tamil Nadu Freedom Struggle', 'Role of Tamil Nadu in Freedom Struggle & Women Freedom Fighters', true),
+  ('TNPSC_GROUP_4', 'Unit 8: TN History & Culture', 'Social Movements', '19th & 20th Century Socio-Political Movements', 'G4_GS_U6', 'Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu', 'Social Reform Movements', 'Social Reformers, Movements & Social Transformation in Tamil Nadu', true),
+  ('TNPSC_GROUP_4', 'Unit 8: TN History & Culture', 'Thirukkural', 'Significance as Secular Literature & Everyday Relevance', 'G4_GS_U6', 'Unit VI: History, Culture, Heritage, and Socio-Political Movements of Tamil Nadu', 'Thirukkural Studies', 'Thirukkural: Secular Literature, Universal Values & Philosophical Content', true),
+  ('TNPSC_GROUP_4', 'Unit 9: TN Administration', 'TN Geography', 'Geography of Tamil Nadu & its Economic Impact', 'G4_GS_U5', 'Unit V: Indian Economy and Development Administration in Tamil Nadu', 'Tamil Nadu Economy', 'Geography of Tamil Nadu, Economic Growth Impact & Government Welfare Schemes', true),
+  ('TNPSC_GROUP_4', 'Unit 9: TN Administration', 'Welfare & Governance', 'Social Justice & Social Harmony', 'G4_GS_U5', 'Unit V: Indian Economy and Development Administration in Tamil Nadu', 'Social Development & Welfare', 'Rural Welfare Programmes, Poverty, Population, Education & Health Systems in Tamil Nadu', true)
+ON CONFLICT (exam_group, old_unit_name, old_macro_topic, old_micro_topic) DO UPDATE
+SET new_unit_code = EXCLUDED.new_unit_code, new_unit_name = EXCLUDED.new_unit_name,
+    new_macro_topic = EXCLUDED.new_macro_topic, new_micro_topic = EXCLUDED.new_micro_topic,
+    confirmed = true;
+
+SELECT public.apply_taxonomy_remap() AS questions_moved;
