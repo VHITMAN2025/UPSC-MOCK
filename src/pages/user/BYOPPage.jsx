@@ -1023,27 +1023,111 @@ export function BYOPPage() {
       }
 
       // Check if PDF has selectable text
-      if (!extractionResult.pages || extractionResult.pages.length === 0) {
-        throw new Error('PDF contains no pages or failed to extract page data.')
-      }
-
+      // Note: Don't throw error here - we need to check for selectable text first
+      const hasValidPages = extractionResult.pages && extractionResult.pages.length > 0
+      
       // Verify page count
       console.log('[BYOP] PDF IDENTITY CHECK:', {
         processingJobId,
         fileName: paper.file_name,
         expectedFileName: paper.file_name,
         extractedPages: extractionResult.totalPages,
-        hasSelectableText: extractionResult.hasSelectableText
+        hasSelectableText: extractionResult.hasSelectableText,
+        hasValidPages
       })
 
       // Check if any page has text items with content
-      const hasSelectableText = extractionResult.pages.some(page => 
+      const hasSelectableText = hasValidPages && extractionResult.pages.some(page => 
         page.items && page.items.length > 0 && 
         page.items.some(item => item.text && item.text.trim().length > 0)
       )
 
       if (!hasSelectableText) {
-        throw new Error('This PDF is a scanned image document with no selectable digital text. The offline local parser requires selectable text. For scanned PDFs, please use a selectable-text PDF or an OCR tool.')
+        console.warn('[BYOP] No selectable text detected - PDF appears to be scanned/image-based. Attempting AI Vision extraction...')
+        toast.info('Scanned PDF detected. Switching to AI Vision OCR extraction...')
+        
+        // Check if API key is available
+        const effectiveKey = geminiApiKey || apiKeyService.getUserApiKey()
+        if (!effectiveKey) {
+          toast.error('This is a scanned PDF requiring AI Vision OCR. Please configure your Gemini API key in Profile & Settings.')
+          setActiveId(null)
+          setProgress(null)
+          await byopService.update(paper.id, user.id, {
+            processing_status: 'failed',
+            notes: 'Scanned PDF detected but no Gemini API key configured. Please add API key and retry.'
+          })
+          setPapers(prev => prev.map(p => p.id === paper.id
+            ? { ...p, processing_status: 'failed', notes: 'Requires API key for scanned PDF' }
+            : p
+          ))
+          navigate('/profile#api-key')
+          return
+        }
+
+        // Use AI Vision to extract from scanned PDF
+        try {
+          setProgress({
+            stage: 'extracting',
+            currentPage: 1,
+            totalPages: 1,
+            pagesProcessed: 1,
+            questionsFound: 0,
+            statusText: 'Extracting text from scanned PDF using AI Vision OCR...'
+          })
+
+          const base64Data = await blobToBase64(pdfBlob)
+          const aiQuestions = await extractQuestionsWithAi(
+            base64Data,
+            selectedModel,
+            (status) => setProgress(prev => ({ ...prev, statusText: status })),
+            effectiveKey,
+            { approvedTaxonomy: await loadApprovedPdfTaxonomy() }
+          )
+
+          if (aiQuestions && aiQuestions.length > 0) {
+            console.log('[BYOP] AI Vision OCR extraction successful:', {
+              processingJobId,
+              fileName: paper.file_name,
+              questionsExtracted: aiQuestions.length
+            })
+
+            const questions = sanitizeUnicode(aiQuestions.map(q => ({
+              ...q,
+              processing_job_id: processingJobId,
+              paper_id: paper.id,
+              source_pdf: paper.file_name,
+              extraction_method: 'ai_vision_ocr'
+            })))
+
+            await byopService.update(paper.id, user.id, {
+              processing_status: 'parsed',
+              notes: `${questions.length} questions extracted using AI Vision OCR (scanned PDF). Review required.`,
+              extraction_method: 'ai_vision_ocr',
+              questions_json: questions
+            })
+
+            setPapers(prev => prev.map(p => p.id === paper.id
+              ? {
+                  ...p,
+                  processing_status: 'parsed',
+                  notes: `${questions.length} questions extracted using AI Vision OCR`,
+                  extraction_method: 'ai_vision_ocr',
+                  questions_json: questions
+                }
+              : p
+            ))
+
+            toast.success(`AI Vision OCR successfully extracted ${questions.length} questions from scanned PDF!`)
+            setActiveId(null)
+            setProgress(null)
+            return
+          } else {
+            throw new Error('AI Vision OCR returned no questions from scanned PDF')
+          }
+        } catch (aiErr) {
+          console.error('[BYOP] AI Vision OCR extraction failed for scanned PDF:', aiErr)
+          throw new Error(`Scanned PDF OCR extraction failed: ${aiErr.message}. Please ensure the PDF contains clear, readable text.`)
+        }
       }
 
       // Step 3: Parse MCQ questions from extracted text
