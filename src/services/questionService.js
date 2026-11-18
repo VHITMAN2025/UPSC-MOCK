@@ -422,6 +422,15 @@ export const questionService = {
       let macroName = q.macro_topic_name || q.macro_topic || null
       let microName = q.micro_topic_name || q.micro_topic || null
 
+      console.log(`[CSV-DEBUG] Q${idx + 1} BEFORE classification:`, { 
+        unitName, 
+        macroName, 
+        microName,
+        raw_unit_name: q.unit_name,
+        raw_macro: q.macro_topic,
+        raw_micro: q.micro_topic 
+      })
+
       if (!unitName || !macroName || !microName) {
         const matched = syllabusAnalyticsService.classifyQuestionToMicroTopic(q, CANONICAL_MICROS)
         if (matched) {
@@ -435,6 +444,8 @@ export const questionService = {
       unitName = unitName || 'Unit 1 — General Science'
       macroName = macroName || 'General Studies'
       microName = microName || 'General Concepts'
+
+      console.log(`[CSV-DEBUG] Q${idx + 1} AFTER classification:`, { unitName, macroName, microName })
 
       // The row's own exam_tag (from the CSV or extractor) decides its group;
       // the target paper's group is only a fallback.
@@ -599,15 +610,19 @@ export const questionService = {
         .select()
 
       // Resilient fallback: if Supabase returns code 42703 (undefined column) or message indicates column does not exist,
-      // strip taxonomy columns and upsert base fields without crashing
+      // strip OPTIONAL metadata columns but PRESERVE the required taxonomy fields (unit_name, macro_topic, micro_topic)
+      // that the database trigger validates
       if (error && (error.code === '42703' || String(error.message).toLowerCase().includes('column'))) {
-        console.warn(`[questionService] Metadata columns not yet in DB schema, falling back to base question schema:`, error.message)
+        console.warn(`[questionService] Some optional columns not in DB schema, retrying without optional fields:`, error.message)
         const strippedBatch = batch.map(({
-          group_tag, group_name, unit_tag, unit_name,
-          macro_topic, macro_topic_name, micro_topic, micro_topic_name,
+          // STRIP these optional fields that might not exist in the database schema:
+          group_tag, group_name, unit_tag,
+          macro_topic_name, micro_topic_name,
           micro_topic_id, exam_year, is_pyq, difficulty_level, tags,
           unit_code, content_hash, subject_name, sub_topic, question_type,
-          cognitive_skill, ideal_time_seconds, year, ...rest
+          cognitive_skill, ideal_time_seconds, year, 
+          // KEEP unit_name, macro_topic, micro_topic (required by database trigger)
+          ...rest
         }) => rest)
         const retryRes = await supabase
           .from('questions')

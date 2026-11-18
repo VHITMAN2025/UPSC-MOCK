@@ -264,6 +264,7 @@ export function normalizeTo29Columns(rawQ, index = 1) {
     // 6-10
     subject_name: rawQ.subject_name || rawQ.subject || (uCode.startsWith('LANG_TA') ? 'General Tamil' : uCode.startsWith('LANG_EN') ? 'General English' : uCode.startsWith('APT') ? 'Aptitude & Mental Ability' : 'General Studies'),
     unit_code: uCode,
+    unit_name: rawQ.unit_name || catalogUnitName || '',
     macro_topic: rawQ.macro_topic || rawQ.macro_topic_name || 'General',
     micro_topic: rawQ.micro_topic || rawQ.micro_topic_name || 'General Concepts',
     sub_topic: rawQ.sub_topic || rawQ.topic_name || '',
