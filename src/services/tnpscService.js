@@ -1684,6 +1684,8 @@ const VALID_PRACTICE_FIELDS = 'id, paper_id, question_number, question_text, opt
 
 async function fetchVerifiedQuestionsPool(examContext = null) {
   let paperIds = []
+  let examGroupFilter = null
+  
   if (examContext) {
     const { data: examPapers } = await supabase
       .from('papers')
@@ -1691,6 +1693,16 @@ async function fetchVerifiedQuestionsPool(examContext = null) {
       .eq('status', 'published')
     if (examPapers && examPapers.length > 0) {
       const normContext = String(examContext).toLowerCase().trim()
+      
+      // Determine which group filter to apply
+      if (normContext.includes('group 1')) {
+        examGroupFilter = 'Group 1'
+      } else if (normContext.includes('group 2')) {
+        examGroupFilter = ['Group 2', 'Group 2/2A', 'Group 2A']
+      } else if (normContext.includes('group 4')) {
+        examGroupFilter = 'Group 4'
+      }
+      
       paperIds = examPapers
         .filter(p => {
           const pExam = String(p.exam_name || '').toLowerCase().trim()
@@ -1712,6 +1724,17 @@ async function fetchVerifiedQuestionsPool(examContext = null) {
   if (paperIds.length > 0) {
     p1Query = p1Query.in('paper_id', paperIds)
     p2Query = p2Query.in('paper_id', paperIds)
+  }
+  
+  // CRITICAL FIX: Filter by group_tag to ensure Group 1 practice gets only Group 1 questions
+  if (examGroupFilter) {
+    if (Array.isArray(examGroupFilter)) {
+      p1Query = p1Query.in('group_tag', examGroupFilter)
+      p2Query = p2Query.in('group_tag', examGroupFilter)
+    } else {
+      p1Query = p1Query.eq('group_tag', examGroupFilter)
+      p2Query = p2Query.eq('group_tag', examGroupFilter)
+    }
   }
 
   const [res1, res2] = await Promise.all([p1Query, p2Query])
