@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useBlocker } from 'react-router-dom'
 import { paperService } from '../../services/paperService'
 import { questionService } from '../../services/questionService'
 import { attemptService } from '../../services/attemptService'
@@ -29,6 +29,28 @@ export function ExamPage() {
   const [showSubmitModal, setShowSubmitModal] = useState(false)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
   const [error, setError] = useState(null)
+
+  // Block navigation when test is in progress
+  const shouldBlockNavigation = attempt?.status === 'in_progress' && !submitting
+  
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      shouldBlockNavigation && currentLocation.pathname !== nextLocation.pathname
+  )
+
+  // Warn user before leaving page (browser back button, close tab, refresh)
+  useEffect(() => {
+    if (!shouldBlockNavigation) return
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault()
+      e.returnValue = 'Your test is in progress. Are you sure you want to leave? Your progress will be saved but the timer will continue.'
+      return e.returnValue
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [shouldBlockNavigation])
 
   // Per-question active pacing tracker (seconds spent on each question)
   const questionTimingsRef = useRef({})
@@ -378,6 +400,36 @@ export function ExamPage() {
                 ) : (
                   <span>Submit Attempt Now</span>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Blocker Modal */}
+      {blocker.state === 'blocked' && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-modal border border-surface-border space-y-4">
+            <div className="flex items-center space-x-3">
+              <AlertTriangle className="w-6 h-6 text-amber-500" />
+              <h3 className="text-lg font-bold text-body-text">Leave Exam?</h3>
+            </div>
+            <p className="text-xs text-body-secondary leading-relaxed">
+              Your test is in progress. If you leave now, your answers will be saved but the timer will continue running. Are you sure you want to leave?
+            </p>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                onClick={() => blocker.reset()}
+                className="px-6 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-bold shadow-subtle"
+              >
+                Stay on Test
+              </button>
+              <button
+                onClick={() => blocker.proceed()}
+                className="px-4 py-2 border border-surface-border rounded-lg text-xs font-semibold text-body-secondary hover:bg-slate-50"
+              >
+                Leave Test
               </button>
             </div>
           </div>
