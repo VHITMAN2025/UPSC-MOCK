@@ -298,7 +298,7 @@ export const questionService = {
     const list = (items || []).filter(item => item && item.id)
     if (list.length === 0) return 0
 
-    const CHUNK_SIZE = 200
+    const CHUNK_SIZE = 400
     for (let i = 0; i < list.length; i += CHUNK_SIZE) {
       const ids = list.slice(i, i + CHUNK_SIZE).map(item => item.id)
       const { error } = await supabase
@@ -402,10 +402,11 @@ export const questionService = {
       const validOpt = ['A', 'B', 'C', 'D'].includes(opt) ? opt : null
 
       // Options mapping (support both option_a / options array)
-      let optA = q.option_a || ''
-      let optB = q.option_b || ''
-      let optC = q.option_c || ''
-      let optD = q.option_d || ''
+      // Support 29-column CSV format (en_option_a) and legacy format (option_a)
+      let optA = q.en_option_a || q.option_a || ''
+      let optB = q.en_option_b || q.option_b || ''
+      let optC = q.en_option_c || q.option_c || ''
+      let optD = q.en_option_d || q.option_d || ''
 
       if (Array.isArray(q.options)) {
         q.options.forEach((o) => {
@@ -594,8 +595,8 @@ export const questionService = {
     })
     const uniqueList = Array.from(uniqueMap.values())
 
-    // 3. Batch insert in chunks of 25 items to handle large question sets safely
-    const BATCH_SIZE = 25
+    // 3. Batch insert in chunks of 50 items to handle large question sets safely
+    const BATCH_SIZE = 50
     const insertedRecords = []
     let totalInserted = 0
 
