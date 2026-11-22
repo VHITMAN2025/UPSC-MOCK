@@ -37,6 +37,8 @@ function PracticeBuilder({ onStart }) {
 
   const [subjects, setSubjects]   = useState(['All Subjects'])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
+  const [units, setUnits] = useState([])
+  const [unitsLoading, setUnitsLoading] = useState(false)
   const [availableCount, setAvailableCount] = useState(null)
   const [checkingCount, setCheckingCount] = useState(false)
 
@@ -73,6 +75,16 @@ function PracticeBuilder({ onStart }) {
     setError(null)
     loadSubjects(urlSubject)
   }, [selectedExam, urlSubject, urlTopic, urlUnit, urlMicroTopicId, urlMode, mistakeIds, isFixTest])
+
+  // Load units when subject changes
+  useEffect(() => {
+    if (!isFixTest && config.subject && config.subject !== 'All Subjects') {
+      loadUnits(config.subject)
+    } else {
+      setUnits([])
+      setConfig(c => ({ ...c, unit: null }))
+    }
+  }, [config.subject, isFixTest])
 
   // Real-time available question count check for targeted micro-topics
   useEffect(() => {
@@ -154,6 +166,43 @@ function PracticeBuilder({ onStart }) {
       setSubjects(preferredSubject ? ['All Subjects', preferredSubject] : ['All Subjects'])
     } finally {
       setSubjectsLoading(false)
+    }
+  }
+
+  async function loadUnits(subject) {
+    if (!subject || subject === 'All Subjects') {
+      setUnits([])
+      return
+    }
+    
+    setUnitsLoading(true)
+    try {
+      // Get exam ID first
+      const { data: examRow } = await supabase
+        .from('syllabus_exams')
+        .select('id')
+        .eq('exam_name', selectedExam)
+        .maybeSingle()
+
+      if (examRow?.id) {
+        const { data: unitsData } = await supabase
+          .from('syllabus_units')
+          .select('unit_code, unit_name, subject')
+          .eq('exam_id', examRow.id)
+          .eq('subject', subject)
+          .order('unit_number')
+
+        if (unitsData && unitsData.length > 0) {
+          setUnits(unitsData)
+        } else {
+          setUnits([])
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load units:', error)
+      setUnits([])
+    } finally {
+      setUnitsLoading(false)
     }
   }
 
@@ -268,6 +317,43 @@ function PracticeBuilder({ onStart }) {
             <p className="mt-2 text-xs font-medium text-emerald-800">All ${availableCount} available verified questions for this topic will be loaded for your practice session.</p>
           )}
         </div>
+
+        {/* Unit Selection Dropdown */}
+        {!isFixTest && config.subject && config.subject !== 'All Subjects' && (
+          <div>
+            <label className="block text-sm font-bold text-body-text mb-2">Select Unit (Optional)</label>
+            {unitsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-body-secondary">
+                <Loader2 className="w-4 h-4 animate-spin text-tnpsc-brand" />
+                Loading units…
+              </div>
+            ) : units.length > 0 ? (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setConfig(c => ({ ...c, unit: null }))}
+                  className={`w-full px-4 py-2.5 rounded-xl text-left text-sm font-semibold transition-colors ${
+                    !config.unit ? 'bg-tnpsc-brand text-white' : 'bg-slate-100 text-body-secondary hover:text-body-text'
+                  }`}
+                >
+                  All Units
+                </button>
+                {units.map(unit => (
+                  <button
+                    key={unit.unit_code}
+                    onClick={() => setConfig(c => ({ ...c, unit: unit.unit_code }))}
+                    className={`w-full px-4 py-2.5 rounded-xl text-left text-sm font-semibold transition-colors ${
+                      config.unit === unit.unit_code ? 'bg-tnpsc-brand text-white' : 'bg-slate-100 text-body-secondary hover:text-body-text'
+                    }`}
+                  >
+                    {unit.unit_name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-body-secondary">No units available for this subject.</p>
+            )}
+          </div>
+        )}
 
         {/* Question count */}
         <div>

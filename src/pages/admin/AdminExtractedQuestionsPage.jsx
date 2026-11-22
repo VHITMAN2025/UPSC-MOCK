@@ -111,7 +111,7 @@ function paperPayloadFromName(name, examName) {
 
 // The grid opens on a small page of rows so it stays fast however many questions are
 // stored; a search or filter queries the whole database.
-const DEFAULT_ROW_LIMIT = 200
+const DEFAULT_ROW_LIMIT = 400
 const SEARCH_RESULT_LIMIT = 5000
 
 // The canonical 29 columns, in order. filterKey links a column to its sort and

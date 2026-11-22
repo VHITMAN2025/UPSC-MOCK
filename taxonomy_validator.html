@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TNPSC Taxonomy Validator - 91 Entry Checker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 30px;
+        }
+        
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .tab:hover {
+            color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        select, input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            min-height: 120px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 6px;
+            display: none;
+        }
+        
+        .result.valid {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+            display: block;
+        }
+        
+        .result.invalid {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+            display: block;
+        }
+        
+        .result h3 {
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .result-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(255,255,255,0.5);
+            border-radius: 4px;
+        }
+        
+        .result-item strong {
+            display: inline-block;
+            width: 150px;
+        }
+        
+        .suggestions {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 6px;
+        }
+        
+        .suggestions h4 {
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        
+        .suggestion-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .file-upload {
+            border: 2px dashed #667eea;
+            border-radius: 6px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .file-upload:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+        
+        .file-upload.dragover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .stat-card {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 32px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card p {
+            opacity: 0.9;
+        }
+        
+        .search-box {
+            position: relative;
+        }
+        
+        .search-results {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .search-results.active {
+            display: block;
+        }
+        
+        .search-result-item {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .search-result-item:hover {
+            background: #f8f9ff;
+        }
+        
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .copy-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 TNPSC Taxonomy Validator</h1>
+            <p>Strict 91-Entry Character-for-Character Matching</p>
+        </div>
+        
+        <div class="content">
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('single')">Single Row Validator</button>
+                <button class="tab" onclick="showTab('csv')">CSV File Validator</button>
+                <button class="tab" onclick="showTab('browse')">Browse Taxonomy</button>
+                <button class="tab" onclick="showTab('stats')">Statistics</button>
+            </div>
+            
+            <!-- Single Row Validator -->
+            <div id="single" class="tab-content active">
+                <h2>Validate a Single Row</h2>
+                <p style="color: #666; margin-bottom: 20px;">Test if your macro and micro topics match the approved 91-entry taxonomy.</p>
+                
+                <div class="form-group">
+                    <label>Exam Group</label>
+                    <select id="examTag">
+                        <option value="TNPSC_GROUP_4">Group IV</option>
+                        <option value="TNPSC_GROUP_2">Group II / IIA</option>
+                        <option value="TNPSC_GROUP_1">Group I</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Macro Topic</label>
+                    <input type="text" id="macroTopic" placeholder='e.g., Physics'>
+                </div>
+                
+                <div class="form-group">
+                    <label>Micro Topic</label>
+                    <input type="text" id="microTopic" placeholder='e.g., Mechanics, Force, Pressure & Energy'>
+                </div>
+                
+                <button class="btn" onclick="validateSingleRow()">Validate Row</button>
+                
+                <div id="singleResult" class="result"></div>
+            </div>
+            
+            <!-- CSV File Validator -->
+            <div id="csv" class="tab-content">
+                <h2>Validate CSV File</h2>
+                <p style="color: #666; margin-bottom: 20px;">Upload your CSV file to validate all rows against the taxonomy.</p>
+                
+                <div class="file-upload" id="fileUpload" onclick="document.getElementById('fileInput').click()">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📄</div>
+                    <p style="font-size: 16px; margin-bottom: 5px;">Click to select CSV file or drag & drop here</p>
+                    <p style="color: #999; font-size: 14px;">Supports UTF-8 encoded CSV files</p>
+                </div>
+                <input type="file" id="fileInput" accept=".csv" onchange="handleFileUpload(event)">
+                
+                <div id="csvResults" style="margin-top: 30px;"></div>
+            </div>
+            
+            <!-- Browse Taxonomy -->
+            <div id="browse" class="tab-content">
+                <h2>Browse Valid Taxonomy Entries</h2>
+                <p style="color: #666; margin-bottom: 20px;">Search and copy exact taxonomy strings for your CSV.</p>
+                
+                <div class="form-group">
+                    <label>Select Exam Group</label>
+                    <select id="browseExam" onchange="updateBrowseList()">
+                        <option value="TNPSC_GROUP_4">Group IV (59 entries)</option>
+                        <option value="TNPSC_GROUP_2">Group II / IIA (20 entries)</option>
+                        <option value="TNPSC_GROUP_1">Group I (12 entries)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group search-box">
+                    <label>Search</label>
+                    <input type="text" id="searchInput" placeholder="Search macro or micro topics..." oninput="filterBrowseList()">
+                </div>
+                
+                <div id="browseList"></div>
+            </div>
+            
+            <!-- Statistics -->
+            <div id="stats" class="tab-content">
+                <h2>Taxonomy Statistics</h2>
+                
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>91</h3>
+                        <p>Total Entries</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>59</h3>
+                        <p>Group IV</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>20</h3>
+                        <p>Group II / IIA</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>12</h3>
+                        <p>Group I</p>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <h3 style="margin-bottom: 15px;">Entry Breakdown</h3>
+                    <div id="breakdownDetails"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="./src/data/taxonomyV2.js"></script>
+    <script>
+        // Access the taxonomy data
+        const TAXONOMY = window.TAXONOMY_V2 || [];
+        
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            if (tabName === 'browse') {
+                updateBrowseList();
+            } else if (tabName === 'stats') {
+                updateStats();
+            }
+        }
+        
+        // Single row validation
+        function validateSingleRow() {
+            const examTag = document.getElementById('examTag').value;
+            const macroTopic = document.getElementById('macroTopic').value.trim();
+            const microTopic = document.getElementById('microTopic').value.trim();
+            
+            if (!macroTopic || !microTopic) {
+                alert('Please enter both macro and micro topics');
+                return;
+            }
+            
+            const match = TAXONOMY.find(entry => 
+                entry.exam_tag === examTag &&
+                entry.macro_topic === macroTopic &&
+                entry.micro_topic === microTopic
+            );
+            
+            const resultDiv = document.getElementById('singleResult');
+            
+            if (match) {
+                resultDiv.className = 'result valid';
+                resultDiv.innerHTML = `
+                    <h3>✅ VALID MATCH FOUND</h3>
+                    <div class="result-item"><strong>Topic ID:</strong> ${match.unit_code}</div>
+                    <div class="result-item"><strong>Subject:</strong> ${match.subject_name}</div>
+                    <div class="result-item"><strong>Unit:</strong> ${match.unit_name}</div>
+                    <div class="result-item"><strong>Macro Topic:</strong> ${match.macro_topic}</div>
+                    <div class="result-item"><strong>Micro Topic:</strong> ${match.micro_topic}</div>
+                    <div class="result-item"><strong>Quota:</strong> ${match.unit_quota} questions per unit</div>
+                `;
+            } else {
+                const suggestions = findSuggestions(examTag, macroTopic, microTopic);
+                let suggestionsHTML = '';
+                
+                if (suggestions.length > 0) {
+                    suggestionsHTML = '<div class="suggestions"><h4>Did you mean?</h4>';
+                    suggestions.forEach(entry => {
+                        suggestionsHTML += `
+                            <div class="suggestion-item">
+                                <strong>Macro:</strong> "${entry.macro_topic}"<br>
+                                <strong>Micro:</strong> "${entry.micro_topic}"<br>
+                                <small>(${entry.unit_code} - ${entry.unit_name})</small>
+                                <button class="copy-btn" onclick='copyToClipboard("${entry.macro_topic}", "${entry.micro_topic}")'>Copy</button>
+                            </div>
+                        `;
+                    });
+                    suggestionsHTML += '</div>';
+                }
+                
+                resultDiv.className = 'result invalid';
+                resultDiv.innerHTML = `
+                    <h3>❌ NO EXACT MATCH FOUND</h3>
+                    <div class="result-item"><strong>Your Input:</strong></div>
+                    <div class="result-item">Exam Tag: "${examTag}"</div>
+                    <div class="result-item">Macro: "${macroTopic}"</div>
+                    <div class="result-item">Micro: "${microTopic}"</div>
+                    <div class="result-item" style="margin-top: 15px;">
+                        <strong>Common Issues:</strong><br>
+                        • Check spelling and punctuation<br>
+                        • Verify "&" vs "and" usage<br>
+                        • Check for extra/missing spaces<br>
+                        • Verify Tamil Unicode characters
+                    </div>
+                    ${suggestionsHTML}
+                `;
+            }
+        }
+        
+        // Find suggestions for invalid input
+        function findSuggestions(examTag, macroTopic, microTopic) {
+            const sameExam = TAXONOMY.filter(entry => entry.exam_tag === examTag);
+            
+            // Try exact macro match first
+            let suggestions = sameExam.filter(entry => entry.macro_topic === macroTopic);
+            
+            // If no exact macro match, try similar micro topics
+            if (suggestions.length === 0) {
+                const microWords = microTopic.toLowerCase().split(/[\s,&]+/).filter(w => w.length > 3);
+                suggestions = sameExam.filter(entry => {
+                    const entryWords = entry.micro_topic.toLowerCase().split(/[\s,&]+/);
+                    return microWords.some(word => entryWords.includes(word));
+                });
+            }
+            
+            return suggestions.slice(0, 5);
+        }
+        
+        // Copy to clipboard
+        function copyToClipboard(macro, micro) {
+            const text = `Macro: ${macro}\nMicro: ${micro}`;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            });
+        }
+        
+        // CSV file upload
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                validateCSVContent(content);
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+        
+        // Drag & drop
+        const fileUpload = document.getElementById('fileUpload');
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+        
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.classList.remove('dragover');
+        });
+        
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    validateCSVContent(e.target.result);
+                };
+                reader.readAsText(files[0], 'UTF-8');
+            }
+        });
+        
+        // Validate CSV content
+        function validateCSVContent(content) {
+            const lines = content.split(/\r?\n/).filter(line => line.trim());
+            const dataLines = lines.slice(1); // Skip header
+            
+            let validCount = 0;
+            let invalidCount = 0;
+            const invalidRows = [];
+            
+            dataLines.forEach((line, index) => {
+                const cols = parseCSVLine(line);
+                const examTag = cols[2];
+                const macroTopic = cols[8];
+                const microTopic = cols[9];
+                
+                const match = TAXONOMY.find(entry => 
+                    entry.exam_tag === examTag &&
+                    entry.macro_topic === macroTopic &&
+                    entry.micro_topic === microTopic
+                );
+                
+                if (match) {
+                    validCount++;
+                } else {
+                    invalidCount++;
+                    invalidRows.push({
+                        row: index + 2,
+                        examTag,
+                        macroTopic,
+                        microTopic
+                    });
+                }
+            });
+            
+            displayCSVResults(dataLines.length, validCount, invalidCount, invalidRows);
+        }
+        
+        // Parse CSV line
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+        
+        // Display CSV results
+        function displayCSVResults(total, valid, invalid, invalidRows) {
+            const resultsDiv = document.getElementById('csvResults');
+            const percentage = ((valid / total) * 100).toFixed(1);
+            
+            let html = `
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>${total}</h3>
+                        <p>Total Rows</p>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                        <h3>${valid}</h3>
+                        <p>Valid (${percentage}%)</p>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">
+                        <h3>${invalid}</h3>
+                        <p>Invalid (${(100 - percentage).toFixed(1)}%)</p>
+                    </div>
+                </div>
+            `;
+            
+            if (invalid > 0) {
+                html += '<div class="result invalid"><h3>❌ Invalid Rows Found</h3>';
+                invalidRows.forEach(row => {
+                    html += `
+                        <div class="result-item">
+                            <strong>Row ${row.row}:</strong><br>
+                            Exam: ${row.examTag}<br>
+                            Macro: "${row.macroTopic}"<br>
+                            Micro: "${row.microTopic}"
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            } else {
+                html += '<div class="result valid"><h3>✅ All Rows Valid!</h3><p>Your CSV is ready for import.</p></div>';
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        // Browse taxonomy
+        let currentBrowseList = [];
+        
+        function updateBrowseList() {
+            const examTag = document.getElementById('browseExam').value;
+            currentBrowseList = TAXONOMY.filter(entry => entry.exam_tag === examTag);
+            filterBrowseList();
+        }
+        
+        function filterBrowseList() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            let filtered = currentBrowseList;
+            
+            if (searchTerm) {
+                filtered = filtered.filter(entry => 
+                    entry.macro_topic.toLowerCase().includes(searchTerm) ||
+                    entry.micro_topic.toLowerCase().includes(searchTerm) ||
+                    entry.unit_name.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            displayBrowseList(filtered);
+        }
+        
+        function displayBrowseList(entries) {
+            const listDiv = document.getElementById('browseList');
+            
+            if (entries.length === 0) {
+                listDiv.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">No entries found</p>';
+                return;
+            }
+            
+            let html = '<div style="margin-top: 20px;">';
+            entries.forEach(entry => {
+                html += `
+                    <div class="suggestion-item">
+                        <div style="margin-bottom: 5px;">
+                            <strong>${entry.unit_name}</strong>
+                            <span style="float: right; color: #999;">${entry.unit_code}</span>
+                        </div>
+                        <div style="color: #666; margin: 5px 0;">
+                            <strong>Macro:</strong> ${entry.macro_topic}
+                        </div>
+                        <div style="color: #666; margin: 5px 0;">
+                            <strong>Micro:</strong> ${entry.micro_topic}
+                        </div>
+                        <button class="copy-btn" onclick='copyToClipboard("${entry.macro_topic}", "${entry.micro_topic}")'>Copy Topics</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            listDiv.innerHTML = html;
+        }
+        
+        // Update stats
+        function updateStats() {
+            const g1 = TAXONOMY.filter(e => e.exam_tag === 'TNPSC_GROUP_1');
+            const g2 = TAXONOMY.filter(e => e.exam_tag === 'TNPSC_GROUP_2');
+            const g4 = TAXONOMY.filter(e => e.exam_tag === 'TNPSC_GROUP_4');
+            
+            const html = `
+                <div class="result" style="display: block; background: white; border: 2px solid #e0e0e0;">
+                    <h4>Group IV Breakdown</h4>
+                    <div class="result-item">General Studies: ${g4.filter(e => e.subject_name === 'General Studies').length} entries</div>
+                    <div class="result-item">Aptitude & Mental Ability: ${g4.filter(e => e.subject_name === 'Aptitude & Mental Ability').length} entries</div>
+                    <div class="result-item">General Tamil: ${g4.filter(e => e.subject_name === 'General Tamil').length} entries</div>
+                    <div class="result-item">General English: ${g4.filter(e => e.subject_name === 'General English').length} entries</div>
+                    
+                    <h4 style="margin-top: 20px;">Group II Breakdown</h4>
+                    <div class="result-item">General Studies: ${g2.filter(e => e.subject_name === 'General Studies').length} entries</div>
+                    <div class="result-item">Aptitude & Mental Ability: ${g2.filter(e => e.subject_name === 'Aptitude & Mental Ability').length} entries</div>
+                    <div class="result-item">General Tamil: ${g2.filter(e => e.subject_name === 'General Tamil').length} entries</div>
+                    <div class="result-item">General English: ${g2.filter(e => e.subject_name === 'General English').length} entries</div>
+                    
+                    <h4 style="margin-top: 20px;">Group I Breakdown</h4>
+                    <div class="result-item">General Studies: ${g1.filter(e => e.subject_name === 'General Studies').length} entries</div>
+                    <div class="result-item">Aptitude & Mental Ability: ${g1.filter(e => e.subject_name === 'Aptitude & Mental Ability').length} entries</div>
+                </div>
+            `;
+            
+            document.getElementById('breakdownDetails').innerHTML = html;
+        }
+        
+        // Initialize
+        if (TAXONOMY.length === 0) {
+            alert('Taxonomy data not loaded! Make sure taxonomyV2.js is in src/data/');
+        }
+    </script>
+</body>
+</html>
