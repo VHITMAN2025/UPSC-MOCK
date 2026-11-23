@@ -1,20 +1,21 @@
 import React from 'react'
-import { BrowserRouter } from 'react-router-dom'
+import { RouterProvider, createBrowserRouter } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { AppProvider } from './contexts/AppContext'
-import { AppRoutes } from './routes/AppRoutes'
+import { createAppRoutes } from './routes/AppRoutes'
 import { ErrorBoundary } from './components/ErrorBoundary'
+
+// Create router with data router API (required for useBlocker)
+const router = createBrowserRouter(createAppRoutes())
 
 export function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppProvider>
-            <AppRoutes />
-          </AppProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <AuthProvider>
+        <AppProvider>
+          <RouterProvider router={router} />
+        </AppProvider>
+      </AuthProvider>
     </ErrorBoundary>
   )
 }

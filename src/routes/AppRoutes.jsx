@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { AdminRoute } from '../components/AdminRoute'
 import { UserLayout } from '../layouts/UserLayout'
@@ -47,74 +47,69 @@ import { AdminAnalyticsPage }      from '../pages/admin/AdminAnalyticsPage'
 import { AdminSettingsPage }       from '../pages/admin/AdminSettingsPage'
 import { AdminExtractedQuestionsPage } from '../pages/admin/AdminExtractedQuestionsPage'
 
-export function AppRoutes() {
-  return (
-    <Routes>
-      {/* ── Public ── */}
-      <Route path="/"                  element={<LandingPage />} />
-      <Route path="/login"             element={<LoginPage />} />
-      <Route path="/register"          element={<RegisterPage />} />
-      <Route path="/forgot-password"   element={<ForgotPasswordPage />} />
-      <Route path="/admin/login"       element={<LoginPage isAdminLogin={true} />} />
+// Convert to route objects for createBrowserRouter (required for useBlocker)
+export function createAppRoutes() {
+  return [
+    // ── Public ──
+    { path: '/', element: <LandingPage /> },
+    { path: '/login', element: <LoginPage /> },
+    { path: '/register', element: <RegisterPage /> },
+    { path: '/forgot-password', element: <ForgotPasswordPage /> },
+    { path: '/admin/login', element: <LoginPage isAdminLogin={true} /> },
 
-      {/* ── User (protected, inside UserLayout with TNPSC sidebar) ── */}
-      <Route element={<ProtectedRoute><UserLayout /></ProtectedRoute>}>
-        {/* Dashboard */}
-        <Route path="/dashboard"         element={<UserDashboard />} />
+    // ── User (protected, inside UserLayout with TNPSC sidebar) ──
+    {
+      element: <ProtectedRoute><UserLayout /></ProtectedRoute>,
+      children: [
+        { path: '/dashboard', element: <UserDashboard /> },
+        { path: '/papers', element: <PaperListPage /> },
+        { path: '/papers/:paperId', element: <PaperDetailPage /> },
+        { path: '/attempt/:attemptId', element: <ResultPage /> },
+        { path: '/attempt/:attemptId/result', element: <ResultPage /> },
+        { path: '/attempt/:attemptId/review', element: <QuestionReviewPage /> },
+        { path: '/my-attempts', element: <AttemptHistoryPage /> },
+        { path: '/compare/:paperId', element: <CompareAttemptsPage /> },
+        { path: '/practice', element: <PracticePage /> },
+        { path: '/mock-tests', element: <MockTestsPage /> },
+        { path: '/syllabus', element: <SyllabusPage /> },
+        { path: '/analytics', element: <AnalyticsPage /> },
+        { path: '/current-affairs', element: <CurrentAffairsPage /> },
+        { path: '/govt-updates', element: <GovtUpdatesPage /> },
+        { path: '/my-papers', element: <BYOPPage /> },
+        { path: '/notes', element: <NotesPage /> },
+        { path: '/profile', element: <ProfilePage /> },
+        { path: '/help', element: <HelpContactPage /> },
+      ]
+    },
 
-        {/* Papers + Attempts (existing) */}
-        <Route path="/papers"            element={<PaperListPage />} />
-        <Route path="/papers/:paperId"   element={<PaperDetailPage />} />
-        <Route path="/attempt/:attemptId"        element={<ResultPage />} />
-        <Route path="/attempt/:attemptId/result" element={<ResultPage />} />
-        <Route path="/attempt/:attemptId/review" element={<QuestionReviewPage />} />
-        <Route path="/my-attempts"       element={<AttemptHistoryPage />} />
-        <Route path="/compare/:paperId"  element={<CompareAttemptsPage />} />
+    // ── Fullscreen Exam (no sidebar) ──
+    { path: '/exam/:paperId', element: <ProtectedRoute><ExamPage /></ProtectedRoute> },
 
-        {/* TNPSC new routes */}
-        <Route path="/practice"          element={<PracticePage />} />
-        <Route path="/mock-tests"        element={<MockTestsPage />} />
-        <Route path="/syllabus"          element={<SyllabusPage />} />
-        <Route path="/analytics"         element={<AnalyticsPage />} />
-        <Route path="/current-affairs"   element={<CurrentAffairsPage />} />
-        <Route path="/govt-updates"      element={<GovtUpdatesPage />} />
-        <Route path="/my-papers"         element={<BYOPPage />} />
-        <Route path="/notes"             element={<NotesPage />} />
-        <Route path="/profile"           element={<ProfilePage />} />
-        <Route path="/help"              element={<HelpContactPage />} />
-      </Route>
+    // ── Admin ──
+    {
+      element: <AdminRoute><AdminLayout /></AdminRoute>,
+      children: [
+        { path: '/admin', element: <AdminDashboard /> },
+        { path: '/admin/papers', element: <Navigate to="/admin/questions" replace /> },
+        { path: '/admin/papers/create', element: <Navigate to="/admin/questions?newPaper=1" replace /> },
+        { path: '/admin/papers/:paperId/edit', element: <Navigate to="/admin/questions" replace /> },
+        { path: '/admin/papers/:paperId/questions', element: <QuestionManagementPage /> },
+        { path: '/admin/papers/:paperId/import', element: <ImportQuestionsPage /> },
+        { path: '/admin/attempts', element: <Navigate to="/admin/pricing" replace /> },
+        { path: '/admin/syllabus', element: <Navigate to="/admin/questions" replace /> },
+        { path: '/admin/pricing', element: <AdminPricingPage /> },
+        { path: '/admin/current-affairs', element: <AdminCurrentAffairsPage /> },
+        { path: '/admin/notifications', element: <AdminNotificationsPage /> },
+        { path: '/admin/recall', element: <AdminRecallPage /> },
+        { path: '/admin/users', element: <AdminUsersPage /> },
+        { path: '/admin/analytics', element: <AdminAnalyticsPage /> },
+        { path: '/admin/settings', element: <AdminSettingsPage /> },
+        { path: '/admin/questions', element: <AdminExtractedQuestionsPage /> },
+        { path: '/admin/extracted-questions', element: <AdminExtractedQuestionsPage /> },
+      ]
+    },
 
-      {/* ── Fullscreen Exam (no sidebar) ── */}
-      <Route path="/exam/:paperId" element={<ProtectedRoute><ExamPage /></ProtectedRoute>} />
-
-      {/* ── Admin ── */}
-      <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
-        <Route path="/admin"                              element={<AdminDashboard />} />
-        {/* The papers list now lives inside the Extracted Questions tab */}
-        <Route path="/admin/papers"                       element={<Navigate to="/admin/questions" replace />} />
-        {/* A paper now needs only a name, so creating and renaming happen in the Papers panel */}
-        <Route path="/admin/papers/create"                element={<Navigate to="/admin/questions?newPaper=1" replace />} />
-        <Route path="/admin/papers/:paperId/edit"         element={<Navigate to="/admin/questions" replace />} />
-        <Route path="/admin/papers/:paperId/questions"    element={<QuestionManagementPage />} />
-        <Route path="/admin/papers/:paperId/import"       element={<ImportQuestionsPage />} />
-        {/* Attempts was replaced by Pricing & Plans; Syllabus was removed from the admin panel */}
-        <Route path="/admin/attempts"                     element={<Navigate to="/admin/pricing" replace />} />
-        <Route path="/admin/syllabus"                     element={<Navigate to="/admin/questions" replace />} />
-        <Route path="/admin/pricing"                      element={<AdminPricingPage />} />
-        {/* TNPSC CMS */}
-        <Route path="/admin/current-affairs"              element={<AdminCurrentAffairsPage />} />
-        <Route path="/admin/notifications"                element={<AdminNotificationsPage />} />
-        <Route path="/admin/recall"                       element={<AdminRecallPage />} />
-        <Route path="/admin/users"                        element={<AdminUsersPage />} />
-        <Route path="/admin/analytics"                    element={<AdminAnalyticsPage />} />
-        <Route path="/admin/settings"                     element={<AdminSettingsPage />} />
-        {/* Question Bank & Extracted Questions by Subject/Topic */}
-        <Route path="/admin/questions"                    element={<AdminExtractedQuestionsPage />} />
-        <Route path="/admin/extracted-questions"          element={<AdminExtractedQuestionsPage />} />
-      </Route>
-
-      {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  )
+    // Catch-all
+    { path: '*', element: <Navigate to="/" replace /> }
+  ]
 }
